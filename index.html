@@ -4,394 +4,236 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Resa · KPI Assistant</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg:       #0e0f0d;
-  --surface:  #161710;
-  --surface2: #1d1e16;
-  --border:   rgba(112,213,73,0.08);
-  --border2:  rgba(112,213,73,0.18);
-  --accent:   #70d549;
-  --accent2:  #52a334;
-  --accent-glow: rgba(112,213,73,0.12);
-  --text:     #eef0e8;
-  --text2:    #8d9080;
-  --text3:    #4d5044;
-  --radius:   10px;
-  --radius-sm:6px;
+  --bg:        #ffffff;
+  --surface:   #f5f5f5;
+  --surface2:  #ececec;
+  --border:    #e0e0e0;
+  --border2:   #d0d0d0;
+  --accent:    #70d549;
+  --accent-dk: #4a9e2e;
+  --text:      #1a1a1a;
+  --text2:     #555555;
+  --text3:     #999999;
+  --radius:    8px;
+  --radius-sm: 6px;
 }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
-/* HEADER */
 header {
-  padding: 10px 18px;
+  padding: 11px 20px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-  background: var(--surface);
-}
-header img {
-  height: 28px;
-  width: auto;
-  display: block;
-}
-.header-divider {
-  width: 1px; height: 20px;
-  background: var(--border2);
-}
-.header-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--text2);
-  letter-spacing: 0.03em;
-}
-.header-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  margin-left: auto;
-  box-shadow: 0 0 6px var(--accent);
-}
-
-/* LOADING SCREEN */
-#loading-screen {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
   gap: 14px;
+  flex-shrink: 0;
 }
-.loading-bar-wrap {
-  width: 240px;
-  height: 2px;
-  background: var(--surface2);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.loading-bar {
-  height: 100%;
-  width: 0%;
-  background: var(--accent);
-  border-radius: 2px;
-  animation: loadBar 1.2s ease forwards;
-}
-@keyframes loadBar { to { width: 100%; } }
-.loading-label {
-  font-size: 11px;
+header img { height: 26px; width: auto; display: block; }
+.header-sep { width: 1px; height: 18px; background: var(--border2); }
+.header-title { font-size: 14px; color: var(--text2); }
+.header-model {
+  margin-left: auto;
+  font-size: 12px;
   color: var(--text3);
-  letter-spacing: 0.06em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 2px 10px;
 }
-
-/* ERROR SCREEN */
-#error-screen {
+#setup-panel {
   flex: 1;
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  background: var(--bg);
+  padding: 24px;
 }
-.error-card {
-  background: var(--surface);
-  border: 1px solid rgba(240,100,80,0.25);
+.setup-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 28px 32px;
-  max-width: 420px;
-  text-align: center;
+  padding: 32px 36px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
-.error-card h2 {
-  font-family: 'Playfair Display', serif;
-  font-size: 18px;
-  font-weight: 400;
-  color: #f07a6a;
-  margin-bottom: 10px;
-}
-.error-card p {
+.setup-card h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.setup-sub { font-size: 14px; color: var(--text3); margin-bottom: 24px; }
+.field-group { margin-bottom: 20px; }
+label {
+  display: block;
   font-size: 12px;
+  font-weight: 600;
   color: var(--text2);
-  line-height: 1.7;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
 }
-.error-card code {
-  background: var(--surface2);
-  border: 1px solid rgba(240,100,80,0.2);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 11px;
-  color: #f07a6a;
-  display: inline-block;
-  margin-top: 8px;
-  word-break: break-all;
+input[type="password"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color 0.15s;
 }
-
-/* CHAT PANEL */
-#chat-panel {
-  flex: 1;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
+input[type="password"]:focus { border-color: var(--accent-dk); }
+.hint { font-size: 12px; color: var(--text3); margin-top: 5px; line-height: 1.5; }
+.btn-primary {
+  width: 100%;
+  padding: 11px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
 }
+.btn-primary:hover { background: var(--accent-dk); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+#chat-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
 #messages {
   flex: 1;
   overflow-y: auto;
   padding: 20px 20px 8px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   scrollbar-width: thin;
-  scrollbar-color: var(--surface2) transparent;
+  scrollbar-color: var(--border2) transparent;
 }
-#messages::-webkit-scrollbar { width: 3px; }
-#messages::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
-
-.msg {
-  display: flex;
-  gap: 10px;
-  animation: fadeUp 0.18s ease;
-}
+#messages::-webkit-scrollbar { width: 4px; }
+#messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.msg { display: flex; gap: 10px; animation: fadeUp 0.15s ease; }
 @keyframes fadeUp {
-  from { opacity:0; transform:translateY(5px); }
+  from { opacity:0; transform:translateY(4px); }
   to   { opacity:1; transform:translateY(0); }
 }
 .msg-avatar {
-  width: 24px; height: 24px;
-  border-radius: 4px;
-  display: flex; align-items:center; justify-content:center;
-  font-size: 10px;
-  font-weight: 500;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.msg.user .msg-avatar {
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  color: var(--text2);
-}
-.msg.assistant .msg-avatar {
-  background: var(--accent-glow);
-  border: 1px solid rgba(112,213,73,0.3);
-  color: var(--accent);
-}
-.msg-body { flex: 1; padding-top: 1px; }
-.msg-role {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text3);
-  margin-bottom: 5px;
-}
-.msg-text {
-  font-size: 13px;
-  color: var(--text);
-  line-height: 1.8;
-}
-.msg.user .msg-text { color: var(--text2); }
-.msg-text strong { color: var(--accent); font-weight: 500; }
-.msg-text ul, .msg-text ol { padding-left: 18px; margin: 6px 0; }
-.msg-text li { margin: 3px 0; }
-.msg-text code {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 11px;
-  color: var(--accent);
-}
-.msg-text pre {
-  background: var(--surface2);
-  border: 1px solid var(--border2);
+  width: 28px; height: 28px;
   border-radius: var(--radius-sm);
-  padding: 12px;
-  overflow-x: auto;
-  margin: 8px 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  flex-shrink: 0; margin-top: 1px;
 }
-.msg-text pre code { background:none; border:none; padding:0; font-size:11px; }
-
-/* TYPING */
-.typing-dots { display:flex; gap:4px; align-items:center; padding-top:4px; }
-.typing-dots span {
-  width:5px; height:5px; border-radius:50%;
-  background: var(--accent);
-  opacity: 0.4;
-  animation: tpulse 1.2s ease-in-out infinite;
-}
+.msg.user .msg-avatar { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
+.msg.assistant .msg-avatar { background: #e8f8e0; border: 1px solid #b6e8a0; color: var(--accent-dk); }
+.msg-body { flex: 1; }
+.msg-role { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); margin-bottom: 4px; }
+.msg-text { font-size: 15px; color: var(--text); line-height: 1.75; }
+.msg.user .msg-text { color: var(--text2); }
+.msg-text strong { color: var(--text); font-weight: 700; }
+.msg-text ul, .msg-text ol { padding-left: 20px; margin: 6px 0; }
+.msg-text li { margin: 3px 0; }
+.msg-text code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 13px; color: var(--text2); font-family: monospace; }
+.msg-text pre { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; overflow-x: auto; margin: 8px 0; }
+.msg-text pre code { background:none; border:none; padding:0; font-size:13px; }
+.typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
+.typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
-@keyframes tpulse {
-  0%,80%,100% { opacity:0.2; transform:scale(0.8); }
-  40%          { opacity:1;   transform:scale(1); }
-}
-
-/* QUICK PILLS */
-#quick-questions {
-  padding: 0 18px 12px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
+@keyframes tpulse { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
+#quick-questions { padding: 2px 18px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
 .quick-btn {
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 20px;
-  color: var(--text2);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
-  padding: 4px 11px;
-  cursor: pointer;
-  transition: all 0.12s;
-  white-space: nowrap;
+  background: var(--bg); border: 1px solid var(--border2); border-radius: 20px;
+  color: var(--text2); font-family: Arial, Helvetica, sans-serif; font-size: 13px;
+  padding: 5px 13px; cursor: pointer; transition: all 0.12s; white-space: nowrap;
 }
-.quick-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); }
-
-/* INPUT AREA */
-#input-area {
-  padding: 10px 14px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
+.quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: #f0fce8; }
+#input-area { padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--bg); display: flex; gap: 8px; align-items: flex-end; }
 #user-input {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
-  padding: 8px 12px;
-  outline: none;
-  resize: none;
-  min-height: 38px;
-  max-height: 110px;
-  line-height: 1.5;
-  transition: border-color 0.12s;
+  flex: 1; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  color: var(--text); font-family: Arial, Helvetica, sans-serif; font-size: 15px;
+  padding: 9px 13px; outline: none; resize: none; min-height: 40px; max-height: 120px;
+  line-height: 1.5; transition: border-color 0.15s;
 }
-#user-input:focus { border-color: var(--accent2); }
+#user-input:focus { border-color: var(--accent-dk); }
 #user-input::placeholder { color: var(--text3); }
 #send-btn {
-  width: 38px; height: 38px;
-  background: var(--accent);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  display: flex; align-items:center; justify-content:center;
-  transition: background 0.12s, transform 0.1s;
-  flex-shrink: 0;
+  width: 40px; height: 40px; background: var(--accent); border: none;
+  border-radius: var(--radius-sm); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s, transform 0.1s; flex-shrink: 0;
 }
-#send-btn:hover { background: #85e05e; }
+#send-btn:hover { background: var(--accent-dk); }
 #send-btn:active { transform: scale(0.95); }
-#send-btn:disabled { background: var(--surface2); cursor: not-allowed; opacity:0.5; }
-#send-btn svg { width:15px; height:15px; }
-
-/* FOOTER */
-.footer-bar {
-  padding: 6px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.footer-status {
-  font-size: 10px;
-  color: var(--text3);
-  display: flex; align-items:center; gap:5px;
-}
-.status-dot {
-  width:5px; height:5px; border-radius:50%;
-  background: var(--accent);
-}
-
-/* WELCOME */
-.welcome-area {
-  text-align: center;
-  padding: 40px 20px 24px;
-}
-.welcome-area h3 {
-  font-family: 'Playfair Display', serif;
-  font-size: 22px;
-  font-weight: 400;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-.welcome-area p {
-  font-size: 12px;
-  color: var(--text2);
-  line-height: 1.7;
-  max-width: 300px;
-  margin: 0 auto;
-}
-.welcome-divider {
-  width: 32px; height: 1px;
-  background: var(--border2);
-  margin: 16px auto;
-}
+#send-btn:disabled { background: var(--surface2); cursor: not-allowed; opacity: 0.6; }
+#send-btn svg { width: 16px; height: 16px; }
+.footer-bar { padding: 7px 18px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; flex-shrink: 0; }
+.footer-status { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.welcome-area { text-align: center; padding: 44px 20px 20px; }
+.welcome-area h3 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.welcome-area p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 320px; margin: 0 auto; }
+.welcome-pills { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.welcome-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; color: var(--text3); padding: 3px 9px; }
 </style>
 </head>
 <body>
 
 <header>
-  <img src="data:image/png;base64,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" alt="Resa">
-  <div class="header-divider"></div>
+  <img src="resa_logo.png" alt="Resa">
+  <div class="header-sep"></div>
   <span class="header-title">KPI Assistant</span>
-  <div class="header-dot"></div>
+  <span class="header-model">claude-haiku-4-5</span>
 </header>
 
-<!-- LOADING -->
-<div id="loading-screen">
-  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
-  <span class="loading-label">cargando contexto...</span>
-</div>
-
-<!-- ERROR -->
-<div id="error-screen">
-  <div class="error-card">
-    <h2>Error de configuración</h2>
-    <p id="error-msg">No se pudo inicializar el asistente.</p>
+<div id="setup-panel">
+  <div class="setup-card">
+    <h2>Iniciar sesión</h2>
+    <p class="setup-sub">Introduce tu API key para conectar con el asistente.</p>
+    <div class="field-group">
+      <label>API Key de Anthropic</label>
+      <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
+      <p class="hint">Solo se usa durante esta sesión. No se almacena en ningún servidor.</p>
+    </div>
+    <button class="btn-primary" id="connect-btn" onclick="initChat()">Conectar &rarr;</button>
   </div>
 </div>
 
-<!-- CHAT -->
 <div id="chat-panel">
   <div id="messages">
     <div class="welcome-area" id="welcome">
-      <h3>¿En qué puedo ayudarte?</h3>
-      <div class="welcome-divider"></div>
-      <p>Pregunta sobre KPIs, criterios de cálculo, filtros aplicados o cualquier duda sobre el modelo de datos.</p>
+      <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
+      <p>Pregunta sobre KPIs, criterios de c&aacute;lculo, filtros aplicados o el modelo de datos.</p>
+      <div class="welcome-pills">
+        <span class="welcome-pill">empleados.csv</span>
+        <span class="welcome-pill">proyectos.csv</span>
+        <span class="welcome-pill">resumen_departamentos.csv</span>
+      </div>
     </div>
   </div>
-
   <div id="quick-questions">
-    <button class="quick-btn" onclick="quickAsk('¿Cómo se calcula el margen bruto?')">margen bruto</button>
-    <button class="quick-btn" onclick="quickAsk('¿Qué filtros se aplican sobre esta métrica?')">filtros activos</button>
-    <button class="quick-btn" onclick="quickAsk('¿Cuál es la diferencia entre usuarios activos y registrados?')">activos vs registrados</button>
-    <button class="quick-btn" onclick="quickAsk('Explícame todos los KPIs disponibles')">listar KPIs</button>
-    <button class="quick-btn" onclick="quickAsk('¿Qué tablas forman el modelo de datos y cómo se relacionan?')">modelo de datos</button>
+    <button class="quick-btn" onclick="quickAsk('margen bruto')">margen bruto</button>
+    <button class="quick-btn" onclick="quickAsk('filtros activos sobre m\u00e9tricas')">filtros activos</button>
+    <button class="quick-btn" onclick="quickAsk('diferencia entre usuarios activos y registrados')">activos vs registrados</button>
+    <button class="quick-btn" onclick="quickAsk('listar todos los KPIs disponibles')">listar KPIs</button>
+    <button class="quick-btn" onclick="quickAsk('tablas del modelo y c\u00f3mo se relacionan')">modelo de datos</button>
   </div>
-
   <div id="input-area">
     <textarea id="user-input" placeholder="Escribe tu pregunta..." rows="1"
       onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
     <button id="send-btn" onclick="sendMessage()">
       <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 10H16M16 10L11 5M16 10L11 15" stroke="#0e0f0d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 10H16M16 10L11 5M16 10L11 15" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
   </div>
@@ -400,167 +242,192 @@ header img {
 <div class="footer-bar">
   <span class="footer-status">
     <span class="status-dot"></span>
-    <span id="footer-text">iniciando...</span>
+    <span id="footer-text">listo</span>
   </span>
 </div>
 
 <script>
-const CONFIG_URL = 'config.json';
-let apiKey = '';
-let systemCtx = '';
-let history = [];
-let busy = false;
+var apiKey = "";
+var systemCtx = "";
+var chatHistory = [];
+var busy = false;
 
-async function init() {
+async function initChat() {
+  var key = document.getElementById("api-key-input").value.trim();
+  if (!key) { alert("Introduce tu API key de Anthropic."); return; }
+
+  var btn = document.getElementById("connect-btn");
+  btn.textContent = "Conectando...";
+  btn.disabled = true;
+
   try {
-    const res = await fetch(CONFIG_URL + '?v=' + Date.now());
-    if (!res.ok) throw new Error('No se encontró config.json (HTTP ' + res.status + ')');
-    const cfg = await res.json();
-    if (!cfg.apiKey) throw new Error('config.json no contiene el campo apiKey');
-    apiKey = cfg.apiKey;
-
-    const ctxRes = await fetch('context.txt?v=' + Date.now());
-    if (!ctxRes.ok) throw new Error('No se encontró context.txt (HTTP ' + ctxRes.status + ')');
-    systemCtx = await ctxRes.text();
-    if (!systemCtx.trim()) throw new Error('context.txt está vacío');
-
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('chat-panel').style.display = 'flex';
-    document.getElementById('footer-text').textContent = 'conectado · claude-haiku-4-5';
-    document.getElementById('user-input').focus();
+    var r = await fetch("context.txt?v=" + Date.now());
+    if (r.ok) {
+      var txt = await r.text();
+      if (txt.trim()) systemCtx = txt;
+    }
   } catch(e) {
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('error-screen').style.display = 'flex';
-    document.getElementById('error-msg').textContent = e.message;
+    // context.txt no disponible en local, continua sin contexto
   }
+
+  apiKey = key;
+  document.getElementById("setup-panel").style.display = "none";
+  document.getElementById("chat-panel").style.display = "flex";
+  document.getElementById("footer-text").textContent = "conectado \u00b7 claude-haiku-4-5";
+  document.getElementById("user-input").focus();
 }
 
 function buildSystem() {
-  return `Eres un asistente experto en el modelo de datos y KPIs de Resa.
-Responde en español, de forma clara y precisa.
-Usa **negrita** para nombres de métricas, tablas o fórmulas clave.
-Si algo no está en la documentación, indícalo honestamente.
-No inventes datos ni criterios que no estén descritos.
-
-═══════════════════════════════════
-DOCUMENTACIÓN DEL MODELO
-═══════════════════════════════════
-${systemCtx}
-═══════════════════════════════════`;
+  var base = "Eres un asistente experto en el modelo de datos y KPIs de Resa.\n"
+    + "Responde en espa\u00f1ol, de forma clara y precisa.\n"
+    + "Usa **negrita** para nombres de m\u00e9tricas, tablas o f\u00f3rmulas clave.\n"
+    + "Si algo no est\u00e1 en la documentaci\u00f3n, ind\u00edcalo honestamente.\n\n";
+  if (systemCtx) {
+    base += "DOCUMENTACI\u00d3N DEL MODELO\n"
+      + "==================\n"
+      + systemCtx
+      + "\n==================";
+  }
+  return base;
 }
 
 async function sendMessage(text) {
   if (busy) return;
-  const input = document.getElementById('user-input');
-  const userText = text || input.value.trim();
+  var input = document.getElementById("user-input");
+  var userText = text || input.value.trim();
   if (!userText) return;
 
-  input.value = ''; input.style.height = 'auto';
-  const welcome = document.getElementById('welcome');
+  input.value = "";
+  input.style.height = "auto";
+  var welcome = document.getElementById("welcome");
   if (welcome) welcome.remove();
-  document.getElementById('quick-questions').style.display = 'none';
+  document.getElementById("quick-questions").style.display = "none";
 
-  appendMsg('user', userText);
-  history.push({ role: 'user', content: userText });
+  appendMsg("user", userText);
+  chatHistory.push({ role: "user", content: userText });
 
-  const tid = appendTyping();
-  setLoading(true);
+  var tid = appendTyping();
+  setStatus("enviando petici\u00f3n...");
+  busy = true;
+  document.getElementById("send-btn").disabled = true;
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
+    setStatus("conectando con API...");
+    var r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1500,
         system: buildSystem(),
-        messages: history
+        messages: chatHistory
       })
     });
     removeTyping(tid);
+    setStatus("respuesta recibida HTTP " + r.status);
     if (!r.ok) {
-      const e = await r.json().catch(()=>({}));
-      throw new Error(e.error?.message || 'HTTP ' + r.status);
+      var errData = await r.json().catch(function() { return {}; });
+      throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
     }
-    const d = await r.json();
-    const reply = d.content?.[0]?.text || 'Sin respuesta.';
-    history.push({ role: 'assistant', content: reply });
-    appendMsg('assistant', reply);
+    var d = await r.json();
+    var reply = (d.content && d.content[0] && d.content[0].text) || "Sin respuesta.";
+    chatHistory.push({ role: "assistant", content: reply });
+    appendMsg("assistant", reply);
+    setStatus("conectado \u00b7 claude-haiku-4-5");
   } catch(e) {
     removeTyping(tid);
     appendError(e.message);
+    setStatus("error: " + e.message);
   } finally {
-    setLoading(false);
+    busy = false;
+    document.getElementById("send-btn").disabled = false;
   }
 }
 
 function quickAsk(t) { sendMessage(t); }
 
 function appendMsg(role, text) {
-  const box = document.getElementById('messages');
-  const d = document.createElement('div');
-  d.className = 'msg ' + role;
-  const av = role === 'user' ? 'U' : 'R';
-  const rl = role === 'user' ? 'tú' : 'asistente';
-  d.innerHTML = `<div class="msg-avatar">${av}</div>
-    <div class="msg-body">
-      <div class="msg-role">${rl}</div>
-      <div class="msg-text">${fmt(text)}</div>
-    </div>`;
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg " + role;
+  var av = role === "user" ? "U" : "R";
+  var rl = role === "user" ? "T\u00fa" : "Asistente";
+  d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">' + rl + '</div>'
+    + '<div class="msg-text">' + fmt(text) + '</div>'
+    + '</div>';
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
 }
 
 function appendTyping() {
-  const box = document.getElementById('messages');
-  const id = 't' + Date.now();
-  const d = document.createElement('div');
-  d.className = 'msg assistant'; d.id = id;
-  d.innerHTML = '<div class="msg-avatar">R</div><div class="msg-body"><div class="msg-role">asistente</div><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  var box = document.getElementById("messages");
+  var id = "t" + Date.now();
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.id = id;
+  d.innerHTML = '<div class="msg-avatar">R</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="typing-dots"><span></span><span></span><span></span></div>'
+    + '</div>';
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
   return id;
 }
-function removeTyping(id) { const e = document.getElementById(id); if(e) e.remove(); }
+
+function removeTyping(id) {
+  var e = document.getElementById(id);
+  if (e) e.remove();
+}
 
 function appendError(msg) {
-  const box = document.getElementById('messages');
-  const d = document.createElement('div');
-  d.innerHTML = `<div style="background:rgba(240,100,80,.07);border:1px solid rgba(240,100,80,.2);border-radius:8px;color:#f07a6a;padding:10px 14px;font-size:12px;line-height:1.5;">Error: ${esc(msg)}</div>`;
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.innerHTML = '<div style="background:#fff5f5;border:1px solid #f5c6c6;border-radius:6px;color:#c0392b;padding:10px 14px;font-size:14px;line-height:1.5;">Error: ' + esc(msg) + '</div>';
   box.appendChild(d);
   box.scrollTop = box.scrollHeight;
 }
 
-function setLoading(v) {
-  busy = v;
-  document.getElementById('send-btn').disabled = v;
-  document.getElementById('footer-text').textContent = v ? 'consultando...' : 'conectado · claude-haiku-4-5';
+function setStatus(msg) {
+  document.getElementById("footer-text").textContent = msg;
 }
 
 function fmt(s) {
   return esc(s)
-    .replace(/```([\s\S]*?)```/g,'<pre><code>$1</code></pre>')
-    .replace(/`([^`]+)`/g,'<code>$1</code>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/^#{1,3} (.+)$/gm,'<strong>$1</strong>')
-    .replace(/^- (.+)$/gm,'<li>$1</li>')
-    .replace(/(<li>[\s\S]*?<\/li>)/g,'<ul>$1</ul>')
-    .replace(/<\/ul>\s*<ul>/g,'')
-    .replace(/\n\n/g,'</p><p>')
-    .replace(/\n/g,'<br>');
+    .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^#{1,3} (.+)$/gm, "<strong>$1</strong>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>")
+    .replace(/<\/ul>\s*<ul>/g, "")
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n/g, "<br>");
 }
-function esc(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} }
-function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,110)+'px'; }
 
-window.addEventListener('load', init);
+function esc(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function handleKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+document.getElementById("api-key-input").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") initChat();
+});
 </script>
 </body>
 </html>
