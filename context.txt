@@ -21,7 +21,7 @@ El código se ejecuta en Pyodide (navegador). Disponibles: pandas (pd), numpy (n
 
 # DATAFRAMES DISPONIBLES (ya cargados como variables globales)
 
-## `leads_contacts` (FACT TABLE - la que usarás el 90% del tiempo)
+## `leads_contacts` (FACT TABLE)
 Unión de leads y contactos. Una fila = un registro CRM.
 Columnas:
 - `Correo electrónico` (str): identificador único del estudiante. Usar `nunique()` para contar registros únicos (equivale al DISTINCTCOUNT del modelo DAX original).
@@ -43,7 +43,7 @@ Columnas:
 - `Fuente_Agrupada` (str): agrupación limpia. Valores: "Web Resa", "Unitour", "Directo", "Chat", "Uniscopio", "Contacto Residencia", "Hello", "Facebook", "Otros", "Sin info".
 - `Residencias_interes_corregido`, `Residencias_actual_corregido`, `Ciudad_actual_corregido`, `Curso_corregido`, `Ciudad_deinteres_corregido` (str): versiones saneadas (nulos -> "Sin info"). USAR ESTAS preferentemente cuando agrupes.
 
-## Dimensiones (catálogos de valores únicos, normalmente NO necesarias para responder)
+## Dimensiones (catálogos de valores únicos)
 - `tabla_ciudad_actual` (col: `Ciudad actual`)
 - `tabla_ciudad_interes` (col: `Ciudades de interés`)
 - `tabla_curso` (col: `Curso`)
@@ -122,11 +122,10 @@ pct = (valor_nuevo / valor_viejo - 1) if valor_viejo > 0 else None
 3. **Para conversión, particulares solamente** en el numerador (`Particular o Grupo == "Particular"`).
 4. **Cuando agrupes por dimensiones categóricas** (ciudad, residencia, curso), usa las versiones `_corregido` para evitar ruido por nulos.
 5. **Si el usuario pide un ranking/top**, devuelve un DataFrame ordenado descendentemente con head(N) y reset_index() si procede.
-6. **Si el usuario pide un gráfico**, devuelve la `Figure` de matplotlib. Tamaño recomendado: figsize=(8, 4.5). Usa color "#70d549" (verde Resa) cuando sea una serie principal.
-7. **Si la pregunta es ambigua sobre el curso**, usa el curso más reciente disponible en los datos (`leads_contacts["Curso"].max()` o lógica equivalente).
-8. **Si la pregunta es sobre estructura del modelo** ("qué tablas hay", "qué columnas tiene X"), devuelve `resultado` como string descriptivo basándote en lo documentado arriba.
-9. **NO uses pd.options ni configures display**: solo computa y asigna.
-10. **Maneja divisiones por cero**: usa condicional o `np.where`.
+6. **Si el usuario pide un gráfico**, devuelve la `Figure` de matplotlib. Tamaño recomendado: figsize=(8, 4.5). Usa color "#70d549" cuando sea una serie principal.
+7. **Si la pregunta es sobre estructura del modelo** ("qué tablas hay", "qué columnas tiene X"), devuelve `resultado` como string descriptivo basándote en lo documentado arriba.
+8. **NO uses pd.options ni configures display**: solo computa y asigna.
+9. **Maneja divisiones por cero**: usa condicional o `np.where`.
 
 # EJEMPLOS
 
