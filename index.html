@@ -368,9 +368,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 </div>
 
 <script>
-// ============================================================================
-//  ESTADO GLOBAL
-// ============================================================================
+
 var apiKey = "";
 var systemCtx = "";
 var chatHistory = [];
@@ -378,9 +376,7 @@ var busy = false;
 var pyodide = null;
 var loadedCsvs = new Set();
 
-// Mapa de DataFrames Python <-> ficheros CSV.
-// La clave es el nombre que tendrá la variable global en Python.
-// El valor es el nombre del fichero CSV que debe estar en la misma carpeta.
+
 var CSV_TABLES = {
   "leads_contacts":             "Leads_Contacts.csv",
   "tabla_ciudad_actual":        "Tabla_Ciudad_Actual.csv",
@@ -395,14 +391,11 @@ var CSV_TABLES = {
   "glosario":                   "Glosario.csv"
 };
 
-// Columnas que en leads_contacts deben parsearse como fecha
 var DATE_COLUMNS_LEADS = ["Fecha creación"];
 
 marked.use({ breaks: true, gfm: true });
 
-// ============================================================================
-//  INICIALIZACIÓN
-// ============================================================================
+
 async function initChat() {
   var key = document.getElementById("api-key-input").value.trim();
   if (!key) { alert("Introduce tu API key de Anthropic."); return; }
@@ -413,7 +406,6 @@ async function initChat() {
   document.getElementById("boot-progress").classList.add("active");
 
   try {
-    // 1. Cargar context.txt
     setStep("step-ctx", "active");
     try {
       var r = await fetch("context.txt?v=" + Date.now());
@@ -421,20 +413,17 @@ async function initChat() {
         var txt = await r.text();
         if (txt.trim()) systemCtx = txt;
       }
-    } catch(e) { /* opcional */ }
+    } catch(e) { }
     setStep("step-ctx", "done");
 
-    // 2. Inicializar Pyodide
     setStep("step-pyodide", "active");
     pyodide = await loadPyodide({
       indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
     });
     setStep("step-pyodide", "done");
 
-    // 3. Cargar paquetes
     setStep("step-pkgs", "active");
     await pyodide.loadPackage(["pandas", "numpy", "matplotlib"]);
-    // Configuración inicial del entorno Python
     await pyodide.runPythonAsync(
       "import pandas as pd\n" +
       "import numpy as np\n" +
@@ -445,12 +434,10 @@ async function initChat() {
     );
     setStep("step-pkgs", "done");
 
-    // 4. Cargar CSVs
     setStep("step-csv", "active");
     await loadCsv("leads_contacts");
     setStep("step-csv", "done");
 
-    apiKey = key;
     document.getElementById("setup-panel").style.display = "none";
     document.getElementById("chat-panel").style.display = "flex";
     setStatus("conectado · pyodide listo", "ok");
@@ -470,9 +457,6 @@ function setStep(id, state) {
   if (state) el.classList.add(state);
 }
 
-// ============================================================================
-//  CARGA DE CSVs (lazy)
-// ============================================================================
 async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) return true;
   var file = CSV_TABLES[varName];
@@ -485,7 +469,6 @@ async function loadCsv(varName) {
       return false;
     }
     var text = await r.text();
-    // Inyectar el CSV como string en Python y leerlo desde StringIO
     pyodide.globals.set("__csv_buffer__", text);
 
     var parseDates = (varName === "leads_contacts")
@@ -506,11 +489,9 @@ async function loadCsv(varName) {
   }
 }
 
-// Detecta qué tablas usa el script y las carga si no están
 async function ensureTablesLoaded(pythonCode) {
   var needed = [];
   for (var v in CSV_TABLES) {
-    // Match a la variable como palabra completa
     var re = new RegExp("\\b" + v + "\\b");
     if (re.test(pythonCode) && !loadedCsvs.has(v)) {
       needed.push(v);
@@ -522,18 +503,11 @@ async function ensureTablesLoaded(pythonCode) {
   }
 }
 
-// ============================================================================
-//  CONSTRUCCIÓN DEL SYSTEM PROMPT
-// ============================================================================
 function buildSystem() {
   if (systemCtx) return systemCtx;
-  // Fallback mínimo
   return "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales (leads_contacts, etc.).";
 }
 
-// ============================================================================
-//  ENVÍO DE MENSAJES
-// ============================================================================
 async function sendMessage(text) {
   if (busy) return;
   var input = document.getElementById("user-input");
@@ -583,7 +557,6 @@ async function sendMessage(text) {
 
     var pythonCode = extractPython(reply);
     if (!pythonCode) {
-      // Si no hay código, mostrar la respuesta como texto plano (fallback)
       appendAssistantText(reply || "Sin respuesta.");
       setStatus("respuesta sin código · revisa el prompt", "error");
     } else {
@@ -604,23 +577,15 @@ async function sendMessage(text) {
 }
 
 function quickAsk(t) { sendMessage(t); }
-
-// ============================================================================
-//  EXTRACCIÓN DE CÓDIGO Y EJECUCIÓN
-// ============================================================================
 function extractPython(reply) {
-  // Busca el primer bloque ```python ... ```
   var m = reply.match(/```(?:python)?\s*\n([\s\S]*?)```/);
   if (m) return m[1].trim();
-  // Si la respuesta entera parece código (empieza por import o def o asignación a resultado)
   var t = reply.trim();
   if (/^(import |from |resultado\s*=|def |[a-zA-Z_]+\s*=)/.test(t)) return t;
   return null;
 }
 
 async function runPython(code) {
-  // Wrapper que captura el resultado y lo serializa a algo que JS pueda renderizar.
-  // El código del usuario debe asignar `resultado`.
   var wrapper =
     "import json as _json\n" +
     "import io as _io, base64 as _base64\n" +
@@ -665,9 +630,6 @@ function indent(text, prefix) {
   return text.split("\n").map(function(l) { return prefix + l; }).join("\n");
 }
 
-// ============================================================================
-//  RENDERIZADO
-// ============================================================================
 function appendMsg(role, text) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
@@ -709,7 +671,6 @@ function appendResult(result, code) {
     + '</div>';
   box.appendChild(d);
 
-  // Activar listeners del toggle
   var toggle = d.querySelector(".code-toggle");
   if (toggle) {
     toggle.addEventListener("click", function() {
@@ -838,9 +799,6 @@ function scrollToBottom() {
   box.scrollTop = box.scrollHeight;
 }
 
-// ============================================================================
-//  UTILIDADES
-// ============================================================================
 function setStatus(msg, kind) {
   document.getElementById("footer-text").textContent = msg;
   var dot = document.getElementById("status-dot");
