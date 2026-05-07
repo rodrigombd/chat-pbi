@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Resa · KPI Assistant</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -15,9 +16,13 @@
   --border2:   #d0d0d0;
   --accent:    #70d549;
   --accent-dk: #4a9e2e;
+  --accent-lt: #e8f8e0;
   --text:      #1a1a1a;
   --text2:     #555555;
   --text3:     #999999;
+  --error:     #c0392b;
+  --error-bg:  #fff5f5;
+  --error-bd:  #f5c6c6;
   --radius:    8px;
   --radius-sm: 6px;
 }
@@ -66,7 +71,7 @@ header img { height: 26px; width: auto; display: block; }
   border-radius: var(--radius);
   padding: 32px 36px;
   width: 100%;
-  max-width: 440px;
+  max-width: 460px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .setup-card h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
@@ -110,6 +115,26 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 }
 .btn-primary:hover { background: var(--accent-dk); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.boot-progress {
+  margin-top: 18px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text2);
+  display: none;
+}
+.boot-progress.active { display: block; }
+.boot-progress .step { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.boot-progress .step .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border2); flex-shrink: 0;
+}
+.boot-progress .step.done .dot { background: var(--accent); }
+.boot-progress .step.active .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+.boot-progress .step.error .dot { background: var(--error); }
+@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
 #chat-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
 #messages {
   flex: 1;
@@ -136,50 +161,123 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   flex-shrink: 0; margin-top: 1px;
 }
 .msg.user .msg-avatar { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
-.msg.assistant .msg-avatar { background: #e8f8e0; border: 1px solid #b6e8a0; color: var(--accent-dk); }
-.msg-body { flex: 1; min-width: 0; } /* min-width 0 evita desbordamientos */
+.msg.assistant .msg-avatar { background: var(--accent-lt); border: 1px solid #b6e8a0; color: var(--accent-dk); }
+.msg-body { flex: 1; min-width: 0; }
 .msg-role { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); margin-bottom: 4px; }
-.msg-text { font-size: 15px; color: var(--text); line-height: 1.75; }
+.msg-text { font-size: 15px; color: var(--text); line-height: 1.7; }
 .msg.user .msg-text { color: var(--text2); }
-.msg-text p { margin-bottom: 12px; }
+.msg-text p { margin-bottom: 8px; }
+.msg-text p:last-child { margin-bottom: 0; }
 .msg-text strong { color: var(--text); font-weight: 700; }
-.msg-text ul, .msg-text ol { padding-left: 20px; margin: 8px 0; }
-.msg-text li { margin: 4px 0; }
-.msg-text code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 2px 5px; font-size: 13px; color: var(--text2); font-family: monospace; }
-.msg-text pre { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; overflow-x: auto; margin: 12px 0; }
-.msg-text pre code { background:none; border:none; padding:0; font-size:13px; }
-.msg-text table { 
-  width: 100%; 
-  border-collapse: collapse; 
-  margin: 16px 0; 
-  font-size: 14px; 
+
+.result-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
-  overflow: hidden; 
+  padding: 14px 16px;
+  margin-top: 4px;
+}
+.result-box .scalar {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.result-box .scalar-label {
+  font-size: 12px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.result-box .text-result { font-size: 15px; color: var(--text); line-height: 1.7; }
+.result-box img { max-width: 100%; border-radius: var(--radius-sm); display: block; }
+.result-box table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
   box-shadow: 0 0 0 1px var(--border);
 }
-.msg-text th, .msg-text td { 
-  border-bottom: 1px solid var(--border); 
+.result-box th, .result-box td {
+  border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
-  padding: 10px 14px; 
-  text-align: left; 
+  padding: 9px 13px;
+  text-align: left;
 }
-.msg-text th:last-child, .msg-text td:last-child { border-right: none; }
-.msg-text th { background: var(--surface); color: var(--text); font-weight: 600; }
-.msg-text tr:last-child td { border-bottom: none; }
-.msg-text tr:hover { background-color: #fafafa; }
+.result-box th:last-child, .result-box td:last-child { border-right: none; }
+.result-box th { background: var(--surface); color: var(--text); font-weight: 600; }
+.result-box tr:last-child td { border-bottom: none; }
+.result-box tr:hover { background-color: #fafafa; }
+.result-box td.num, .result-box th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.code-toggle {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text3);
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+.code-toggle:hover { background: var(--surface); color: var(--text2); }
+.code-toggle .arrow { transition: transform 0.15s; display: inline-block; }
+.code-toggle.expanded .arrow { transform: rotate(90deg); }
+.code-block {
+  display: none;
+  margin-top: 8px;
+  background: #1a1a1a;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.code-block.expanded { display: block; }
+.code-block pre {
+  margin: 0;
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12.5px;
+  color: #e6e6e6;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.error-box {
+  background: var(--error-bg);
+  border: 1px solid var(--error-bd);
+  border-radius: var(--radius-sm);
+  color: var(--error);
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.error-box pre {
+  margin-top: 6px;
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: #7a1f15;
+}
 
 .typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
 .typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
 @keyframes tpulse { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
+.typing-label { font-size: 12px; color: var(--text3); margin-left: 4px; }
+
 #quick-questions { padding: 2px 18px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
 .quick-btn {
   background: var(--bg); border: 1px solid var(--border2); border-radius: 20px;
   color: var(--text2); font-family: Arial, Helvetica, sans-serif; font-size: 13px;
   padding: 5px 13px; cursor: pointer; transition: all 0.12s; white-space: nowrap;
 }
-.quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: #f0fce8; }
+.quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: var(--accent-lt); }
 #input-area { padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--bg); display: flex; gap: 8px; align-items: flex-end; }
 #user-input {
   flex: 1; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius-sm);
@@ -202,18 +300,20 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .footer-bar { padding: 7px 18px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; flex-shrink: 0; }
 .footer-status { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.status-dot.busy { background: #f0a020; animation: pulse 1s ease-in-out infinite; }
+.status-dot.error { background: var(--error); }
 .welcome-area { text-align: center; padding: 44px 20px 20px; }
 .welcome-area h3 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-.welcome-area p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 320px; margin: 0 auto; }
+.welcome-area p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 360px; margin: 0 auto; }
 </style>
 </head>
 <body>
 
 <header>
-  <img src="resa_logo.png" alt="Resa">
+  <img src="resa_logo.png" alt="Resa" onerror="this.style.display='none'">
   <div class="header-sep"></div>
   <span class="header-title">KPI Assistant</span>
-  <span class="header-model">claude-haiku-4-5</span>
+  <span class="header-model">claude-haiku-4-5 · pyodide</span>
 </header>
 
 <div id="setup-panel">
@@ -226,6 +326,12 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <p class="hint">Solo se usa durante esta sesión. No se almacena en ningún servidor.</p>
     </div>
     <button class="btn-primary" id="connect-btn" onclick="initChat()">Conectar &rarr;</button>
+    <div class="boot-progress" id="boot-progress">
+      <div class="step" id="step-ctx"><span class="dot"></span><span>Cargando contexto del modelo</span></div>
+      <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
+      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas + numpy + matplotlib</span></div>
+      <div class="step" id="step-csv"><span class="dot"></span><span>Cargando CSVs locales</span></div>
+    </div>
   </div>
 </div>
 
@@ -233,12 +339,15 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   <div id="messages">
     <div class="welcome-area" id="welcome">
       <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
-      <p>Pregunta sobre KPIs, criterios de c&aacute;lculo, filtros aplicados o el modelo de datos.</p>
+      <p>Pregunta sobre KPIs, conversi&oacute;n, distribuciones o tendencias. El asistente generar&aacute; c&oacute;digo Python que se ejecuta en tu navegador sobre los datos cargados.</p>
     </div>
   </div>
   <div id="quick-questions">
-    <button class="quick-btn" onclick="quickAsk('listar todos los KPIs disponibles')">listar KPIs</button>
-    <button class="quick-btn" onclick="quickAsk('tablas del modelo y c\u00f3mo se relacionan')">modelo de datos</button>
+    <button class="quick-btn" onclick="quickAsk('\u00bfCu\u00e1ntos leads hay en total?')">total leads</button>
+    <button class="quick-btn" onclick="quickAsk('Top 5 ciudades de inter\u00e9s')">top ciudades</button>
+    <button class="quick-btn" onclick="quickAsk('Tasa de conversi\u00f3n del curso 2025/2026')">conversi&oacute;n 25/26</button>
+    <button class="quick-btn" onclick="quickAsk('Compara leads del curso 2024/2025 vs 2025/2026')">comparar cursos</button>
+    <button class="quick-btn" onclick="quickAsk('Distribuci\u00f3n de leads por origen agrupado')">por origen</button>
   </div>
   <div id="input-area">
     <textarea id="user-input" placeholder="Escribe tu pregunta..." rows="1"
@@ -253,22 +362,47 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 <div class="footer-bar">
   <span class="footer-status">
-    <span class="status-dot"></span>
+    <span class="status-dot" id="status-dot"></span>
     <span id="footer-text">listo</span>
   </span>
 </div>
 
 <script>
+// ============================================================================
+//  ESTADO GLOBAL
+// ============================================================================
 var apiKey = "";
 var systemCtx = "";
 var chatHistory = [];
 var busy = false;
+var pyodide = null;
+var loadedCsvs = new Set();
 
-marked.use({
-  breaks: true,
-  gfm: true
-});
+// Mapa de DataFrames Python <-> ficheros CSV.
+// La clave es el nombre que tendrá la variable global en Python.
+// El valor es el nombre del fichero CSV que debe estar en la misma carpeta.
+var CSV_TABLES = {
+  "leads_contacts":             "Leads_Contacts.csv",
+  "tabla_ciudad_actual":        "Tabla_Ciudad_Actual.csv",
+  "tabla_ciudad_interes":       "Tabla_Ciudad_Interes.csv",
+  "tabla_curso":                "Tabla_Curso.csv",
+  "tabla_residencia_actual":    "Tabla_Residencia_Actual_CONTACTS.csv",
+  "tabla_residencia_escogida":  "Tabla_Residencia_Escogida_LEADS.csv",
+  "tabla_residencia_interes":   "Tabla_Residencia_Interes.csv",
+  "tabla_origen":               "Tabla_Origen.csv",
+  "tabla_fuente_pc":            "Tabla_Fuente_PC.csv",
+  "maestro_fuente":             "Maestro_Fuente.csv",
+  "glosario":                   "Glosario.csv"
+};
 
+// Columnas que en leads_contacts deben parsearse como fecha
+var DATE_COLUMNS_LEADS = ["Fecha creación"];
+
+marked.use({ breaks: true, gfm: true });
+
+// ============================================================================
+//  INICIALIZACIÓN
+// ============================================================================
 async function initChat() {
   var key = document.getElementById("api-key-input").value.trim();
   if (!key) { alert("Introduce tu API key de Anthropic."); return; }
@@ -276,38 +410,130 @@ async function initChat() {
   var btn = document.getElementById("connect-btn");
   btn.textContent = "Conectando...";
   btn.disabled = true;
+  document.getElementById("boot-progress").classList.add("active");
 
   try {
-    var r = await fetch("context.txt?v=" + Date.now());
-    if (r.ok) {
-      var txt = await r.text();
-      if (txt.trim()) systemCtx = txt;
-    }
+    // 1. Cargar context.txt
+    setStep("step-ctx", "active");
+    try {
+      var r = await fetch("context.txt?v=" + Date.now());
+      if (r.ok) {
+        var txt = await r.text();
+        if (txt.trim()) systemCtx = txt;
+      }
+    } catch(e) { /* opcional */ }
+    setStep("step-ctx", "done");
+
+    // 2. Inicializar Pyodide
+    setStep("step-pyodide", "active");
+    pyodide = await loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
+    });
+    setStep("step-pyodide", "done");
+
+    // 3. Cargar paquetes
+    setStep("step-pkgs", "active");
+    await pyodide.loadPackage(["pandas", "numpy", "matplotlib"]);
+    // Configuración inicial del entorno Python
+    await pyodide.runPythonAsync(
+      "import pandas as pd\n" +
+      "import numpy as np\n" +
+      "import matplotlib\n" +
+      "matplotlib.use('AGG')\n" +
+      "import matplotlib.pyplot as plt\n" +
+      "import io, base64\n"
+    );
+    setStep("step-pkgs", "done");
+
+    // 4. Cargar CSVs
+    setStep("step-csv", "active");
+    await loadCsv("leads_contacts");
+    setStep("step-csv", "done");
+
+    apiKey = key;
+    document.getElementById("setup-panel").style.display = "none";
+    document.getElementById("chat-panel").style.display = "flex";
+    setStatus("conectado · pyodide listo", "ok");
+    document.getElementById("user-input").focus();
   } catch(e) {
-    // context.txt no disponible
+    console.error(e);
+    alert("Error inicializando: " + e.message);
+    btn.textContent = "Conectar →";
+    btn.disabled = false;
   }
-
-  apiKey = key;
-  document.getElementById("setup-panel").style.display = "none";
-  document.getElementById("chat-panel").style.display = "flex";
-  document.getElementById("footer-text").textContent = "conectado \u00b7 claude-haiku-4-5";
-  document.getElementById("user-input").focus();
 }
 
+function setStep(id, state) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("active", "done", "error");
+  if (state) el.classList.add(state);
+}
+
+// ============================================================================
+//  CARGA DE CSVs (lazy)
+// ============================================================================
+async function loadCsv(varName) {
+  if (loadedCsvs.has(varName)) return true;
+  var file = CSV_TABLES[varName];
+  if (!file) return false;
+
+  try {
+    var r = await fetch(file + "?v=" + Date.now());
+    if (!r.ok) {
+      console.warn("CSV no encontrado: " + file + " (HTTP " + r.status + ")");
+      return false;
+    }
+    var text = await r.text();
+    // Inyectar el CSV como string en Python y leerlo desde StringIO
+    pyodide.globals.set("__csv_buffer__", text);
+
+    var parseDates = (varName === "leads_contacts")
+      ? "parse_dates=" + JSON.stringify(DATE_COLUMNS_LEADS)
+      : "";
+    var pyCode =
+      "from io import StringIO\n" +
+      varName + " = pd.read_csv(StringIO(__csv_buffer__)" +
+        (parseDates ? ", " + parseDates : "") +
+      ")\n" +
+      "del __csv_buffer__\n";
+    await pyodide.runPythonAsync(pyCode);
+    loadedCsvs.add(varName);
+    return true;
+  } catch(e) {
+    console.error("Error cargando " + file + ":", e);
+    return false;
+  }
+}
+
+// Detecta qué tablas usa el script y las carga si no están
+async function ensureTablesLoaded(pythonCode) {
+  var needed = [];
+  for (var v in CSV_TABLES) {
+    // Match a la variable como palabra completa
+    var re = new RegExp("\\b" + v + "\\b");
+    if (re.test(pythonCode) && !loadedCsvs.has(v)) {
+      needed.push(v);
+    }
+  }
+  for (var i = 0; i < needed.length; i++) {
+    setStatus("cargando " + CSV_TABLES[needed[i]] + "...", "busy");
+    await loadCsv(needed[i]);
+  }
+}
+
+// ============================================================================
+//  CONSTRUCCIÓN DEL SYSTEM PROMPT
+// ============================================================================
 function buildSystem() {
-  var base = "Eres un asistente experto en el modelo de datos y KPIs de Resa.\n"
-    + "Responde en espa\u00f1ol, de forma clara y precisa.\n"
-    + "Usa **negrita** para nombres de m\u00e9tricas, tablas o f\u00f3rmulas clave.\n"
-    + "Si algo no est\u00e1 en la documentaci\u00f3n, ind\u00edcalo honestamente.\n\n";
-  if (systemCtx) {
-    base += "DOCUMENTACI\u00d3N DEL MODELO\n"
-      + "==================\n"
-      + systemCtx
-      + "\n==================";
-  }
-  return base;
+  if (systemCtx) return systemCtx;
+  // Fallback mínimo
+  return "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales (leads_contacts, etc.).";
 }
 
+// ============================================================================
+//  ENVÍO DE MENSAJES
+// ============================================================================
 async function sendMessage(text) {
   if (busy) return;
   var input = document.getElementById("user-input");
@@ -323,13 +549,12 @@ async function sendMessage(text) {
   appendMsg("user", userText);
   chatHistory.push({ role: "user", content: userText });
 
-  var tid = appendTyping();
-  setStatus("enviando petici\u00f3n...");
+  var tid = appendTyping("generando código...");
+  setStatus("llamando a la API...", "busy");
   busy = true;
   document.getElementById("send-btn").disabled = true;
 
   try {
-    setStatus("conectando con API...");
     var r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -339,27 +564,39 @@ async function sendMessage(text) {
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: "claude-3-haiku-20240307", 
-        max_tokens: 1500,
+        model: "claude-haiku-4-5",
+        max_tokens: 2048,
         system: buildSystem(),
         messages: chatHistory
       })
     });
-    removeTyping(tid);
-    setStatus("respuesta recibida HTTP " + r.status);
+
     if (!r.ok) {
       var errData = await r.json().catch(function() { return {}; });
       throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
     }
     var d = await r.json();
-    var reply = (d.content && d.content[0] && d.content[0].text) || "Sin respuesta.";
+    var reply = (d.content && d.content[0] && d.content[0].text) || "";
     chatHistory.push({ role: "assistant", content: reply });
-    appendMsg("assistant", reply);
-    setStatus("conectado \u00b7 claude-haiku");
+
+    removeTyping(tid);
+
+    var pythonCode = extractPython(reply);
+    if (!pythonCode) {
+      // Si no hay código, mostrar la respuesta como texto plano (fallback)
+      appendAssistantText(reply || "Sin respuesta.");
+      setStatus("respuesta sin código · revisa el prompt", "error");
+    } else {
+      setStatus("ejecutando código...", "busy");
+      await ensureTablesLoaded(pythonCode);
+      var execResult = await runPython(pythonCode);
+      appendResult(execResult, pythonCode);
+      setStatus("listo", "ok");
+    }
   } catch(e) {
     removeTyping(tid);
-    appendError(e.message);
-    setStatus("error: " + e.message);
+    appendError("Error en la consulta: " + e.message);
+    setStatus("error", "error");
   } finally {
     busy = false;
     document.getElementById("send-btn").disabled = false;
@@ -368,12 +605,75 @@ async function sendMessage(text) {
 
 function quickAsk(t) { sendMessage(t); }
 
+// ============================================================================
+//  EXTRACCIÓN DE CÓDIGO Y EJECUCIÓN
+// ============================================================================
+function extractPython(reply) {
+  // Busca el primer bloque ```python ... ```
+  var m = reply.match(/```(?:python)?\s*\n([\s\S]*?)```/);
+  if (m) return m[1].trim();
+  // Si la respuesta entera parece código (empieza por import o def o asignación a resultado)
+  var t = reply.trim();
+  if (/^(import |from |resultado\s*=|def |[a-zA-Z_]+\s*=)/.test(t)) return t;
+  return null;
+}
+
+async function runPython(code) {
+  // Wrapper que captura el resultado y lo serializa a algo que JS pueda renderizar.
+  // El código del usuario debe asignar `resultado`.
+  var wrapper =
+    "import json as _json\n" +
+    "import io as _io, base64 as _base64\n" +
+    "_OUTPUT = {'kind': 'none', 'value': None}\n" +
+    "try:\n" +
+    indent(code, "    ") + "\n" +
+    "    _r = resultado\n" +
+    "    import pandas as _pd\n" +
+    "    import matplotlib.figure as _mf\n" +
+    "    if isinstance(_r, _mf.Figure):\n" +
+    "        _buf = _io.BytesIO()\n" +
+    "        _r.savefig(_buf, format='png', dpi=110, bbox_inches='tight')\n" +
+    "        _buf.seek(0)\n" +
+    "        _OUTPUT = {'kind': 'image', 'value': _base64.b64encode(_buf.read()).decode('ascii')}\n" +
+    "    elif isinstance(_r, _pd.DataFrame):\n" +
+    "        _OUTPUT = {'kind': 'dataframe', 'value': _r.to_json(orient='split', date_format='iso', force_ascii=False), 'shape': list(_r.shape)}\n" +
+    "    elif isinstance(_r, _pd.Series):\n" +
+    "        _df = _r.reset_index()\n" +
+    "        _OUTPUT = {'kind': 'dataframe', 'value': _df.to_json(orient='split', date_format='iso', force_ascii=False), 'shape': list(_df.shape)}\n" +
+    "    elif isinstance(_r, dict):\n" +
+    "        _OUTPUT = {'kind': 'dict', 'value': _json.dumps(_r, default=str, ensure_ascii=False)}\n" +
+    "    elif isinstance(_r, (int, float)):\n" +
+    "        _OUTPUT = {'kind': 'number', 'value': float(_r) if isinstance(_r, float) else int(_r)}\n" +
+    "    elif isinstance(_r, str):\n" +
+    "        _OUTPUT = {'kind': 'text', 'value': _r}\n" +
+    "    else:\n" +
+    "        _OUTPUT = {'kind': 'text', 'value': str(_r)}\n" +
+    "except Exception as _e:\n" +
+    "    import traceback as _tb\n" +
+    "    _OUTPUT = {'kind': 'error', 'value': str(_e), 'trace': _tb.format_exc()}\n" +
+    "_json.dumps(_OUTPUT, ensure_ascii=False)\n";
+
+  try {
+    var out = await pyodide.runPythonAsync(wrapper);
+    return JSON.parse(out);
+  } catch(e) {
+    return { kind: "error", value: e.message, trace: e.stack || "" };
+  }
+}
+
+function indent(text, prefix) {
+  return text.split("\n").map(function(l) { return prefix + l; }).join("\n");
+}
+
+// ============================================================================
+//  RENDERIZADO
+// ============================================================================
 function appendMsg(role, text) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg " + role;
   var av = role === "user" ? "U" : "R";
-  var rl = role === "user" ? "T\u00fa" : "Asistente";
+  var rl = role === "user" ? "Tú" : "Asistente";
   var formattedText = role === "user" ? esc(text) : marked.parse(text);
 
   d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
@@ -382,15 +682,122 @@ function appendMsg(role, text) {
     + '<div class="msg-text">' + formattedText + '</div>'
     + '</div>';
   box.appendChild(d);
-  
-  if (role === "user") {
-    box.scrollTop = box.scrollHeight;
-  } else {
-    d.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  scrollToBottom();
 }
 
-function appendTyping() {
+function appendAssistantText(text) {
+  appendMsg("assistant", text);
+}
+
+function appendResult(result, code) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+
+  var inner = '';
+  if (result.kind === "error") {
+    inner = renderError(result);
+  } else {
+    inner = '<div class="result-box">' + renderResult(result) + '</div>';
+  }
+  inner += renderCodeToggle(code);
+
+  d.innerHTML = '<div class="msg-avatar">R</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="msg-text">' + inner + '</div>'
+    + '</div>';
+  box.appendChild(d);
+
+  // Activar listeners del toggle
+  var toggle = d.querySelector(".code-toggle");
+  if (toggle) {
+    toggle.addEventListener("click", function() {
+      this.classList.toggle("expanded");
+      var blk = this.nextElementSibling;
+      if (blk) blk.classList.toggle("expanded");
+    });
+  }
+
+  scrollToBottom();
+}
+
+function renderResult(r) {
+  if (r.kind === "number") {
+    var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
+      ? r.value.toFixed(2)
+      : new Intl.NumberFormat("es-ES").format(r.value);
+    return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
+  }
+  if (r.kind === "text") {
+    return '<div class="text-result">' + marked.parseInline(r.value) + '</div>';
+  }
+  if (r.kind === "dict") {
+    var obj = JSON.parse(r.value);
+    var rows = '';
+    for (var k in obj) {
+      var v = obj[k];
+      if (typeof v === "number") v = new Intl.NumberFormat("es-ES").format(v);
+      rows += '<tr><td><strong>' + esc(k) + '</strong></td><td class="num">' + esc(String(v)) + '</td></tr>';
+    }
+    return '<table>' + rows + '</table>';
+  }
+  if (r.kind === "image") {
+    return '<img src="data:image/png;base64,' + r.value + '" alt="gráfico">';
+  }
+  if (r.kind === "dataframe") {
+    return renderDataFrame(JSON.parse(r.value), r.shape);
+  }
+  if (r.kind === "none") {
+    return '<div class="text-result"><em>El script no asignó nada a la variable <code>resultado</code>.</em></div>';
+  }
+  return '<div class="text-result">' + esc(JSON.stringify(r)) + '</div>';
+}
+
+function renderDataFrame(df, shape) {
+  var cols = df.columns || [];
+  var rows = df.data || [];
+  if (rows.length === 0) {
+    return '<div class="text-result"><em>Sin resultados.</em></div>';
+  }
+  var html = '<table><thead><tr>';
+  for (var i = 0; i < cols.length; i++) {
+    html += '<th>' + esc(String(cols[i])) + '</th>';
+  }
+  html += '</tr></thead><tbody>';
+  var maxRows = Math.min(rows.length, 100);
+  for (var r = 0; r < maxRows; r++) {
+    html += '<tr>';
+    for (var c = 0; c < rows[r].length; c++) {
+      var val = rows[r][c];
+      var isNum = typeof val === "number";
+      var display;
+      if (val === null || val === undefined) display = "—";
+      else if (isNum) display = Number.isInteger(val) ? new Intl.NumberFormat("es-ES").format(val) : val.toFixed(4).replace(/\.?0+$/, "");
+      else display = String(val);
+      html += '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  if (shape && shape[0] > maxRows) {
+    html += '<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ' + maxRows + ' de ' + shape[0] + ' filas.</div>';
+  }
+  return html;
+}
+
+function renderError(r) {
+  var trace = r.trace ? '<pre>' + esc(r.trace) + '</pre>' : '';
+  return '<div class="error-box"><strong>Error al ejecutar el código:</strong> ' + esc(r.value) + trace + '</div>';
+}
+
+function renderCodeToggle(code) {
+  if (!code) return '';
+  return '<span class="code-toggle"><span class="arrow">▶</span> ver código ejecutado</span>'
+    + '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
+}
+
+function appendTyping(label) {
   var box = document.getElementById("messages");
   var id = "t" + Date.now();
   var d = document.createElement("div");
@@ -399,10 +806,12 @@ function appendTyping() {
   d.innerHTML = '<div class="msg-avatar">R</div>'
     + '<div class="msg-body">'
     + '<div class="msg-role">Asistente</div>'
-    + '<div class="typing-dots"><span></span><span></span><span></span></div>'
+    + '<div class="typing-dots"><span></span><span></span><span></span>'
+    + (label ? '<span class="typing-label">' + esc(label) + '</span>' : '')
+    + '</div>'
     + '</div>';
   box.appendChild(d);
-  box.scrollTop = box.scrollHeight;
+  scrollToBottom();
   return id;
 }
 
@@ -414,17 +823,34 @@ function removeTyping(id) {
 function appendError(msg) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
-  d.innerHTML = '<div style="background:#fff5f5;border:1px solid #f5c6c6;border-radius:6px;color:#c0392b;padding:10px 14px;font-size:14px;line-height:1.5;">Error: ' + esc(msg) + '</div>';
+  d.className = "msg assistant";
+  d.innerHTML = '<div class="msg-avatar">R</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="msg-text"><div class="error-box">' + esc(msg) + '</div></div>'
+    + '</div>';
   box.appendChild(d);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  var box = document.getElementById("messages");
   box.scrollTop = box.scrollHeight;
 }
 
-function setStatus(msg) {
+// ============================================================================
+//  UTILIDADES
+// ============================================================================
+function setStatus(msg, kind) {
   document.getElementById("footer-text").textContent = msg;
+  var dot = document.getElementById("status-dot");
+  dot.classList.remove("busy", "error");
+  if (kind === "busy") dot.classList.add("busy");
+  else if (kind === "error") dot.classList.add("error");
 }
 
 function esc(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function handleKey(e) {
