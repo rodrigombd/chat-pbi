@@ -313,7 +313,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   <img src="resa_logo.png" alt="Resa" onerror="this.style.display='none'">
   <div class="header-sep"></div>
   <span class="header-title">KPI Assistant</span>
-  <span class="header-model">claude-haiku-3 · pyodide</span>
+  <span class="header-model">claude-haiku-4-5 · pyodide</span>
 </header>
 
 <div id="setup-panel">
@@ -438,6 +438,8 @@ async function initChat() {
     await loadCsv("leads_contacts");
     setStep("step-csv", "done");
 
+    apiKey = key;
+
     document.getElementById("setup-panel").style.display = "none";
     document.getElementById("chat-panel").style.display = "flex";
     setStatus("conectado · pyodide listo", "ok");
@@ -538,7 +540,7 @@ async function sendMessage(text) {
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: "claude-3-haiku-20240307",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1500,
         system: buildSystem(),
         messages: chatHistory
