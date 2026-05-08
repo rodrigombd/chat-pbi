@@ -538,8 +538,8 @@ async function sendMessage(text) {
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 2048,
+        model: "claude-3-haiku-20240307",
+        max_tokens: 1500,
         system: buildSystem(),
         messages: chatHistory
       })
