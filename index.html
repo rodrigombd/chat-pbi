@@ -17,6 +17,9 @@
   --accent:    #70d549;
   --accent-dk: #4a9e2e;
   --accent-lt: #e8f8e0;
+  --insight:   #2563eb;
+  --insight-dk:#1d4ed8;
+  --insight-lt:#dbeafe;
   --text:      #1a1a1a;
   --text2:     #555555;
   --text3:     #999999;
@@ -27,138 +30,79 @@
   --radius-sm: 6px;
 }
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 15px;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: Arial, Helvetica, sans-serif; font-size: 15px;
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
 }
 header {
-  padding: 11px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-shrink: 0;
+  padding: 11px 20px; border-bottom: 1px solid var(--border); background: var(--bg);
+  display: flex; align-items: center; gap: 14px; flex-shrink: 0;
 }
 header img { height: 26px; width: auto; display: block; }
 .header-sep { width: 1px; height: 18px; background: var(--border2); }
 .header-title { font-size: 14px; color: var(--text2); }
 .header-model {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--text3);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 2px 10px;
+  margin-left: auto; font-size: 12px; color: var(--text3);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 2px 10px;
 }
 #setup-panel {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  padding: 24px;
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 24px;
 }
 .setup-card {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px 36px;
-  width: 100%;
-  max-width: 460px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 32px 36px; width: 100%; max-width: 460px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .setup-card h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
 .setup-sub { font-size: 14px; color: var(--text3); margin-bottom: 24px; }
 .field-group { margin-bottom: 20px; }
 label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text2);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 6px;
+  display: block; font-size: 12px; font-weight: 600; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
 }
 input[type="password"] {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 15px;
-  padding: 9px 12px;
-  outline: none;
-  transition: border-color 0.15s;
+  width: 100%; background: var(--bg); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: Arial, Helvetica, sans-serif; font-size: 15px;
+  padding: 9px 12px; outline: none; transition: border-color 0.15s;
 }
 input[type="password"]:focus { border-color: var(--accent-dk); }
 .hint { font-size: 12px; color: var(--text3); margin-top: 5px; line-height: 1.5; }
 .btn-primary {
-  width: 100%;
-  padding: 11px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
+  width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none;
+  border-radius: var(--radius-sm); font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s;
 }
 .btn-primary:hover { background: var(--accent-dk); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .boot-progress {
-  margin-top: 18px;
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--text2);
-  display: none;
+  margin-top: 18px; padding: 10px 12px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 12px; color: var(--text2); display: none;
 }
 .boot-progress.active { display: block; }
 .boot-progress .step { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.boot-progress .step .dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--border2); flex-shrink: 0;
-}
+.boot-progress .step .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
 .boot-progress .step.done .dot { background: var(--accent); }
 .boot-progress .step.active .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
 .boot-progress .step.error .dot { background: var(--error); }
 @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
 #chat-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
 #messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 20px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border2) transparent;
+  flex: 1; overflow-y: auto; padding: 20px 20px 8px;
+  display: flex; flex-direction: column; gap: 16px;
+  scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
 }
 #messages::-webkit-scrollbar { width: 4px; }
 #messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 .msg { display: flex; gap: 10px; animation: fadeUp 0.15s ease; }
-@keyframes fadeUp {
-  from { opacity:0; transform:translateY(4px); }
-  to   { opacity:1; transform:translateY(0); }
-}
+@keyframes fadeUp { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 .msg-avatar {
-  width: 28px; height: 28px;
-  border-radius: var(--radius-sm);
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700;
-  flex-shrink: 0; margin-top: 1px;
+  font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
 }
 .msg.user .msg-avatar { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
 .msg.assistant .msg-avatar { background: var(--accent-lt); border: 1px solid #b6e8a0; color: var(--accent-dk); }
@@ -169,108 +113,63 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .msg-text p { margin-bottom: 8px; }
 .msg-text p:last-child { margin-bottom: 0; }
 .msg-text strong { color: var(--text); font-weight: 700; }
-
 .result-box {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-sm);
-  padding: 14px 16px;
-  margin-top: 4px;
+  background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 4px;
 }
-.result-box .scalar {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.01em;
-}
-.result-box .scalar-label {
-  font-size: 12px;
-  color: var(--text3);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
-}
+.result-box.insight { border-left: 3px solid var(--insight); background: #fafbff; }
+.result-box .scalar { font-size: 26px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.result-box .scalar-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
 .result-box .text-result { font-size: 15px; color: var(--text); line-height: 1.7; }
+.result-box .text-result h2, .result-box .text-result h3 { font-size: 16px; margin: 10px 0 6px; }
+.result-box .text-result ul { margin-left: 20px; margin-bottom: 8px; }
 .result-box img { max-width: 100%; border-radius: var(--radius-sm); display: block; }
 .result-box table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  box-shadow: 0 0 0 1px var(--border);
+  width: 100%; border-collapse: collapse; font-size: 14px;
+  border-radius: var(--radius-sm); overflow: hidden; box-shadow: 0 0 0 1px var(--border);
+  margin: 8px 0;
 }
 .result-box th, .result-box td {
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  padding: 9px 13px;
-  text-align: left;
+  border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+  padding: 9px 13px; text-align: left;
 }
 .result-box th:last-child, .result-box td:last-child { border-right: none; }
 .result-box th { background: var(--surface); color: var(--text); font-weight: 600; }
 .result-box tr:last-child td { border-bottom: none; }
 .result-box tr:hover { background-color: #fafafa; }
 .result-box td.num, .result-box th.num { text-align: right; font-variant-numeric: tabular-nums; }
-
 .code-toggle {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--text3);
-  cursor: pointer;
-  user-select: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  transition: background 0.12s, color 0.12s;
+  margin-top: 10px; font-size: 12px; color: var(--text3); cursor: pointer;
+  user-select: none; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 4px; transition: background 0.12s, color 0.12s;
 }
 .code-toggle:hover { background: var(--surface); color: var(--text2); }
 .code-toggle .arrow { transition: transform 0.15s; display: inline-block; }
 .code-toggle.expanded .arrow { transform: rotate(90deg); }
 .code-block {
-  display: none;
-  margin-top: 8px;
-  background: #1a1a1a;
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  overflow-x: auto;
+  display: none; margin-top: 8px; background: #1a1a1a;
+  border-radius: var(--radius-sm); padding: 12px 14px; overflow-x: auto;
 }
 .code-block.expanded { display: block; }
 .code-block pre {
-  margin: 0;
-  font-family: "Menlo", "Monaco", "Courier New", monospace;
-  font-size: 12.5px;
-  color: #e6e6e6;
-  line-height: 1.55;
-  white-space: pre;
+  margin: 0; font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12.5px; color: #e6e6e6; line-height: 1.55; white-space: pre;
 }
-
 .error-box {
-  background: var(--error-bg);
-  border: 1px solid var(--error-bd);
-  border-radius: var(--radius-sm);
-  color: var(--error);
-  padding: 10px 14px;
-  font-size: 14px;
-  line-height: 1.5;
+  background: var(--error-bg); border: 1px solid var(--error-bd);
+  border-radius: var(--radius-sm); color: var(--error);
+  padding: 10px 14px; font-size: 14px; line-height: 1.5;
 }
 .error-box pre {
-  margin-top: 6px;
-  font-family: "Menlo", "Monaco", "Courier New", monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
-  color: #7a1f15;
+  margin-top: 6px; font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12px; white-space: pre-wrap; color: #7a1f15;
 }
-
 .typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
 .typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
 @keyframes tpulse { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
 .typing-label { font-size: 12px; color: var(--text3); margin-left: 4px; }
-
 #quick-questions { padding: 2px 18px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
 .quick-btn {
   background: var(--bg); border: 1px solid var(--border2); border-radius: 20px;
@@ -278,7 +177,25 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   padding: 5px 13px; cursor: pointer; transition: all 0.12s; white-space: nowrap;
 }
 .quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: var(--accent-lt); }
-#input-area { padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--bg); display: flex; gap: 8px; align-items: flex-end; }
+#actions-bar {
+  padding: 0 18px 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.action-btn {
+  background: var(--insight-lt); border: 1px solid #b8cdf7; border-radius: 20px;
+  color: var(--insight-dk); font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer;
+  transition: all 0.12s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.action-btn:hover:not(:disabled) {
+  background: var(--insight); color: #fff; border-color: var(--insight);
+}
+.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-hint { font-size: 12px; color: var(--text3); }
+#input-area {
+  padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--bg);
+  display: flex; gap: 8px; align-items: flex-end;
+}
 #user-input {
   flex: 1; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius-sm);
   color: var(--text); font-family: Arial, Helvetica, sans-serif; font-size: 15px;
@@ -331,6 +248,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
       <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas + numpy + matplotlib</span></div>
       <div class="step" id="step-csv"><span class="dot"></span><span>Cargando CSVs locales</span></div>
+      <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de análisis</span></div>
     </div>
   </div>
 </div>
@@ -342,6 +260,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <p>Pregunta sobre KPIs, conversi&oacute;n, distribuciones o tendencias. El asistente generar&aacute; c&oacute;digo Python que se ejecuta en tu navegador sobre los datos cargados.</p>
     </div>
   </div>
+
   <div id="quick-questions">
     <button class="quick-btn" onclick="quickAsk('\u00bfCu\u00e1ntos leads hay en total?')">total leads</button>
     <button class="quick-btn" onclick="quickAsk('Top 5 ciudades de inter\u00e9s')">top ciudades</button>
@@ -349,6 +268,14 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <button class="quick-btn" onclick="quickAsk('Compara leads del curso 2024/2025 vs 2025/2026')">comparar cursos</button>
     <button class="quick-btn" onclick="quickAsk('Distribuci\u00f3n de leads por origen agrupado')">por origen</button>
   </div>
+
+  <div id="actions-bar">
+    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Análisis determinista de Leads, Contacts y CR sobre la última consulta">
+      📊 Generar conclusiones
+    </button>
+    <span class="action-hint" id="insight-hint">Haz una consulta primero para activar el análisis.</span>
+  </div>
+
   <div id="input-area">
     <textarea id="user-input" placeholder="Escribe tu pregunta..." rows="1"
       onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
@@ -371,11 +298,12 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 var apiKey = "";
 var systemCtx = "";
+var insightsScript = "";
 var chatHistory = [];
 var busy = false;
 var pyodide = null;
 var loadedCsvs = new Set();
-
+var lastUserQuery = null;
 
 var CSV_TABLES = {
   "leads_contacts":             "Leads_Contacts.csv",
@@ -437,6 +365,18 @@ async function initChat() {
     setStep("step-csv", "active");
     await loadCsv("leads_contacts");
     setStep("step-csv", "done");
+    setStep("step-insights", "active");
+    try {
+      var r2 = await fetch("insights_script.py?v=" + Date.now());
+      if (r2.ok) {
+        insightsScript = await r2.text();
+      } else {
+        console.warn("insights_script.py no disponible (HTTP " + r2.status + ")");
+      }
+    } catch(e) {
+      console.warn("Error cargando insights_script.py:", e);
+    }
+    setStep("step-insights", insightsScript ? "done" : "error");
 
     apiKey = key;
 
@@ -463,7 +403,6 @@ async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) return true;
   var file = CSV_TABLES[varName];
   if (!file) return false;
-
   try {
     var r = await fetch(file + "?v=" + Date.now());
     if (!r.ok) {
@@ -472,7 +411,6 @@ async function loadCsv(varName) {
     }
     var text = await r.text();
     pyodide.globals.set("__csv_buffer__", text);
-
     var parseDates = (varName === "leads_contacts")
       ? "parse_dates=" + JSON.stringify(DATE_COLUMNS_LEADS)
       : "";
@@ -525,10 +463,13 @@ async function sendMessage(text) {
   appendMsg("user", userText);
   chatHistory.push({ role: "user", content: userText });
 
+  lastUserQuery = userText;
+
   var tid = appendTyping("generando código...");
   setStatus("llamando a la API...", "busy");
   busy = true;
   document.getElementById("send-btn").disabled = true;
+  document.getElementById("insight-btn").disabled = true;
 
   try {
     var r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -565,7 +506,7 @@ async function sendMessage(text) {
       setStatus("ejecutando código...", "busy");
       await ensureTablesLoaded(pythonCode);
       var execResult = await runPython(pythonCode);
-      appendResult(execResult, pythonCode);
+      appendResult(execResult, pythonCode, false);
       setStatus("listo", "ok");
     }
   } catch(e) {
@@ -575,10 +516,65 @@ async function sendMessage(text) {
   } finally {
     busy = false;
     document.getElementById("send-btn").disabled = false;
+    updateInsightButton();
+  }
+}
+
+async function generateInsights() {
+  if (!lastUserQuery) return;
+  if (busy) return;
+  if (!insightsScript) {
+    appendError("El script de análisis (insights_script.py) no se ha cargado correctamente. Verifica que el archivo está en la misma carpeta que index.html.");
+    return;
+  }
+
+  appendMsg("user", "📊 Generar conclusiones sobre: \"" + lastUserQuery + "\"");
+
+  var tid = appendTyping("ejecutando análisis determinista...");
+  setStatus("calculando drivers...", "busy");
+  busy = true;
+  document.getElementById("send-btn").disabled = true;
+  document.getElementById("insight-btn").disabled = true;
+
+  try {
+    pyodide.globals.set("last_user_query", lastUserQuery);
+    var execResult = await runPython(insightsScript);
+
+    removeTyping(tid);
+    appendResult(execResult, insightsScript, true);
+    setStatus("análisis completado", "ok");
+  } catch(e) {
+    removeTyping(tid);
+    appendError("Error en el análisis: " + e.message);
+    setStatus("error", "error");
+  } finally {
+    busy = false;
+    document.getElementById("send-btn").disabled = false;
+    updateInsightButton();
+  }
+}
+
+function updateInsightButton() {
+  var btn = document.getElementById("insight-btn");
+  var hint = document.getElementById("insight-hint");
+  if (lastUserQuery && !busy && insightsScript) {
+    btn.disabled = false;
+    var truncated = lastUserQuery.length > 60 ? lastUserQuery.substring(0, 60) + "…" : lastUserQuery;
+    hint.textContent = "Analizar Leads/Contacts/CR de: \"" + truncated + "\"";
+  } else if (!insightsScript) {
+    btn.disabled = true;
+    hint.textContent = "Script de análisis no cargado.";
+  } else if (!lastUserQuery) {
+    btn.disabled = true;
+    hint.textContent = "Haz una consulta primero para activar el análisis.";
+  } else {
+    btn.disabled = true;
+    hint.textContent = "Procesando...";
   }
 }
 
 function quickAsk(t) { sendMessage(t); }
+
 function extractPython(reply) {
   var m = reply.match(/```(?:python)?\s*\n([\s\S]*?)```/);
   if (m) return m[1].trim();
@@ -639,7 +635,6 @@ function appendMsg(role, text) {
   var av = role === "user" ? "U" : "R";
   var rl = role === "user" ? "Tú" : "Asistente";
   var formattedText = role === "user" ? esc(text) : marked.parse(text);
-
   d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
     + '<div class="msg-body">'
     + '<div class="msg-role">' + rl + '</div>'
@@ -653,26 +648,24 @@ function appendAssistantText(text) {
   appendMsg("assistant", text);
 }
 
-function appendResult(result, code) {
+function appendResult(result, code, isInsight) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg assistant";
-
   var inner = '';
   if (result.kind === "error") {
     inner = renderError(result);
   } else {
-    inner = '<div class="result-box">' + renderResult(result) + '</div>';
+    var cls = "result-box" + (isInsight ? " insight" : "");
+    inner = '<div class="' + cls + '">' + renderResult(result) + '</div>';
   }
-  inner += renderCodeToggle(code);
-
+  inner += renderCodeToggle(code, isInsight);
   d.innerHTML = '<div class="msg-avatar">R</div>'
     + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente</div>'
+    + '<div class="msg-role">Asistente' + (isInsight ? ' · análisis determinista' : '') + '</div>'
     + '<div class="msg-text">' + inner + '</div>'
     + '</div>';
   box.appendChild(d);
-
   var toggle = d.querySelector(".code-toggle");
   if (toggle) {
     toggle.addEventListener("click", function() {
@@ -681,7 +674,6 @@ function appendResult(result, code) {
       if (blk) blk.classList.toggle("expanded");
     });
   }
-
   scrollToBottom();
 }
 
@@ -693,7 +685,7 @@ function renderResult(r) {
     return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
   }
   if (r.kind === "text") {
-    return '<div class="text-result">' + marked.parseInline(r.value) + '</div>';
+    return '<div class="text-result">' + marked.parse(r.value) + '</div>';
   }
   if (r.kind === "dict") {
     var obj = JSON.parse(r.value);
@@ -754,9 +746,10 @@ function renderError(r) {
   return '<div class="error-box"><strong>Error al ejecutar el código:</strong> ' + esc(r.value) + trace + '</div>';
 }
 
-function renderCodeToggle(code) {
+function renderCodeToggle(code, isInsight) {
   if (!code) return '';
-  return '<span class="code-toggle"><span class="arrow">▶</span> ver código ejecutado</span>'
+  var label = isInsight ? "ver script de análisis" : "ver código ejecutado";
+  return '<span class="code-toggle"><span class="arrow">▶</span> ' + label + '</span>'
     + '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
 }
 
