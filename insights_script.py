@@ -185,10 +185,10 @@ def top_drivers_cr(df_dim, n=3, min_volumen=20):
         df_sorted = df_f.reindex(df_f["Delta_CR_pp"].abs().sort_values(ascending=False).index)
     return df_sorted.head(n)
 
-drivers_origen_vol = top_drivers_volumen(df_origen, 2)
-drivers_origen_cr  = top_drivers_cr(df_origen, 2, min_volumen=30)
-drivers_ciudad_vol = top_drivers_volumen(df_ciudad, 2)
-drivers_ciudad_cr  = top_drivers_cr(df_ciudad, 2, min_volumen=20)
+drivers_origen_vol = top_drivers_volumen(df_origen, 3)
+drivers_origen_cr  = top_drivers_cr(df_origen, 3, min_volumen=30)
+drivers_ciudad_vol = top_drivers_volumen(df_ciudad, 3)
+drivers_ciudad_cr  = top_drivers_cr(df_ciudad, 3, min_volumen=20)
 
 md = []
 
@@ -236,7 +236,7 @@ elif delta_cr_pp > 0:
 else:
     md.append(f"> El CR se mantiene estable entre {curso_1} y {curso_2}.\n")
 
-md.append(f"### Top 2 drivers por **Origen** (impacto en volumen de Leads)\n")
+md.append(f"### Top 3 drivers por **Origen** (impacto en volumen de Leads)\n")
 if drivers_origen_vol.empty:
     md.append("- *No hay datos suficientes para este análisis.*\n")
 else:
@@ -253,7 +253,7 @@ else:
         )
     md.append("")
 
-md.append(f"### Top 2 drivers por **Origen** (impacto en CR)\n")
+md.append(f"### Top 3 drivers por **Origen** (impacto en CR)\n")
 if drivers_origen_cr.empty:
     md.append("- *No hay datos suficientes para este análisis.*\n")
 else:
