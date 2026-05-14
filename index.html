@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Resa · KPI Assistant</title>
+<title>KPI Assistant</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 <style>
@@ -227,7 +227,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <body>
 
 <header>
-  <img src="resa_logo.png" alt="Resa" onerror="this.style.display='none'">
   <div class="header-sep"></div>
   <span class="header-title">KPI Assistant</span>
   <span class="header-model">claude-haiku-4-5 · pyodide</span>
@@ -235,20 +234,20 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 <div id="setup-panel">
   <div class="setup-card">
-    <h2>Iniciar sesión</h2>
+    <h2>Iniciar sesi&oacute;n</h2>
     <p class="setup-sub">Introduce tu API key para conectar con el asistente.</p>
     <div class="field-group">
-      <label>API Key de Anthropic</label>
-      <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
-      <p class="hint">Solo se usa durante esta sesión. No se almacena en ningún servidor.</p>
+      <label>API Key</label>
+      <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
+      <p class="hint">Solo se usa durante esta sesi&oacute;n. No se almacena en ning&uacute;n servidor.</p>
     </div>
     <button class="btn-primary" id="connect-btn" onclick="initChat()">Conectar &rarr;</button>
     <div class="boot-progress" id="boot-progress">
       <div class="step" id="step-ctx"><span class="dot"></span><span>Cargando contexto del modelo</span></div>
       <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
-      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas + numpy + matplotlib</span></div>
-      <div class="step" id="step-csv"><span class="dot"></span><span>Cargando CSVs locales</span></div>
-      <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de análisis</span></div>
+      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy, matplotlib, scikit-learn</span></div>
+      <div class="step" id="step-csv"><span class="dot"></span><span>Cargando datos</span></div>
+      <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de an&aacute;lisis</span></div>
     </div>
   </div>
 </div>
@@ -257,23 +256,22 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   <div id="messages">
     <div class="welcome-area" id="welcome">
       <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
-      <p>Pregunta sobre KPIs, conversi&oacute;n, distribuciones o tendencias. El asistente generar&aacute; c&oacute;digo Python que se ejecuta en tu navegador sobre los datos cargados.</p>
+      <p>Pregunta sobre el modelo de datos, indicadores o tendencias. El asistente generar&aacute; c&oacute;digo Python que se ejecuta en tu navegador sobre los datos cargados.</p>
     </div>
   </div>
 
   <div id="quick-questions">
-    <button class="quick-btn" onclick="quickAsk('\u00bfCu\u00e1ntos leads hay en total?')">total leads</button>
-    <button class="quick-btn" onclick="quickAsk('Top 5 ciudades de inter\u00e9s')">top ciudades</button>
-    <button class="quick-btn" onclick="quickAsk('Tasa de conversi\u00f3n del curso 2025/2026')">conversi&oacute;n 25/26</button>
-    <button class="quick-btn" onclick="quickAsk('Compara leads del curso 2024/2025 vs 2025/2026')">comparar cursos</button>
-    <button class="quick-btn" onclick="quickAsk('Distribuci\u00f3n de leads por origen agrupado')">por origen</button>
+    <button class="quick-btn" onclick="quickAsk('\u00bfQu\u00e9 tablas hay en el modelo?')">tablas del modelo</button>
+    <button class="quick-btn" onclick="quickAsk('Resumen de indicadores principales')">resumen KPIs</button>
+    <button class="quick-btn" onclick="quickAsk('Compara los dos \u00faltimos periodos')">comparar periodos</button>
+    <button class="quick-btn" onclick="quickAsk('Top 5 categor\u00edas por volumen')">top categor&iacute;as</button>
   </div>
 
   <div id="actions-bar">
-    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Análisis determinista de Leads, Contacts y CR sobre la última consulta">
-      📊 Generar conclusiones
+    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="An&aacute;lisis de drivers sobre la &uacute;ltima consulta">
+      &#128202; Generar conclusiones
     </button>
-    <span class="action-hint" id="insight-hint">Haz una consulta primero para activar el análisis.</span>
+    <span class="action-hint" id="insight-hint">Haz una consulta primero para activar el an&aacute;lisis.</span>
   </div>
 
   <div id="input-area">
@@ -305,6 +303,8 @@ var pyodide = null;
 var loadedCsvs = new Set();
 var lastUserQuery = null;
 
+// Mapa nombre_variable_python -> archivo CSV.
+// El front es agnóstico al cliente: estos nombres se redefinen por proyecto.
 var CSV_TABLES = {
   "leads_contacts":             "Leads_Contacts.csv",
   "tabla_ciudad_actual":        "Tabla_Ciudad_Actual.csv",
@@ -319,14 +319,18 @@ var CSV_TABLES = {
   "glosario":                   "Glosario.csv"
 };
 
-var DATE_COLUMNS_LEADS = ["Fecha creación"];
+// CSV principal que se precarga al arrancar. Resto se cargan bajo demanda.
+var PRIMARY_CSV = "leads_contacts";
+
+// Columnas que deben parsearse como fechas al cargar el CSV principal.
+var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 
 marked.use({ breaks: true, gfm: true });
 
 
 async function initChat() {
   var key = document.getElementById("api-key-input").value.trim();
-  if (!key) { alert("Introduce tu API key de Anthropic."); return; }
+  if (!key) { alert("Introduce tu API key."); return; }
 
   var btn = document.getElementById("connect-btn");
   btn.textContent = "Conectando...";
@@ -351,7 +355,7 @@ async function initChat() {
     setStep("step-pyodide", "done");
 
     setStep("step-pkgs", "active");
-    await pyodide.loadPackage(["pandas", "numpy", "matplotlib"]);
+    await pyodide.loadPackage(["pandas", "numpy", "matplotlib", "scikit-learn"]);
     await pyodide.runPythonAsync(
       "import pandas as pd\n" +
       "import numpy as np\n" +
@@ -363,8 +367,9 @@ async function initChat() {
     setStep("step-pkgs", "done");
 
     setStep("step-csv", "active");
-    await loadCsv("leads_contacts");
+    await loadCsv(PRIMARY_CSV);
     setStep("step-csv", "done");
+
     setStep("step-insights", "active");
     try {
       var r2 = await fetch("insights_script.py?v=" + Date.now());
@@ -411,8 +416,8 @@ async function loadCsv(varName) {
     }
     var text = await r.text();
     pyodide.globals.set("__csv_buffer__", text);
-    var parseDates = (varName === "leads_contacts")
-      ? "parse_dates=" + JSON.stringify(DATE_COLUMNS_LEADS)
+    var parseDates = (varName === PRIMARY_CSV)
+      ? "parse_dates=" + JSON.stringify(PRIMARY_DATE_COLUMNS)
       : "";
     var pyCode =
       "from io import StringIO\n" +
@@ -445,7 +450,7 @@ async function ensureTablesLoaded(pythonCode) {
 
 function buildSystem() {
   if (systemCtx) return systemCtx;
-  return "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales (leads_contacts, etc.).";
+  return "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales.";
 }
 
 async function sendMessage(text) {
@@ -528,10 +533,19 @@ async function generateInsights() {
     return;
   }
 
+  // Asegura que todas las dimensiones estén cargadas antes del análisis,
+  // ya que el insights_script puede explorar cualquier dimensión disponible.
+  setStatus("cargando dimensiones...", "busy");
+  for (var v in CSV_TABLES) {
+    if (!loadedCsvs.has(v)) {
+      await loadCsv(v);
+    }
+  }
+
   appendMsg("user", "Generar conclusiones sobre: \"" + lastUserQuery + "\"");
 
-  var tid = appendTyping("ejecutando análisis determinista...");
-  setStatus("calculando drivers...", "busy");
+  var tid = appendTyping("ejecutando análisis de drivers...");
+  setStatus("entrenando Random Forest...", "busy");
   busy = true;
   document.getElementById("send-btn").disabled = true;
   document.getElementById("insight-btn").disabled = true;
@@ -560,7 +574,7 @@ function updateInsightButton() {
   if (lastUserQuery && !busy && insightsScript) {
     btn.disabled = false;
     var truncated = lastUserQuery.length > 60 ? lastUserQuery.substring(0, 60) + "…" : lastUserQuery;
-    hint.textContent = "Analizar Leads/Contacts/CR de: \"" + truncated + "\"";
+    hint.textContent = "Analizar drivers de: \"" + truncated + "\"";
   } else if (!insightsScript) {
     btn.disabled = true;
     hint.textContent = "Script de análisis no cargado.";
@@ -632,7 +646,7 @@ function appendMsg(role, text) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg " + role;
-  var av = role === "user" ? "U" : "R";
+  var av = role === "user" ? "U" : "A";
   var rl = role === "user" ? "Tú" : "Asistente";
   var formattedText = role === "user" ? esc(text) : marked.parse(text);
   d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
@@ -660,9 +674,9 @@ function appendResult(result, code, isInsight) {
     inner = '<div class="' + cls + '">' + renderResult(result) + '</div>';
   }
   inner += renderCodeToggle(code, isInsight);
-  d.innerHTML = '<div class="msg-avatar">R</div>'
+  d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + (isInsight ? ' · análisis determinista' : '') + '</div>'
+    + '<div class="msg-role">Asistente' + (isInsight ? ' · análisis de drivers' : '') + '</div>'
     + '<div class="msg-text">' + inner + '</div>'
     + '</div>';
   box.appendChild(d);
@@ -759,7 +773,7 @@ function appendTyping(label) {
   var d = document.createElement("div");
   d.className = "msg assistant";
   d.id = id;
-  d.innerHTML = '<div class="msg-avatar">R</div>'
+  d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
     + '<div class="msg-role">Asistente</div>'
     + '<div class="typing-dots"><span></span><span></span><span></span>'
@@ -780,7 +794,7 @@ function appendError(msg) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg assistant";
-  d.innerHTML = '<div class="msg-avatar">R</div>'
+  d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
     + '<div class="msg-role">Asistente</div>'
     + '<div class="msg-text"><div class="error-box">' + esc(msg) + '</div></div>'

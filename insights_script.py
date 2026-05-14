@@ -1,57 +1,137 @@
-import re
-import pandas as pd
-import numpy as np
+"""
+Análisis de drivers — Random Forest sobre dimensiones del modelo.
 
-curso_1_default = "2024/2025"
-curso_2_default = "2025/2026"
+Objetivo: dada la última consulta del usuario, identificar qué variables
+explican la diferencia entre dos cohortes (típicamente dos cursos académicos).
+
+Estrategia:
+  1. Detectar las dos cohortes a comparar a partir de `last_user_query`.
+  2. Construir un dataset a nivel de registro con target binario
+       1 = pertenece a la cohorte "nueva", 0 = cohorte "vieja"
+     (técnica de drift-detection / A-vs-B explanation).
+  3. Entrenar un RandomForestClassifier sobre las dimensiones disponibles.
+  4. Extraer feature_importances_ y mapearlas a variables originales.
+  5. Para las top features, hacer breakdown univariado mostrando qué valores
+     concretos han cambiado y en qué magnitud.
+  6. Devolver markdown con KPIs de cabecera + ranking de drivers + lectura.
+
+Variables globales esperadas en el entorno Pyodide:
+  - leads_contacts (pd.DataFrame)
+  - last_user_query (str)
+"""
+
+import re
+import numpy as np
+import pandas as pd
+
+# ===================== CONFIGURACIÓN =====================
+
+# Dimensiones categóricas que el RF puede usar como features.
+# IMPORTANTE: NO incluir `Curso` ni `Curso_corregido` aquí porque el target
+# binario se construye a partir del curso (sería información del propio
+# target y dominaría las importancias artificialmente).
+CANDIDATE_DIMENSIONS = [
+    "Tipo de registro",
+    "Particular o Grupo",
+    "Origen_Agrupado",
+    "Fuente_Agrupada",
+    "Ciudad_deinteres_corregido",
+    "Ciudad_actual_corregido",
+    "Residencias_interes_corregido",
+    "Residencias_actual_corregido",
+    "Residencia escogida",
+    "Mes creación",
+]
+
+# Columna ID para conteos únicos.
+ID_COL = "Correo electrónico"
+
+# Columna que define el "curso" (cohorte temporal por defecto).
+COURSE_COL = "Curso"
+
+# Parámetros del Random Forest (modestos para Pyodide).
+RF_PARAMS = dict(
+    n_estimators=120,
+    max_depth=8,
+    min_samples_leaf=20,
+    random_state=42,
+    n_jobs=1,
+)
+
+# Cursos por defecto si la consulta no menciona ninguno.
+COURSE_DEFAULTS = ("2024/2025", "2025/2026")
+
+# Número de drivers a reportar.
+TOP_K_DRIVERS = 5
+
+# Para el breakdown univariado, mínimo de registros para considerar relevante.
+MIN_RECORDS_FOR_BREAKDOWN = 30
+
+# ===================== UTILIDADES =====================
 
 try:
     query_text = str(last_user_query) if last_user_query is not None else ""
 except NameError:
     query_text = ""
 
-patron = r"\b(20\d{2}|\d{2})\s*[-/]\s*(20\d{2}|\d{2})\b"
-coincidencias = re.findall(patron, query_text)
 
-cursos_encontrados = []
-for anio_ini, anio_fin in coincidencias:
-    if len(anio_ini) == 2:
-        anio_ini = "20" + anio_ini
-    if len(anio_fin) == 2:
-        anio_fin = "20" + anio_fin
-    
-    cursos_encontrados.append(f"{anio_ini}/{anio_fin}")
+def detectar_cursos(texto, default=COURSE_DEFAULTS):
+    """Extrae cursos del tipo 'YYYY/YYYY' o 'YY/YY' de la consulta del usuario.
+    Si solo hay uno, asume comparación contra el inmediatamente anterior.
+    Si no hay ninguno, devuelve el par por defecto."""
+    patron = r"\b(20\d{2}|\d{2})\s*[-/]\s*(20\d{2}|\d{2})\b"
+    cursos = []
+    for ini, fin in re.findall(patron, texto):
+        if len(ini) == 2:
+            ini = "20" + ini
+        if len(fin) == 2:
+            fin = "20" + fin
+        cursos.append(f"{ini}/{fin}")
 
-if not cursos_encontrados:
-    anios_sueltos = re.findall(r"\b(20\d{2})\b", query_text)
-    for anio in anios_sueltos:
-        anio_int = int(anio)
-        cursos_encontrados.append(f"{anio_int}/{anio_int+1}")
+    if not cursos:
+        anios = re.findall(r"\b(20\d{2})\b", texto)
+        for a in anios:
+            n = int(a)
+            cursos.append(f"{n}/{n+1}")
 
-if len(cursos_encontrados) >= 2:
-    cursos_encontrados = sorted(list(set(cursos_encontrados)))
-    curso_1 = cursos_encontrados[0]
-    curso_2 = cursos_encontrados[-1]
-elif len(cursos_encontrados) == 1:
-    unico = cursos_encontrados[0]
+    if len(cursos) >= 2:
+        cursos = sorted(set(cursos))
+        return cursos[0], cursos[-1]
+    if len(cursos) == 1:
+        unico = cursos[0]
+        try:
+            n = int(unico.split("/")[0])
+            return f"{n-1}/{n}", unico
+        except Exception:
+            return default
+    return default
+
+
+def fmt_num(n):
     try:
-        anio_ini = int(unico.split("/")[0])
-        curso_1 = f"{anio_ini-1}/{anio_ini}"
-        curso_2 = unico
+        return f"{int(n):,}".replace(",", ".")
     except Exception:
-        curso_1 = curso_1_default
-        curso_2 = curso_2_default
-else:
-    curso_1 = curso_1_default
-    curso_2 = curso_2_default
+        return str(n)
+
+
+def fmt_pct(p, dec=2):
+    if p is None or pd.isna(p):
+        return "—"
+    return f"{p*100:+.{dec}f}%"
+
+
+def fmt_pct_abs(p, dec=2):
+    if p is None or pd.isna(p):
+        return "—"
+    return f"{p*100:.{dec}f}%"
+
 
 def contar_leads(df, curso=None):
     f = df[df["Tipo de registro"] == "Leads"]
     if curso is not None:
-        f = f[f["Curso"] == curso]
-    if f.empty:
-        return 0
-    return int(f["Correo electrónico"].nunique())
+        f = f[f[COURSE_COL] == curso]
+    return int(f[ID_COL].nunique()) if not f.empty else 0
+
 
 def contar_contacts(df, curso=None):
     f = df[
@@ -59,296 +139,283 @@ def contar_contacts(df, curso=None):
         (df["Particular o Grupo"] == "Particular")
     ]
     if curso is not None:
-        f = f[f["Curso"] == curso]
-    if f.empty:
-        return 0
-    return int(f["Correo electrónico"].nunique())
+        f = f[f[COURSE_COL] == curso]
+    return int(f[ID_COL].nunique()) if not f.empty else 0
+
 
 def calcular_cr(contacts, leads):
     denom = contacts + leads
-    if denom <= 0:
-        return 0.0
-    return contacts / denom
+    return contacts / denom if denom > 0 else 0.0
+
 
 def var_pct(nuevo, viejo):
     if viejo is None or viejo == 0:
         return None
     return (nuevo / viejo) - 1.0
 
-def fmt_pct(p, decimales=2):
-    if p is None:
-        return "—"
-    return f"{p*100:+.{decimales}f}%"
 
-def fmt_pct_abs(p, decimales=2):
-    if p is None:
-        return "—"
-    return f"{p*100:.{decimales}f}%"
+# ===================== ENTRENAR RANDOM FOREST =====================
 
-def fmt_num(n):
-    if n is None:
-        return "—"
-    try:
-        return f"{int(n):,}".replace(",", ".")
-    except Exception:
-        return str(n)
+def entrenar_rf(df_completo, curso_1, curso_2, dimensiones):
+    """Entrena un RandomForestClassifier para distinguir registros del curso_2
+    de los del curso_1. Devuelve (importancias_por_dimension, n_total)."""
+    from sklearn.ensemble import RandomForestClassifier
 
-leads_1 = contar_leads(leads_contacts, curso_1)
-leads_2  = contar_leads(leads_contacts, curso_2)
+    # Filtrar a las dos cohortes.
+    df = df_completo[df_completo[COURSE_COL].isin([curso_1, curso_2])].copy()
+    if df.empty:
+        return pd.DataFrame(), 0
 
-contacts_1 = contar_contacts(leads_contacts, curso_1)
-contacts_2  = contar_contacts(leads_contacts, curso_2)
+    # Quedarse solo con dimensiones presentes en el df.
+    dims = [d for d in dimensiones if d in df.columns and d != COURSE_COL]
+    if not dims:
+        return pd.DataFrame(), 0
 
-cr_1 = calcular_cr(contacts_1, leads_1)
-cr_2  = calcular_cr(contacts_2, leads_2)
+    # Rellenar nulos y forzar a string para get_dummies.
+    X_raw = df[dims].copy()
+    for c in X_raw.columns:
+        X_raw[c] = X_raw[c].fillna("Sin info").astype(str)
 
-delta_leads     = leads_2 - leads_1
-delta_contacts  = contacts_2 - contacts_1
-delta_cr_pp     = (cr_2 - cr_1) * 100 
+    # One-hot encoding con prefijo = nombre de la dimensión original.
+    # max_categories implícito via drop_first=False; controlamos cardinalidad antes.
+    # Para dimensiones muy cardinales, conservamos solo las top-N por frecuencia.
+    MAX_CAT_PER_DIM = 25
+    for c in dims:
+        vc = X_raw[c].value_counts()
+        if len(vc) > MAX_CAT_PER_DIM:
+            top = set(vc.head(MAX_CAT_PER_DIM).index)
+            X_raw[c] = X_raw[c].where(X_raw[c].isin(top), other="Otros (cola)")
 
-var_leads_pct    = var_pct(leads_2, leads_1)
-var_contacts_pct = var_pct(contacts_2, contacts_1)
-var_cr_pct       = var_pct(cr_2, cr_1)
+    X = pd.get_dummies(X_raw, prefix_sep="||")
+    y = (df[COURSE_COL] == curso_2).astype(int).values
 
-def analizar_dimension(df, dim_col, curso_1, curso_2):
-    df_filt = df[df["Curso"].isin([curso_1, curso_2])].copy()
-    if df_filt.empty or dim_col not in df_filt.columns:
+    if X.shape[1] == 0 or len(np.unique(y)) < 2:
+        return pd.DataFrame(), len(df)
+
+    rf = RandomForestClassifier(**RF_PARAMS)
+    rf.fit(X.values, y)
+
+    # Acumular importancias por dimensión original.
+    importancias = pd.Series(rf.feature_importances_, index=X.columns)
+    por_dim = {}
+    for col, imp in importancias.items():
+        dim_original = col.split("||")[0]
+        por_dim[dim_original] = por_dim.get(dim_original, 0.0) + float(imp)
+
+    df_imp = (
+        pd.DataFrame({"dimension": list(por_dim.keys()),
+                      "importancia": list(por_dim.values())})
+        .sort_values("importancia", ascending=False)
+        .reset_index(drop=True)
+    )
+    return df_imp, len(df)
+
+
+# ===================== BREAKDOWN UNIVARIADO =====================
+
+def breakdown_por_dimension(df_completo, dim, curso_1, curso_2,
+                            min_total=MIN_RECORDS_FOR_BREAKDOWN):
+    """Para una dimensión, devuelve un DataFrame con conteos de Leads y
+    Contacts y deltas entre las dos cohortes."""
+    if dim not in df_completo.columns:
         return pd.DataFrame()
 
+    df = df_completo[df_completo[COURSE_COL].isin([curso_1, curso_2])].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    df[dim] = df[dim].fillna("Sin info").astype(str)
+
     leads_g = (
-        df_filt[df_filt["Tipo de registro"] == "Leads"]
-        .groupby([dim_col, "Curso"])["Correo electrónico"]
-        .nunique()
-        .unstack("Curso", fill_value=0)
+        df[df["Tipo de registro"] == "Leads"]
+        .groupby([dim, COURSE_COL])[ID_COL].nunique()
+        .unstack(COURSE_COL, fill_value=0)
     )
     contacts_g = (
-        df_filt[
-            (df_filt["Tipo de registro"] == "Contacts") &
-            (df_filt["Particular o Grupo"] == "Particular")
-        ]
-        .groupby([dim_col, "Curso"])["Correo electrónico"]
-        .nunique()
-        .unstack("Curso", fill_value=0)
+        df[(df["Tipo de registro"] == "Contacts") &
+           (df["Particular o Grupo"] == "Particular")]
+        .groupby([dim, COURSE_COL])[ID_COL].nunique()
+        .unstack(COURSE_COL, fill_value=0)
     )
 
-    for c in [curso_1, curso_2]:
-        if c not in leads_g.columns:
-            leads_g[c] = 0
-        if c not in contacts_g.columns:
-            contacts_g[c] = 0
+    idx = leads_g.index.union(contacts_g.index)
+    out = pd.DataFrame(index=idx)
+    out.index.name = dim
+    for c in (curso_1, curso_2):
+        out[f"Leads_{c}"] = leads_g.reindex(idx).get(c, pd.Series(0, index=idx)).fillna(0).astype(int)
+        out[f"Contacts_{c}"] = contacts_g.reindex(idx).get(c, pd.Series(0, index=idx)).fillna(0).astype(int)
 
-    out = pd.DataFrame(index=leads_g.index.union(contacts_g.index))
-    out.index.name = dim_col
-    out["Leads_1"]    = leads_g.reindex(out.index)[curso_1].fillna(0).astype(int)
-    out["Leads_2"]     = leads_g.reindex(out.index)[curso_2].fillna(0).astype(int)
-    out["Contacts_1"] = contacts_g.reindex(out.index)[curso_1].fillna(0).astype(int)
-    out["Contacts_2"]  = contacts_g.reindex(out.index)[curso_2].fillna(0).astype(int)
+    out["Delta_Leads"] = out[f"Leads_{curso_2}"] - out[f"Leads_{curso_1}"]
+    out["Delta_Contacts"] = out[f"Contacts_{curso_2}"] - out[f"Contacts_{curso_1}"]
 
-    denom_1 = out["Contacts_1"] + out["Leads_1"]
-    denom_2  = out["Contacts_2"] + out["Leads_2"]
-    out["CR_1"] = np.where(denom_1 > 0, out["Contacts_1"] / denom_1, 0.0)
-    out["CR_2"]  = np.where(denom_2  > 0, out["Contacts_2"]  / denom_2,  0.0)
+    denom_1 = out[f"Contacts_{curso_1}"] + out[f"Leads_{curso_1}"]
+    denom_2 = out[f"Contacts_{curso_2}"] + out[f"Leads_{curso_2}"]
+    out[f"CR_{curso_1}"] = np.where(denom_1 > 0, out[f"Contacts_{curso_1}"] / denom_1, 0.0)
+    out[f"CR_{curso_2}"] = np.where(denom_2 > 0, out[f"Contacts_{curso_2}"] / denom_2, 0.0)
+    out["Delta_CR_pp"] = (out[f"CR_{curso_2}"] - out[f"CR_{curso_1}"]) * 100
 
-    out["Delta_Leads"]    = out["Leads_2"]    - out["Leads_1"]
-    out["Delta_Contacts"] = out["Contacts_2"] - out["Contacts_1"]
-    out["Delta_CR_pp"]    = (out["CR_2"] - out["CR_1"]) * 100
+    # Filtrar valores con volumen mínimo.
+    total = denom_1 + denom_2
+    out = out[total >= min_total]
 
     return out.reset_index()
 
-df_origen = analizar_dimension(leads_contacts, "Origen_Agrupado", curso_1, curso_2)
-df_ciudad = analizar_dimension(leads_contacts, "Ciudad_deinteres_corregido", curso_1, curso_2)
 
-direccion_leads = "subida" if delta_leads > 0 else ("caída" if delta_leads < 0 else "estabilidad")
+# ===================== EJECUCIÓN =====================
 
-def top_drivers_volumen(df_dim, n=3):
-    if df_dim.empty:
-        return df_dim
-    df_sorted = df_dim.reindex(df_dim["Delta_Leads"].abs().sort_values(ascending=False).index)
-    if delta_leads < 0:
-        df_sorted = df_dim.sort_values("Delta_Leads", ascending=True)
-    elif delta_leads > 0:
-        df_sorted = df_dim.sort_values("Delta_Leads", ascending=False)
-    return df_sorted.head(n)
+curso_1, curso_2 = detectar_cursos(query_text)
 
-def top_drivers_cr(df_dim, n=3, min_volumen=20):
-    if df_dim.empty:
-        return df_dim
-    vol_total = df_dim["Leads_1"] + df_dim["Leads_2"] + df_dim["Contacts_1"] + df_dim["Contacts_2"]
-    df_f = df_dim[vol_total >= min_volumen].copy()
-    if df_f.empty:
-        df_f = df_dim.copy()
-    if delta_cr_pp < 0:
-        df_sorted = df_f.sort_values("Delta_CR_pp", ascending=True)
-    elif delta_cr_pp > 0:
-        df_sorted = df_f.sort_values("Delta_CR_pp", ascending=False)
-    else:
-        df_sorted = df_f.reindex(df_f["Delta_CR_pp"].abs().sort_values(ascending=False).index)
-    return df_sorted.head(n)
+# KPIs de cabecera.
+leads_1 = contar_leads(leads_contacts, curso_1)
+leads_2 = contar_leads(leads_contacts, curso_2)
+contacts_1 = contar_contacts(leads_contacts, curso_1)
+contacts_2 = contar_contacts(leads_contacts, curso_2)
+cr_1 = calcular_cr(contacts_1, leads_1)
+cr_2 = calcular_cr(contacts_2, leads_2)
 
-drivers_origen_vol = top_drivers_volumen(df_origen, 3)
-drivers_origen_cr  = top_drivers_cr(df_origen, 3, min_volumen=30)
-drivers_ciudad_vol = top_drivers_volumen(df_ciudad, 3)
-drivers_ciudad_cr  = top_drivers_cr(df_ciudad, 3, min_volumen=20)
+delta_leads = leads_2 - leads_1
+delta_contacts = contacts_2 - contacts_1
+delta_cr_pp = (cr_2 - cr_1) * 100
+var_leads = var_pct(leads_2, leads_1)
+var_contacts = var_pct(contacts_2, contacts_1)
+var_cr = var_pct(cr_2, cr_1)
+
+# Random Forest.
+df_imp, n_registros = entrenar_rf(leads_contacts, curso_1, curso_2, CANDIDATE_DIMENSIONS)
+
+# ===================== CONSTRUIR MARKDOWN =====================
 
 md = []
-
 md.append(f"## **Análisis de drivers · {curso_1} → {curso_2}**\n")
-md.append(f"**Consulta original: «{query_text if query_text else 'análisis por defecto'}»**\n")
+md.append(f"*Consulta original: «{query_text if query_text else 'análisis por defecto'}»*\n")
 
-md.append("### **Conclusiones**\n")
-
-if delta_leads != 0:
-    md.append(
-        f"- **Leads:** {fmt_num(leads_1)} → {fmt_num(leads_2)} "
-        f"(**{'+' if delta_leads >= 0 else ''}{fmt_num(delta_leads)}**, "
-        f"{fmt_pct(var_leads_pct)})"
-    )
-else:
-    md.append(f"- **Leads:** {fmt_num(leads_1)} → {fmt_num(leads_2)} (sin variación)")
-
-if delta_contacts != 0:
-    md.append(
-        f"- **Contacts particulares:** {fmt_num(contacts_1)} → {fmt_num(contacts_2)} "
-        f"(**{'+' if delta_contacts >= 0 else ''}{fmt_num(delta_contacts)}**, "
-        f"{fmt_pct(var_contacts_pct)})"
-    )
-else:
-    md.append(f"- **Contacts particulares:** {fmt_num(contacts_1)} → {fmt_num(contacts_2)} (sin variación)")
-
-signo_cr = "+" if delta_cr_pp >= 0 else ""
+md.append("### KPIs de cabecera\n")
+md.append(
+    f"- **Leads:** {fmt_num(leads_1)} → {fmt_num(leads_2)} "
+    f"(**{'+' if delta_leads >= 0 else ''}{fmt_num(delta_leads)}**, {fmt_pct(var_leads)})"
+)
+md.append(
+    f"- **Contacts particulares:** {fmt_num(contacts_1)} → {fmt_num(contacts_2)} "
+    f"(**{'+' if delta_contacts >= 0 else ''}{fmt_num(delta_contacts)}**, {fmt_pct(var_contacts)})"
+)
+signo = "+" if delta_cr_pp >= 0 else ""
 md.append(
     f"- **Conversion Rate:** {fmt_pct_abs(cr_1)} → {fmt_pct_abs(cr_2)} "
-    f"(**{signo_cr}{delta_cr_pp:.2f} pp**, {fmt_pct(var_cr_pct)})\n"
+    f"(**{signo}{delta_cr_pp:.2f} pp**, {fmt_pct(var_cr)})\n"
 )
 
-if delta_cr_pp < 0:
-    md.append(
-        f"> El CR ha **bajado {abs(delta_cr_pp):.2f} pp** entre {curso_1} y {curso_2}. "
-        f"Los Leads {direccion_leads} en {fmt_num(abs(delta_leads))} registros y los Contacts {('subieron' if delta_contacts>0 else 'bajaron' if delta_contacts<0 else 'se mantuvieron')} "
-        f"en {fmt_num(abs(delta_contacts))}.\n"
-    )
-elif delta_cr_pp > 0:
-    md.append(
-        f"> El CR ha **subido {delta_cr_pp:.2f} pp** entre {curso_1} y {curso_2}. "
-        f"Los Leads {direccion_leads} en {fmt_num(abs(delta_leads))} registros y los Contacts {('subieron' if delta_contacts>0 else 'bajaron' if delta_contacts<0 else 'se mantuvieron')} "
-        f"en {fmt_num(abs(delta_contacts))}.\n"
-    )
-else:
-    md.append(f"> El CR se mantiene estable entre {curso_1} y {curso_2}.\n")
+# ----- Sección Random Forest -----
+md.append("### Drivers detectados por Random Forest\n")
+md.append(
+    f"*Modelo entrenado para distinguir registros de {curso_2} frente a {curso_1}. "
+    f"Dataset: {fmt_num(n_registros)} registros.*\n"
+)
 
-md.append(f"### Top 3 drivers por **Origen** (impacto en volumen de Leads)\n")
-if drivers_origen_vol.empty:
-    md.append("- *No hay datos suficientes para este análisis.*\n")
+if df_imp.empty:
+    md.append("- *No ha sido posible entrenar el modelo (datos insuficientes o dimensiones no disponibles).*\n")
 else:
-    for _, row in drivers_origen_vol.iterrows():
-        nombre = row["Origen_Agrupado"] if pd.notna(row["Origen_Agrupado"]) else "Sin info"
-        dl = int(row["Delta_Leads"])
-        signo = "+" if dl >= 0 else ""
-        impacto = "aportó" if dl > 0 else "restó"
+    top_drivers = df_imp.head(TOP_K_DRIVERS)
+    total_imp = top_drivers["importancia"].sum()
+
+    md.append("| # | Dimensión | Importancia | % del top |")
+    md.append("|---|---|---|---|")
+    for i, row in top_drivers.iterrows():
+        pct_local = (row["importancia"] / total_imp * 100) if total_imp > 0 else 0
         md.append(
-            f"- **{nombre}**: {fmt_num(row['Leads_1'])} → {fmt_num(row['Leads_2'])} leads "
-            f"(**{signo}{fmt_num(dl)}**). CR pasó de {fmt_pct_abs(row['CR_1'])} a {fmt_pct_abs(row['CR_2'])} "
-            f"({'+' if row['Delta_CR_pp']>=0 else ''}{row['Delta_CR_pp']:.2f} pp). "
-            f"Este origen **{impacto} {fmt_num(abs(dl))} leads** al cambio global."
+            f"| {i+1} | **{row['dimension']}** | "
+            f"{row['importancia']:.4f} | {pct_local:.1f}% |"
         )
     md.append("")
 
-md.append(f"### Top 3 drivers por **Origen** (impacto en CR)\n")
-if drivers_origen_cr.empty:
-    md.append("- *No hay datos suficientes para este análisis.*\n")
-else:
-    for _, row in drivers_origen_cr.iterrows():
-        nombre = row["Origen_Agrupado"] if pd.notna(row["Origen_Agrupado"]) else "Sin info"
-        dcr = row["Delta_CR_pp"]
-        signo = "+" if dcr >= 0 else ""
-        md.append(
-            f"- **{nombre}**: CR {fmt_pct_abs(row['CR_1'])} → {fmt_pct_abs(row['CR_2'])} "
-            f"(**{signo}{dcr:.2f} pp**). Leads: {fmt_num(row['Leads_1'])} → {fmt_num(row['Leads_2'])} · "
-            f"Contacts: {fmt_num(row['Contacts_1'])} → {fmt_num(row['Contacts_2'])}."
-        )
-    md.append("")
+    # ----- Breakdown de los top 3 drivers -----
+    md.append(f"### Breakdown de los {min(3, len(top_drivers))} drivers principales\n")
 
-md.append(f"### Top 2 drivers por **Ciudad de interés** (impacto en volumen de Leads)\n")
-if drivers_ciudad_vol.empty:
-    md.append("- *No hay datos suficientes para este análisis.*\n")
-else:
-    for _, row in drivers_ciudad_vol.iterrows():
-        nombre = row["Ciudad_deinteres_corregido"] if pd.notna(row["Ciudad_deinteres_corregido"]) else "Sin info"
-        dl = int(row["Delta_Leads"])
-        signo = "+" if dl >= 0 else ""
-        impacto = "aportó" if dl > 0 else "restó"
-        md.append(
-            f"- **{nombre}**: {fmt_num(row['Leads_1'])} → {fmt_num(row['Leads_2'])} leads "
-            f"(**{signo}{fmt_num(dl)}**). CR pasó de {fmt_pct_abs(row['CR_1'])} a {fmt_pct_abs(row['CR_2'])} "
-            f"({'+' if row['Delta_CR_pp']>=0 else ''}{row['Delta_CR_pp']:.2f} pp). "
-            f"Esta ciudad **{impacto} {fmt_num(abs(dl))} leads** al cambio global."
-        )
-    md.append("")
+    for i, row in top_drivers.head(3).iterrows():
+        dim = row["dimension"]
+        md.append(f"#### {i+1}. {dim} *(importancia: {row['importancia']:.4f})*\n")
 
-md.append(f"### Top 2 drivers por **Ciudad de interés** (impacto en CR)\n")
-if drivers_ciudad_cr.empty:
-    md.append("- *No hay datos suficientes para este análisis.*\n")
-else:
-    for _, row in drivers_ciudad_cr.iterrows():
-        nombre = row["Ciudad_deinteres_corregido"] if pd.notna(row["Ciudad_deinteres_corregido"]) else "Sin info"
-        dcr = row["Delta_CR_pp"]
-        signo = "+" if dcr >= 0 else ""
-        md.append(
-            f"- **{nombre}**: CR {fmt_pct_abs(row['CR_1'])} → {fmt_pct_abs(row['CR_2'])} "
-            f"(**{signo}{dcr:.2f} pp**). Leads: {fmt_num(row['Leads_1'])} → {fmt_num(row['Leads_2'])} · "
-            f"Contacts: {fmt_num(row['Contacts_1'])} → {fmt_num(row['Contacts_2'])}."
-        )
-    md.append("")
+        bd = breakdown_por_dimension(leads_contacts, dim, curso_1, curso_2)
+        if bd.empty:
+            md.append("- *Sin volumen suficiente para desglose univariado.*\n")
+            continue
 
-# --- Conclusión narrativa ---
+        # Top movimientos por delta de leads (positivos y negativos).
+        bd_sorted = bd.reindex(bd["Delta_Leads"].abs().sort_values(ascending=False).index)
+        top_movs = bd_sorted.head(5)
+
+        md.append(
+            f"| Valor | Leads {curso_1} → {curso_2} | Δ Leads | "
+            f"CR {curso_1} → {curso_2} | Δ CR (pp) |"
+        )
+        md.append("|---|---|---|---|---|")
+        for _, r in top_movs.iterrows():
+            val = r[dim] if pd.notna(r[dim]) else "Sin info"
+            dl = int(r["Delta_Leads"])
+            signo_dl = "+" if dl >= 0 else ""
+            cr_old = r[f"CR_{curso_1}"]
+            cr_new = r[f"CR_{curso_2}"]
+            dcr = r["Delta_CR_pp"]
+            signo_dcr = "+" if dcr >= 0 else ""
+            md.append(
+                f"| **{val}** | "
+                f"{fmt_num(r[f'Leads_{curso_1}'])} → {fmt_num(r[f'Leads_{curso_2}'])} | "
+                f"**{signo_dl}{fmt_num(dl)}** | "
+                f"{fmt_pct_abs(cr_old)} → {fmt_pct_abs(cr_new)} | "
+                f"{signo_dcr}{dcr:.2f} |"
+            )
+        md.append("")
+
+# ----- Lectura narrativa -----
 md.append("### Lectura\n")
 
-partes_conclusion = []
+partes = []
+if not df_imp.empty:
+    top1 = df_imp.iloc[0]["dimension"]
+    partes.append(f"la variable que mejor explica el cambio entre {curso_1} y {curso_2} es **{top1}**")
+    if len(df_imp) > 1:
+        top2 = df_imp.iloc[1]["dimension"]
+        partes.append(f"seguida de **{top2}**")
 
-# Usamos los drivers de CR (no los de volumen) para explicar la variación del CR
-if not drivers_origen_cr.empty:
-    top1_origen = drivers_origen_cr.iloc[0]
-    nombre_o = top1_origen["Origen_Agrupado"] if pd.notna(top1_origen["Origen_Agrupado"]) else "Sin info"
-    dcr_o = top1_origen["Delta_CR_pp"]
-    if dcr_o < 0:
-        partes_conclusion.append(f"el origen **{nombre_o}** ha hundido su conversión en **{abs(dcr_o):.2f} pp**")
-    elif dcr_o > 0:
-        partes_conclusion.append(f"el origen **{nombre_o}** ha disparado su conversión en **{dcr_o:.2f} pp**")
-
-if not drivers_ciudad_cr.empty:
-    top1_ciudad = drivers_ciudad_cr.iloc[0]
-    nombre_c = top1_ciudad["Ciudad_deinteres_corregido"] if pd.notna(top1_ciudad["Ciudad_deinteres_corregido"]) else "Sin info"
-    dcr_c = top1_ciudad["Delta_CR_pp"]
-    if dcr_c < 0:
-        partes_conclusion.append(f"la ciudad **{nombre_c}** ha caído **{abs(dcr_c):.2f} pp** en conversión")
-    elif dcr_c > 0:
-        partes_conclusion.append(f"la ciudad **{nombre_c}** ha mejorado **{dcr_c:.2f} pp** en conversión")
-
-if delta_cr_pp < 0:
-    intro = f"El CR global ha bajado **{abs(delta_cr_pp):.2f} pp**"
-elif delta_cr_pp > 0:
-    intro = f"El CR global ha subido **{delta_cr_pp:.2f} pp**"
+if delta_cr_pp < -0.5:
+    intro = f"El CR ha caído **{abs(delta_cr_pp):.2f} pp**"
+elif delta_cr_pp > 0.5:
+    intro = f"El CR ha subido **{delta_cr_pp:.2f} pp**"
 else:
-    intro = "El CR global se mantiene estable"
+    intro = f"El CR se mantiene relativamente estable ({signo}{delta_cr_pp:.2f} pp)"
 
-if partes_conclusion and delta_cr_pp != 0:
-    md.append(f"{intro}, impulsado principalmente porque " + " y ".join(partes_conclusion) + ".")
+if partes:
+    md.append(f"{intro}. Según el Random Forest, " + " y ".join(partes) + ".")
 else:
-    md.append(f"{intro}. No se detectan drivers determinantes en las dimensiones analizadas.")
+    md.append(f"{intro}. No se han detectado drivers claros en las dimensiones analizadas.")
 
-if delta_cr_pp < 0 and not drivers_origen_cr.empty:
-    peor_origen = drivers_origen_cr.iloc[0]
-    nombre_po = peor_origen["Origen_Agrupado"] if pd.notna(peor_origen["Origen_Agrupado"]) else "Sin info"
-    md.append(
-        f"\n**Recomendación:** revisar la calidad del lead en el origen **{nombre_po}**, "
-        f"donde el CR ha caído **{peor_origen['Delta_CR_pp']:.2f} pp**."
-    )
-elif delta_cr_pp > 0 and not drivers_origen_cr.empty:
-    mejor_origen = drivers_origen_cr.iloc[0]
-    nombre_mo = mejor_origen["Origen_Agrupado"] if pd.notna(mejor_origen["Origen_Agrupado"]) else "Sin info"
-    md.append(
-        f"\n**Recomendación:** capitalizar el buen rendimiento del origen **{nombre_mo}** "
-        f"(CR **+{mejor_origen['Delta_CR_pp']:.2f} pp**) reasignando inversión hacia ese canal."
-    )
+# Recomendación según signo del cambio.
+if not df_imp.empty:
+    top1 = df_imp.iloc[0]["dimension"]
+    if delta_cr_pp < -0.5:
+        md.append(
+            f"\n**Recomendación:** investigar en detalle la dimensión **{top1}** "
+            f"para entender qué valores concretos están deteriorando el embudo. "
+            f"Revisar la tabla de breakdown anterior."
+        )
+    elif delta_cr_pp > 0.5:
+        md.append(
+            f"\n**Recomendación:** identificar los valores de **{top1}** que están "
+            f"empujando la mejora y reforzar la inversión o los procesos asociados."
+        )
+    else:
+        md.append(
+            f"\n**Recomendación:** aunque el CR global no varía mucho, **{top1}** "
+            f"sí presenta movimientos internos relevantes. Vale la pena vigilarla."
+        )
+
+md.append(
+    "\n---\n"
+    "*Metodología: clasificador binario (curso reciente vs anterior) sobre "
+    "one-hot encoding de las dimensiones del modelo. "
+    "Las importancias agregan la contribución de cada dimensión sumando "
+    "las importancias de sus categorías. "
+    "Las dimensiones con cardinalidad > 25 se truncan a las 25 categorías "
+    "más frecuentes para evitar overfitting.*"
+)
 
 resultado = "\n".join(md)
