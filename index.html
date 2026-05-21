@@ -164,6 +164,48 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   margin-top: 6px; font-family: "Menlo", "Monaco", "Courier New", monospace;
   font-size: 12px; white-space: pre-wrap; color: #7a1f15;
 }
+/* --- Estilos para alertas de desarrollador --- */
+.error-box.dev-alert {
+  background: #fff8e1; border-color: #f5c842; color: #5a3e00; font-size: 13px;
+}
+.error-box.dev-alert code {
+  background: rgba(0,0,0,0.07); border-radius: 3px;
+  padding: 1px 5px; font-family: "Menlo","Monaco","Courier New",monospace; font-size: 12px;
+}
+.error-box.dev-alert pre {
+  color: #5a3e00; background: rgba(0,0,0,0.06); border-radius: 4px; padding: 6px 8px; margin-top: 6px;
+}
+.dev-banner {
+  margin: 10px 16px 4px; padding: 12px 16px;
+  background: #fffbea; border: 1px solid #f5d97a; border-radius: 6px;
+  font-size: 13px; color: #7a5a00; line-height: 1.6;
+}
+.dev-banner code {
+  background: rgba(0,0,0,0.07); border-radius: 3px;
+  padding: 1px 5px; font-family: "Menlo","Monaco","Courier New",monospace; font-size: 12px;
+}
+/* Bloque plegable para traza tecnica en errores */
+.err-details { margin-top: 8px; font-size: 12.5px; }
+.err-details summary {
+  cursor: pointer; user-select: none; color: var(--text2);
+  padding: 4px 0; font-weight: 500; list-style: none;
+}
+.err-details summary::-webkit-details-marker { display: none; }
+.err-details summary::before {
+  content: "BA"; display: inline-block; margin-right: 6px;
+  font-size: 10px; transition: transform 0.15s;
+}
+.err-details[open] summary::before { transform: rotate(90deg); }
+.err-details summary:hover { color: var(--text); }
+.err-summary {
+  font-family: "Menlo","Monaco","Courier New",monospace;
+  font-size: 12.5px; padding: 4px 0; color: #7a1f15;
+}
+.error-box.error-friendly .err-summary { color: #7a5a00; }
+.err-section-label {
+  margin-top: 10px; font-size: 12px; font-weight: 600;
+  color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px;
+}
 .typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
 .typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
@@ -222,6 +264,60 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .welcome-area { text-align: center; padding: 44px 20px 20px; }
 .welcome-area h3 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
 .welcome-area p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 360px; margin: 0 auto; }
+
+/* --- Aclaración (modo CLARIFY) --- */
+.clarify-box {
+  background: #fffbea; border: 1px solid #f5d97a; border-left: 3px solid #d49f00;
+  border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 4px;
+}
+.clarify-box .clarify-q {
+  font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px;
+}
+.clarify-box .clarify-why {
+  font-size: 13px; color: var(--text2); margin-bottom: 12px; line-height: 1.5;
+}
+.clarify-box .clarify-progress {
+  font-size: 11px; font-weight: 600; color: #b07a00; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 4px;
+}
+.clarify-options { display: flex; flex-direction: column; gap: 6px; }
+.clarify-option {
+  text-align: left; background: var(--bg); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); padding: 9px 12px; cursor: pointer;
+  font-size: 14px; color: var(--text); font-family: inherit;
+  transition: all 0.12s;
+}
+.clarify-option:hover {
+  border-color: var(--accent-dk); background: var(--accent-lt); color: var(--accent-dk);
+}
+.clarify-option:disabled { opacity: 0.5; cursor: not-allowed; }
+.clarify-option.selected {
+  background: var(--accent-lt); border-color: var(--accent-dk); color: var(--accent-dk);
+}
+.clarify-other-wrap {
+  display: flex; gap: 6px; margin-top: 2px;
+}
+.clarify-other-input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: inherit; font-size: 14px; padding: 9px 12px; outline: none;
+  transition: border-color 0.15s;
+}
+.clarify-other-input:focus { border-color: var(--accent-dk); }
+.clarify-other-input:disabled { opacity: 0.5; cursor: not-allowed; background: var(--surface); }
+.clarify-other-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 14px; font-weight: 600; padding: 0 14px;
+  cursor: pointer; transition: background 0.12s; white-space: nowrap;
+}
+.clarify-other-btn:hover { background: var(--accent-dk); }
+.clarify-other-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--surface2); }
+
+/* --- Aviso de reintento por error --- */
+.retry-notice {
+  font-size: 12px; color: var(--text3); font-style: italic;
+  padding: 4px 0; margin-bottom: 4px;
+}
 </style>
 </head>
 <body>
@@ -268,10 +364,10 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   </div>
 
   <div id="actions-bar">
-    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="An&aacute;lisis de drivers sobre la &uacute;ltima consulta">
+    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Explica a qu&eacute; se debe la variaci&oacute;n entre los dos elementos de la consulta">
       &#128202; Generar conclusiones
     </button>
-    <span class="action-hint" id="insight-hint">Haz una consulta primero para activar el an&aacute;lisis.</span>
+    <span class="action-hint" id="insight-hint">Haz una consulta comparativa para activar el an&aacute;lisis.</span>
   </div>
 
   <div id="input-area">
@@ -293,7 +389,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 </div>
 
 <script>
-
 var apiKey = "";
 var systemCtx = "";
 var insightsScript = "";
@@ -302,34 +397,30 @@ var busy = false;
 var pyodide = null;
 var loadedCsvs = new Set();
 var lastUserQuery = null;
+var lastTurn = null;
+var pendingPipeline = null;
 
-// Mapa nombre_variable_python -> archivo CSV.
-// El front es agnóstico al cliente: estos nombres se redefinen por proyecto.
+// Modelo en estrella desnormalizado: todas las dimensiones categóricas
+// (ciudad, curso, residencia, origen, fuente...) viven dentro de la tabla
+// de hechos `leads_contacts`. No hace falta cargar satélites.
 var CSV_TABLES = {
-  "leads_contacts":             "Leads_Contacts.csv",
-  "tabla_ciudad_actual":        "Tabla_Ciudad_Actual.csv",
-  "tabla_ciudad_interes":       "Tabla_Ciudad_Interes.csv",
-  "tabla_curso":                "Tabla_Curso.csv",
-  "tabla_residencia_actual":    "Tabla_Residencia_Actual_CONTACTS.csv",
-  "tabla_residencia_escogida":  "Tabla_Residencia_Escogida_LEADS.csv",
-  "tabla_residencia_interes":   "Tabla_Residencia_Interes.csv",
-  "tabla_origen":               "Tabla_Origen.csv",
-  "tabla_fuente_pc":            "Tabla_Fuente_PC.csv",
-  "maestro_fuente":             "Maestro_Fuente.csv",
-  "glosario":                   "Glosario.csv"
+  "leads_contacts": "Leads_Contacts.csv"
 };
-
-// CSV principal que se precarga al arrancar. Resto se cargan bajo demanda.
 var PRIMARY_CSV = "leads_contacts";
-
-// Columnas que deben parsearse como fechas al cargar el CSV principal.
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
+
+var MODEL_ID = "claude-haiku-4-5-20251001";
+var API_URL = "https://api.anthropic.com/v1/messages";
+var API_VERSION = "2023-06-01";
+var MAX_HISTORY = 12;
 
 marked.use({ breaks: true, gfm: true });
 
 
+// ---------- Bootstrap ----------
+
 async function initChat() {
-  var key = document.getElementById("api-key-input").value.trim();
+  var key = readApiKey();
   if (!key) { alert("Introduce tu API key."); return; }
 
   var btn = document.getElementById("connect-btn");
@@ -338,63 +429,140 @@ async function initChat() {
   document.getElementById("boot-progress").classList.add("active");
 
   try {
-    setStep("step-ctx", "active");
-    try {
-      var r = await fetch("context.txt?v=" + Date.now());
-      if (r.ok) {
-        var txt = await r.text();
-        if (txt.trim()) systemCtx = txt;
-      }
-    } catch(e) { }
-    setStep("step-ctx", "done");
-
-    setStep("step-pyodide", "active");
-    pyodide = await loadPyodide({
-      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
-    });
-    setStep("step-pyodide", "done");
-
-    setStep("step-pkgs", "active");
-    await pyodide.loadPackage(["pandas", "numpy", "matplotlib", "scikit-learn"]);
-    await pyodide.runPythonAsync(
-      "import pandas as pd\n" +
-      "import numpy as np\n" +
-      "import matplotlib\n" +
-      "matplotlib.use('AGG')\n" +
-      "import matplotlib.pyplot as plt\n" +
-      "import io, base64\n"
-    );
-    setStep("step-pkgs", "done");
-
-    setStep("step-csv", "active");
-    await loadCsv(PRIMARY_CSV);
-    setStep("step-csv", "done");
-
-    setStep("step-insights", "active");
-    try {
-      var r2 = await fetch("insights_script.py?v=" + Date.now());
-      if (r2.ok) {
-        insightsScript = await r2.text();
-      } else {
-        console.warn("insights_script.py no disponible (HTTP " + r2.status + ")");
-      }
-    } catch(e) {
-      console.warn("Error cargando insights_script.py:", e);
-    }
-    setStep("step-insights", insightsScript ? "done" : "error");
-
+    await loadContext();
+    await initPyodide();
+    await loadPyodidePackages();
+    await installRuntimeHelpers();
+    var csvOk = await loadPrimaryCsv();
+    await loadInsightsScript();
     apiKey = key;
-
-    document.getElementById("setup-panel").style.display = "none";
-    document.getElementById("chat-panel").style.display = "flex";
-    setStatus("conectado · pyodide listo", "ok");
-    document.getElementById("user-input").focus();
-  } catch(e) {
+    revealChatPanel();
+    if (!csvOk) {
+      appendDevBanner(
+        "⚠️ <strong>El CSV principal no se cargó.</strong> " +
+        "Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>" +
+        "Abre el proyecto con un servidor HTTP local, no con <code>file://</code>. " +
+        "Desde la carpeta: <code>python -m http.server 8000</code> " +
+        "y luego ve a <code>http://localhost:8000</code>." +
+        "Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>."
+      );
+    }
+  } catch (e) {
     console.error(e);
     alert("Error inicializando: " + e.message);
     btn.textContent = "Conectar →";
     btn.disabled = false;
   }
+}
+
+function readApiKey() {
+  return document.getElementById("api-key-input").value.trim();
+}
+
+async function loadContext() {
+  setStep("step-ctx", "active");
+  try {
+    var r = await fetch("context.txt?v=" + Date.now());
+    if (r.ok) {
+      var txt = await r.text();
+      if (txt.trim()) systemCtx = txt;
+    }
+  } catch (e) {}
+  setStep("step-ctx", "done");
+}
+
+async function initPyodide() {
+  setStep("step-pyodide", "active");
+  pyodide = await loadPyodide({
+    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
+  });
+  setStep("step-pyodide", "done");
+}
+
+async function loadPyodidePackages() {
+  setStep("step-pkgs", "active");
+  await pyodide.loadPackage(["pandas", "numpy", "matplotlib", "scikit-learn"]);
+  await pyodide.runPythonAsync(
+    "import pandas as pd\n" +
+    "import numpy as np\n" +
+    "import matplotlib\n" +
+    "matplotlib.use('AGG')\n" +
+    "import matplotlib.pyplot as plt\n" +
+    "import io, base64, json, traceback\n"
+  );
+  setStep("step-pkgs", "done");
+}
+
+// Instala dos helpers persistentes en el namespace global de Pyodide:
+//   __reset_resultado__()   : elimina la variable resultado de un turno previo
+//   __serialize_resultado__(): empaqueta la variable resultado como JSON
+async function installRuntimeHelpers() {
+  var helpers =
+    "def __reset_resultado__():\n" +
+    "    if 'resultado' in globals():\n" +
+    "        del globals()['resultado']\n" +
+    "\n" +
+    "def __serialize_resultado__():\n" +
+    "    import json as _j, io as _io, base64 as _b64\n" +
+    "    import pandas as _pd\n" +
+    "    if 'resultado' not in globals():\n" +
+    "        return _j.dumps({'kind':'none','value':None})\n" +
+    "    _r = globals()['resultado']\n" +
+    "    try:\n" +
+    "        import matplotlib.figure as _mf\n" +
+    "        _is_fig = isinstance(_r, _mf.Figure)\n" +
+    "    except Exception:\n" +
+    "        _is_fig = False\n" +
+    "    if _is_fig:\n" +
+    "        _buf = _io.BytesIO()\n" +
+    "        _r.savefig(_buf, format='png', dpi=110, bbox_inches='tight')\n" +
+    "        _buf.seek(0)\n" +
+    "        return _j.dumps({'kind':'image','value':_b64.b64encode(_buf.read()).decode('ascii')})\n" +
+    "    if isinstance(_r, _pd.DataFrame):\n" +
+    "        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)\n" +
+    "    if isinstance(_r, _pd.Series):\n" +
+    "        _df = _r.reset_index()\n" +
+    "        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)\n" +
+    "    if isinstance(_r, dict):\n" +
+    "        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=str, ensure_ascii=False)}, ensure_ascii=False)\n" +
+    "    if isinstance(_r, bool):\n" +
+    "        return _j.dumps({'kind':'text','value':str(_r)})\n" +
+    "    if isinstance(_r, (int, float)):\n" +
+    "        v = float(_r) if isinstance(_r, float) else int(_r)\n" +
+    "        return _j.dumps({'kind':'number','value':v})\n" +
+    "    if isinstance(_r, str):\n" +
+    "        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)\n" +
+    "    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)\n";
+  await pyodide.runPythonAsync(helpers);
+}
+
+async function loadPrimaryCsv() {
+  setStep("step-csv", "active");
+  var ok = await loadCsv(PRIMARY_CSV);
+  setStep("step-csv", ok ? "done" : "error");
+  return ok;
+}
+
+async function loadInsightsScript() {
+  setStep("step-insights", "active");
+  try {
+    var r = await fetch("insights_script.py?v=" + Date.now());
+    if (r.ok) {
+      insightsScript = await r.text();
+    } else {
+      console.warn("insights_script.py no disponible (HTTP " + r.status + ")");
+    }
+  } catch (e) {
+    console.warn("Error cargando insights_script.py:", e);
+  }
+  setStep("step-insights", insightsScript ? "done" : "error");
+}
+
+function revealChatPanel() {
+  document.getElementById("setup-panel").style.display = "none";
+  document.getElementById("chat-panel").style.display = "flex";
+  setStatus("conectado · listo", "ok");
+  document.getElementById("user-input").focus();
 }
 
 function setStep(id, state) {
@@ -404,32 +572,94 @@ function setStep(id, state) {
   if (state) el.classList.add(state);
 }
 
+
+// ---------- Carga de datos ----------
+
 async function loadCsv(varName) {
-  if (loadedCsvs.has(varName)) return true;
+  if (loadedCsvs.has(varName)) {
+    console.log("[loadCsv] ya cargado:", varName);
+    return true;
+  }
   var file = CSV_TABLES[varName];
-  if (!file) return false;
+  if (!file) {
+    showDevAlert("loadCsv: &laquo;" + varName + "&raquo; no existe en CSV_TABLES. Comprueba el nombre de la variable.");
+    return false;
+  }
+  console.log("[loadCsv] fetch de", file, "para variable", varName);
   try {
     var r = await fetch(file + "?v=" + Date.now());
     if (!r.ok) {
-      console.warn("CSV no encontrado: " + file + " (HTTP " + r.status + ")");
+      showDevAlert(
+        "<strong>No se pudo cargar " + esc(file) + "</strong><br>" +
+        "HTTP " + r.status + " " + esc(r.statusText) + "<br><br>" +
+        "<strong>Causas habituales:</strong><br>" +
+        "&bull; Est&aacute;s abriendo el HTML con <code>file://</code> &mdash; usa un servidor local " +
+        "(<code>python -m http.server</code> en la carpeta del proyecto).<br>" +
+        "&bull; El CSV no est&aacute; en la misma carpeta que <code>index.html</code>.<br>" +
+        "&bull; El nombre del fichero no coincide exactamente (may&uacute;sculas/min&uacute;sculas)."
+      );
       return false;
     }
     var text = await r.text();
+    if (!text || text.trim().length === 0) {
+      showDevAlert("<strong>El fichero " + esc(file) + " se descarg&oacute; vac&iacute;o (0 bytes).</strong><br>Comprueba que el archivo no est&aacute; corrupto.");
+      return false;
+    }
+    console.log("[loadCsv] fetch OK", text.length, "bytes &mdash; primeras l&iacute;neas:", text.split("\n").slice(0, 2).join(" | "));
     pyodide.globals.set("__csv_buffer__", text);
     var parseDates = (varName === PRIMARY_CSV)
       ? "parse_dates=" + JSON.stringify(PRIMARY_DATE_COLUMNS)
       : "";
     var pyCode =
-      "from io import StringIO\n" +
-      varName + " = pd.read_csv(StringIO(__csv_buffer__)" +
-        (parseDates ? ", " + parseDates : "") +
-      ")\n" +
+      "from io import StringIO as _SIO\n" +
+      "import traceback as _tb\n" +
+      "try:\n" +
+      "    " + varName + " = pd.read_csv(_SIO(__csv_buffer__), sep=';'" +
+          (parseDates ? ", " + parseDates : "") + ")\n" +
+      "    __csv_load_ok__ = True\n" +
+      "    __csv_shape__   = list(" + varName + ".shape)\n" +
+      "    __csv_cols__    = list(" + varName + ".columns)\n" +
+      "    __csv_error__   = ''\n" +
+      "except Exception as _e:\n" +
+      "    __csv_load_ok__ = False\n" +
+      "    __csv_shape__   = [0, 0]\n" +
+      "    __csv_cols__    = []\n" +
+      "    __csv_error__   = _tb.format_exc()\n" +
       "del __csv_buffer__\n";
     await pyodide.runPythonAsync(pyCode);
+
+    var ok      = pyodide.globals.get("__csv_load_ok__");
+    var errTxt  = pyodide.globals.get("__csv_error__") || "";
+    var shapePx = pyodide.globals.get("__csv_shape__");
+    var colsPx  = pyodide.globals.get("__csv_cols__");
+    var shapeArr = shapePx && shapePx.toJs ? shapePx.toJs() : [0, 0];
+    var colsArr  = colsPx  && colsPx.toJs  ? colsPx.toJs()  : [];
+
+    if (!ok) {
+      showDevAlert(
+        "<strong>pd.read_csv fall&oacute; parseando " + esc(file) + "</strong>" +
+        "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(String(errTxt)) + "</pre>"
+      );
+      return false;
+    }
+
+    console.log("[loadCsv] DataFrame \"" + varName + "\" cargado:", shapeArr[0], "filas x", shapeArr[1], "cols:", Array.from(colsArr).join(", "));
+
+    if (shapeArr[0] < 2) {
+      showDevAlert(
+        "<strong>Aviso: " + varName + " se carg&oacute; con solo " + shapeArr[0] + " fila(s).</strong><br>" +
+        "Posible problema de separador o archivo mal formado.<br>" +
+        "Columnas detectadas: " + Array.from(colsArr).join(", ")
+      );
+    }
+
     loadedCsvs.add(varName);
     return true;
-  } catch(e) {
-    console.error("Error cargando " + file + ":", e);
+  } catch (e) {
+    showDevAlert(
+      "<strong>Error inesperado cargando " + esc(file) + "</strong>" +
+      "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(e && e.message ? e.message : String(e)) + "</pre>"
+    );
     return false;
   }
 }
@@ -438,20 +668,184 @@ async function ensureTablesLoaded(pythonCode) {
   var needed = [];
   for (var v in CSV_TABLES) {
     var re = new RegExp("\\b" + v + "\\b");
-    if (re.test(pythonCode) && !loadedCsvs.has(v)) {
-      needed.push(v);
-    }
+    if (re.test(pythonCode) && !loadedCsvs.has(v)) needed.push(v);
   }
   for (var i = 0; i < needed.length; i++) {
     setStatus("cargando " + CSV_TABLES[needed[i]] + "...", "busy");
-    await loadCsv(needed[i]);
+    var ok = await loadCsv(needed[i]);
+    if (!ok) {
+      console.warn("[ensureTablesLoaded] no se pudo cargar:", needed[i], "(", CSV_TABLES[needed[i]], ")");
+    }
   }
 }
 
-function buildSystem() {
-  if (systemCtx) return systemCtx;
-  return "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales.";
+// ---------- API de modelo ----------
+
+function buildCodeSystem() {
+  return systemCtx ||
+    "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales.";
 }
+
+async function callModel(messages, opts) {
+  opts = opts || {};
+  var system = opts.systemOverride
+    ? opts.systemOverride
+    : buildCodeSystem() + (opts.extraSystem ? "\n\n" + opts.extraSystem : "");
+
+  var body = {
+    model: opts.model || MODEL_ID,
+    max_tokens: opts.maxTokens || 1500,
+    system: system,
+    messages: messages
+  };
+
+  var r = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": API_VERSION,
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!r.ok) {
+    var errData = await r.json().catch(function () { return {}; });
+    throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
+  }
+  var d = await r.json();
+  return (d.content && d.content[0] && d.content[0].text) || "";
+}
+
+
+// ---------- Parseo de respuestas ----------
+
+function extractJSON(reply) {
+  if (!reply) return null;
+  var m = reply.match(/```(?:json)?\s*\n?([\s\S]*?)```/i);
+  var candidate = m ? m[1].trim() : reply.trim();
+  var startObj = candidate.indexOf("{");
+  var startArr = candidate.indexOf("[");
+  var start;
+  if (startObj >= 0 && startArr >= 0) start = Math.min(startObj, startArr);
+  else start = Math.max(startObj, startArr);
+  if (start < 0) return null;
+  var endObj = candidate.lastIndexOf("}");
+  var endArr = candidate.lastIndexOf("]");
+  var end = Math.max(endObj, endArr);
+  if (end < start) return null;
+  var sliced = candidate.substring(start, end + 1)
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/,\s*([\]}])/g, "$1");
+  try { return JSON.parse(sliced); } catch (e) { return null; }
+}
+
+function extractReply(reply) {
+  if (!reply || typeof reply !== "string") {
+    return { mode: "text", payload: reply || "" };
+  }
+  var clarifyMatch = reply.match(/```clarify[^\n]*\n([\s\S]*?)```/i);
+  if (clarifyMatch) {
+    var json = extractJSON(clarifyMatch[1]);
+    if (json && json.pregunta && Array.isArray(json.opciones) && json.opciones.length > 0) {
+      return { mode: "clarify", payload: json };
+    }
+  }
+  var codeMatch = reply.match(/```(?:python|py)?[^\n]*\n([\s\S]*?)```/i);
+  if (codeMatch) {
+    return { mode: "code", payload: normalizeCode(codeMatch[1]) };
+  }
+  var t = reply.trim();
+  if (/(?:^|\n)\s*resultado\s*=/.test(t) ||
+      /^(?:import\s+\w|from\s+\w+\s+import|def\s+\w+\s*\()/.test(t)) {
+    return { mode: "code", payload: normalizeCode(t) };
+  }
+  return { mode: "text", payload: reply };
+}
+
+function normalizeCode(code) {
+  code = code.replace(/^\uFEFF/, "")
+             .replace(/\r\n/g, "\n")
+             .replace(/\r/g, "\n");
+  code = stripCommonLeadingWhitespace(code);
+  return code.trim();
+}
+
+function stripCommonLeadingWhitespace(code) {
+  var lines = code.split("\n");
+  var minLead = Infinity;
+  for (var i = 0; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    var lead = lines[i].match(/^[ \t]*/)[0].length;
+    if (lead < minLead) minLead = lead;
+    if (minLead === 0) break;
+  }
+  if (minLead === Infinity || minLead === 0) return code;
+  for (var j = 0; j < lines.length; j++) {
+    if (lines[j].length >= minLead) lines[j] = lines[j].substring(minLead);
+  }
+  return lines.join("\n");
+}
+
+
+// ---------- Ejecución en Pyodide ----------
+
+async function runPython(code) {
+  if (!code) return { kind: "error", value: "Código vacío" };
+  var normalized = normalizeCode(code);
+
+  try {
+    await pyodide.runPythonAsync("__reset_resultado__()");
+  } catch (e) {}
+
+  try {
+    await pyodide.runPythonAsync(normalized);
+  } catch (e) {
+    var msg = e && e.message ? e.message : String(e);
+    return {
+      kind: "error",
+      value: extractPyErrorMessage(msg),
+      trace: msg
+    };
+  }
+
+  try {
+    var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    // Serialización rota: capturamos tipo y repr del resultado para diagnóstico
+    var serMsg = e && e.message ? e.message : String(e);
+    var diagnostic = serMsg;
+    try {
+      var diag = await pyodide.runPythonAsync(
+        "(type(resultado).__name__ + ' => ' + repr(resultado)[:400]) if 'resultado' in globals() else 'resultado no asignado'"
+      );
+      diagnostic = "Tipo de resultado: " + String(diag) + "\n\n" + serMsg;
+    } catch (e2) {}
+    return {
+      kind: "error",
+      value: "No se pudo serializar el resultado — comprueba el tipo de la variable",
+      trace: diagnostic
+    };
+  }
+}
+
+function extractPyErrorMessage(traceback) {
+  if (!traceback) return "Error desconocido";
+  var lines = traceback.split("\n").filter(function (l) { return l.trim(); });
+  for (var i = lines.length - 1; i >= 0; i--) {
+    var line = lines[i];
+    if (/^[A-Z]\w*Error:/.test(line) || /^[A-Z]\w*Warning:/.test(line)) {
+      return line;
+    }
+  }
+  return lines[lines.length - 1] || "Error en la ejecución";
+}
+
+
+// ---------- Pipeline conversacional ----------
 
 async function sendMessage(text) {
   if (busy) return;
@@ -459,114 +853,657 @@ async function sendMessage(text) {
   var userText = text || input.value.trim();
   if (!userText) return;
 
-  input.value = "";
-  input.style.height = "auto";
-  var welcome = document.getElementById("welcome");
-  if (welcome) welcome.remove();
-  document.getElementById("quick-questions").style.display = "none";
-
+  resetInput(input);
+  hideWelcomeAndQuicks();
   appendMsg("user", userText);
-  chatHistory.push({ role: "user", content: userText });
-
-  lastUserQuery = userText;
-
-  var tid = appendTyping("generando código...");
-  setStatus("llamando a la API...", "busy");
-  busy = true;
-  document.getElementById("send-btn").disabled = true;
-  document.getElementById("insight-btn").disabled = true;
+  pendingPipeline = null;
+  setBusy(true);
 
   try {
-    var r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1500,
-        system: buildSystem(),
-        messages: chatHistory
-      })
-    });
-
-    if (!r.ok) {
-      var errData = await r.json().catch(function() { return {}; });
-      throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
-    }
-    var d = await r.json();
-    var reply = (d.content && d.content[0] && d.content[0].text) || "";
-    chatHistory.push({ role: "assistant", content: reply });
-
-    removeTyping(tid);
-
-    var pythonCode = extractPython(reply);
-    if (!pythonCode) {
-      appendAssistantText(reply || "Sin respuesta.");
-      setStatus("respuesta sin código · revisa el prompt", "error");
-    } else {
-      setStatus("ejecutando código...", "busy");
-      await ensureTablesLoaded(pythonCode);
-      var execResult = await runPython(pythonCode);
-      appendResult(execResult, pythonCode, false);
+    var clase = await classifyMessage(userText);
+    if (clase.tipo === "saludo_meta") {
+      var reply = await answerSmallTalk(userText);
+      appendAssistantText(reply);
       setStatus("listo", "ok");
+      return;
     }
-  } catch(e) {
-    removeTyping(tid);
+
+    var plan = await planSlots(userText);
+    if (plan && plan.slots && plan.slots.length > 0) {
+      pendingPipeline = {
+        userQuery: userText,
+        missing: plan.slots.slice(),
+        answered: [],
+        total: plan.slots.length
+      };
+      lastUserQuery = userText;
+      askNextSlot();
+      return;
+    }
+
+    lastUserQuery = userText;
+    await runFullQuery(userText, []);
+  } catch (e) {
+    clearStaleTypings();
     appendError("Error en la consulta: " + e.message);
     setStatus("error", "error");
   } finally {
-    busy = false;
-    document.getElementById("send-btn").disabled = false;
-    updateInsightButton();
+    if (!pendingPipeline) setBusy(false);
   }
 }
 
-async function generateInsights() {
-  if (!lastUserQuery) return;
-  if (busy) return;
-  if (!insightsScript) {
-    appendError("El script de análisis (insights_script.py) no se ha cargado correctamente. Verifica que el archivo está en la misma carpeta que index.html.");
+function resetInput(input) {
+  input.value = "";
+  input.style.height = "auto";
+}
+
+function hideWelcomeAndQuicks() {
+  var welcome = document.getElementById("welcome");
+  if (welcome) welcome.remove();
+  var quicks = document.getElementById("quick-questions");
+  if (quicks) quicks.style.display = "none";
+}
+
+function setBusy(b) {
+  busy = b;
+  document.getElementById("send-btn").disabled = b;
+  if (b) document.getElementById("insight-btn").disabled = true;
+  else updateInsightButton();
+}
+
+
+// Paso 1: clasifica el mensaje en saludo_meta o pregunta_negocio
+async function classifyMessage(text) {
+  var tid = appendTyping("interpretando consulta...");
+  setStatus("clasificando consulta...", "busy");
+  var promptSys =
+    "Eres un clasificador binario. Tu salida es SOLO un JSON con esta forma:\n" +
+    '{"tipo": "<saludo_meta|pregunta_negocio>"}\n\n' +
+    "Reglas:\n" +
+    "- saludo_meta: hola, gracias, qué puedes hacer, quién eres, ayuda, " +
+    "preguntas sobre el propio asistente o uso de la herramienta, mensajes " +
+    "sin contenido analítico real.\n" +
+    "- pregunta_negocio: cualquier consulta sobre datos, KPIs, leads, " +
+    "contactos, conversión, ciudades, residencias, cursos, comparaciones, " +
+    "rankings, gráficos, evolución, estructura del modelo de datos.\n\n" +
+    "Devuelve EXCLUSIVAMENTE el JSON, sin explicaciones.";
+  try {
+    var reply = await callModel(
+      [{ role: "user", content: text }],
+      { systemOverride: promptSys, maxTokens: 50 }
+    );
+    removeTyping(tid);
+    var j = extractJSON(reply);
+    if (j && j.tipo === "saludo_meta") return { tipo: "saludo_meta" };
+    return { tipo: "pregunta_negocio" };
+  } catch (e) {
+    removeTyping(tid);
+    return { tipo: "pregunta_negocio" };
+  }
+}
+
+
+// Respuesta para saludos: corta, sin context grande
+async function answerSmallTalk(text) {
+  var promptSys =
+    "Eres el asistente analítico de Resa (CRM de residencias de estudiantes). " +
+    "El usuario te ha enviado un saludo o una pregunta sobre cómo te usa. " +
+    "Responde en español, en 2-4 frases breves, amable y directo. Si procede, " +
+    "sugiere ejemplos de lo que puedes hacer:\n" +
+    "  - contar leads y contactos por curso, ciudad, residencia, canal...\n" +
+    "  - calcular tasa de conversión y comparar entre periodos\n" +
+    "  - rankings (top ciudades, residencias) y gráficos\n" +
+    "  - analizar variaciones entre dos cohortes (botón \"Generar conclusiones\")\n\n" +
+    "NO generes código. NO uses markdown elaborado. NO inventes datos.";
+  var tid = appendTyping("preparando respuesta...");
+  try {
+    var reply = await callModel(
+      [{ role: "user", content: text }],
+      { systemOverride: promptSys, maxTokens: 250 }
+    );
+    removeTyping(tid);
+    return reply.trim() || fallbackSmallTalk();
+  } catch (e) {
+    removeTyping(tid);
+    return fallbackSmallTalk();
+  }
+}
+
+function fallbackSmallTalk() {
+  return "¡Hola! Soy el asistente analítico. Puedo contar leads y contactos, calcular conversión, comparar periodos, hacer rankings y gráficos. ¿Qué quieres saber?";
+}
+
+
+// Paso 2: planifica los slots a aclarar
+async function planSlots(text) {
+  var tid = appendTyping("comprobando si necesito aclaraciones...");
+  setStatus("planificando...", "busy");
+  var promptSys =
+    "Eres un analista de requisitos. Recibes una consulta de un usuario de un " +
+    "CRM de residencias de estudiantes y tienes que detectar si le faltan " +
+    "piezas para responderla con datos. Las dimensiones del modelo son:\n" +
+    "  - Curso (2024/2025, 2025/2026, 2026/2027, histórico de todos los cursos)\n" +
+    "  - Tipo de registro (Leads, Contacts, ambos)\n" +
+    "  - Métrica (volumen de leads, volumen de contactos, tasa de conversión)\n" +
+    "  - Dimensión geográfica/comercial (ciudad de interés, ciudad de procedencia, residencia de interés, residencia escogida, canal/origen, fuente)\n\n" +
+    "Tu salida debe ser SOLO un JSON con esta forma:\n" +
+    '{ "slots": [\n' +
+    '   { "slot": "<id>", "pregunta": "<frase>", "opciones": ["..","..",".."], ' +
+    '"razon": "<por qué>", "permitirOtro": true|false } \n' +
+    "] }\n\n" +
+    "Reglas para detectar slots:\n" +
+    "1. Periodo/curso. Si pide KPIs concretos (leads, contactos, conversión, " +
+    "ranking, comparación) y NO especifica curso, añade slot 'curso' con opciones " +
+    "['2024/2025', '2025/2026', '2026/2027', 'Histórico (todos los cursos)']. " +
+    "Excepción: si la pregunta es estructural ('qué tablas hay'), no preguntes.\n" +
+    "2. Métrica. Si la consulta es genérica ('¿cómo va Madrid?', 'compara X vs Y' " +
+    "sin métrica clara), añade slot 'metrica' con opciones ['Volumen de leads', " +
+    "'Volumen de contactos', 'Tasa de conversión', 'Las tres'].\n" +
+    "3. Tipo de registro. Si dice 'usuarios', 'gente', 'registros' de forma " +
+    "genérica, añade slot 'tipo_registro' con opciones ['Solo leads', " +
+    "'Solo contactos', 'Leads y contactos por separado'].\n" +
+    "4. Dimensión ambigua. Si dice 'por residencia' (¿interés/actual/escogida?) o " +
+    "'por ciudad' (¿interés/procedencia?), añade slot 'dimension' con las opciones.\n\n" +
+    "Reglas para NO crear slots:\n" +
+    "- Si la consulta es estructural ('qué tablas hay', 'qué columnas tiene X').\n" +
+    "- Si el usuario YA ha sido explícito (ej. 'leads del 2025/2026 por ciudad de interés' → no preguntes nada, devuelve {\"slots\": []}).\n" +
+    "- Si la pregunta es simple y solo admite una interpretación (ej. '¿cuántos leads hay?' → todos, sin slots).\n\n" +
+    "Reglas de formato:\n" +
+    "- Cada opción debe ser CONCRETA y mutuamente excluyente. Máximo 4 opciones.\n" +
+    "- Pon 'permitirOtro': true si tiene sentido que el usuario escriba un valor libre (ciudades raras, residencias específicas, otros canales). Pon false para slots cerrados (curso, métrica, tipo de registro).\n" +
+    "- Slots máximo 4 por consulta. Empieza por los más imprescindibles.\n" +
+    "- Devuelve {\"slots\": []} si la consulta no necesita aclaración.\n\n" +
+    "Devuelve EXCLUSIVAMENTE el JSON, sin texto antes ni después.";
+
+  try {
+    var reply = await callModel(
+      [{ role: "user", content: text }],
+      { systemOverride: promptSys, maxTokens: 800 }
+    );
+    removeTyping(tid);
+    var j = extractJSON(reply);
+    if (!j || !Array.isArray(j.slots)) return { slots: [] };
+    return { slots: sanitizeSlots(j.slots) };
+  } catch (e) {
+    removeTyping(tid);
+    return { slots: [] };
+  }
+}
+
+function sanitizeSlots(raw) {
+  var clean = [];
+  for (var i = 0; i < raw.length && i < 4; i++) {
+    var s = raw[i];
+    if (!s || !s.pregunta) continue;
+    var opciones = Array.isArray(s.opciones)
+      ? s.opciones.slice(0, 4).filter(Boolean).map(String)
+      : [];
+    if (opciones.length < 2) continue;
+    clean.push({
+      slot: s.slot || ("slot_" + i),
+      pregunta: String(s.pregunta),
+      opciones: opciones,
+      razon: s.razon ? String(s.razon) : "",
+      permitirOtro: s.permitirOtro !== false
+    });
+  }
+  return clean;
+}
+
+
+// Paso 3: pinta el siguiente clarify y espera respuesta
+function askNextSlot() {
+  if (!pendingPipeline || pendingPipeline.missing.length === 0) {
+    finalizePipeline();
+    return;
+  }
+  var slot = pendingPipeline.missing[0];
+  var idx = pendingPipeline.answered.length + 1;
+  var total = pendingPipeline.total;
+  appendClarify(slot, idx, total);
+  setStatus("esperando aclaración (" + idx + "/" + total + ")...", "busy");
+}
+
+async function answerClarify(answerText) {
+  if (!pendingPipeline) return;
+  var slot = pendingPipeline.missing.shift();
+  if (!slot) return;
+  markClarifyAnswered(answerText);
+  pendingPipeline.answered.push({
+    slot: slot.slot,
+    pregunta: slot.pregunta,
+    answer: answerText
+  });
+  if (pendingPipeline.missing.length > 0) {
+    askNextSlot();
+    return;
+  }
+  await finalizePipeline();
+}
+
+function markClarifyAnswered(answerText) {
+  var lastBox = document.querySelector(".clarify-box:not(.answered)");
+  if (!lastBox) return;
+  lastBox.classList.add("answered");
+  var btns = lastBox.querySelectorAll(".clarify-option");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].disabled = true;
+    if (btns[i].textContent === answerText) btns[i].classList.add("selected");
+  }
+  var inp = lastBox.querySelector(".clarify-other-input");
+  if (inp) inp.disabled = true;
+  var ob = lastBox.querySelector(".clarify-other-btn");
+  if (ob) ob.disabled = true;
+}
+
+async function finalizePipeline() {
+  if (!pendingPipeline) return;
+  var pipe = pendingPipeline;
+  pendingPipeline = null;
+  setBusy(true);
+  try {
+    await runFullQuery(pipe.userQuery, pipe.answered);
+  } catch (e) {
+    appendError("Error en la consulta: " + e.message);
+    setStatus("error", "error");
+  } finally {
+    setBusy(false);
+  }
+}
+
+
+// Paso 4: ejecuta el código generado
+async function runFullQuery(userText, answeredSlots) {
+  var enriched = buildEnrichedQuery(userText, answeredSlots);
+  trimHistory();
+  chatHistory.push({ role: "user", content: enriched });
+
+  var tid = appendTyping("generando código...");
+  setStatus("llamando a la API...", "busy");
+  var reply;
+  try {
+    reply = await callModel(chatHistory, null);
+  } catch (e) {
+    removeTyping(tid);
+    appendError("Error de API: " + e.message);
+    setStatus("error", "error");
+    return;
+  }
+  chatHistory.push({ role: "assistant", content: reply });
+  removeTyping(tid);
+
+  var parsed = extractReply(reply);
+  if (parsed.mode === "clarify") {
+    appendAssistantText(
+      "(El modelo ha intentado preguntar de nuevo. Reformula tu consulta con más detalle.)"
+      + (parsed.payload.pregunta ? "\n\n" + parsed.payload.pregunta : "")
+    );
+    setStatus("aclaración no resuelta", "error");
+    return;
+  }
+  if (parsed.mode === "text") {
+    appendAssistantText(parsed.payload || "Sin respuesta.");
+    setStatus("respuesta sin código · revisa el prompt", "error");
     return;
   }
 
-  // Asegura que todas las dimensiones estén cargadas antes del análisis,
-  // ya que el insights_script puede explorar cualquier dimensión disponible.
-  setStatus("cargando dimensiones...", "busy");
-  for (var v in CSV_TABLES) {
-    if (!loadedCsvs.has(v)) {
-      await loadCsv(v);
-    }
+  setStatus("ejecutando código...", "busy");
+  await ensureTablesLoaded(parsed.payload);
+  var execResult = await runPython(parsed.payload);
+  if (execResult.kind === "error") {
+    execResult = await retryWithModelFix(parsed.payload, execResult);
   }
 
-  appendMsg("user", "Generar conclusiones sobre: \"" + lastUserQuery + "\"");
+  appendResult(execResult, execResult.__codeUsed || parsed.payload, false);
+  setExecutionStatus(execResult);
 
-  var tid = appendTyping("ejecutando análisis de drivers...");
-  setStatus("entrenando Random Forest...", "busy");
-  busy = true;
-  document.getElementById("send-btn").disabled = true;
-  document.getElementById("insight-btn").disabled = true;
+  lastTurn = {
+    userQuery: userText,
+    enrichedQuery: enriched,
+    answeredSlots: answeredSlots.slice()
+  };
+}
+
+function buildEnrichedQuery(userText, answeredSlots) {
+  if (!answeredSlots || answeredSlots.length === 0) return userText;
+  var out = userText + "\n\nContexto adicional ya acotado por el usuario:\n";
+  for (var i = 0; i < answeredSlots.length; i++) {
+    out += "- " + answeredSlots[i].pregunta + " → " + answeredSlots[i].answer + "\n";
+  }
+  return out;
+}
+
+function trimHistory() {
+  if (chatHistory.length > MAX_HISTORY) {
+    chatHistory = chatHistory.slice(chatHistory.length - MAX_HISTORY);
+  }
+}
+
+function setExecutionStatus(execResult) {
+  var isErr = execResult.kind === "error" || execResult.kind === "error_friendly";
+  setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
+}
+
+
+// Si el código falla en Pyodide, pide una corrección y reintenta una vez
+async function retryWithModelFix(originalCode, firstError) {
+  appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
+  var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
+  var fixMessages = chatHistory.slice();
+  fixMessages.push({
+    role: "user",
+    content:
+      "El código que has generado ha fallado al ejecutarse en Pyodide.\n\n" +
+      "CÓDIGO QUE FALLÓ:\n```python\n" + originalCode + "\n```\n\n" +
+      "ERROR (Python):\n```\n" + (firstError.trace || firstError.value || "") + "\n```\n\n" +
+      "Devuelve EXCLUSIVAMENTE un nuevo bloque ```python ... ``` con el código " +
+      "corregido. Asegúrate de que la variable `resultado` queda asignada al " +
+      "final. NO escribas explicaciones."
+  });
+  try {
+    var reply = await callModel(fixMessages, null);
+    var parsed = extractReply(reply);
+    if (parsed.mode !== "code") return friendlyError(firstError, originalCode, firstErrorPack);
+    if (parsed.payload.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
+    await ensureTablesLoaded(parsed.payload);
+    var second = await runPython(parsed.payload);
+    if (second.kind === "error") return friendlyError(second, parsed.payload, firstErrorPack);
+    second.__codeUsed = parsed.payload;
+    chatHistory.push({ role: "assistant", content: reply });
+    return second;
+  } catch (e) {
+    return friendlyError(firstError, originalCode, firstErrorPack);
+  }
+}
+
+function friendlyError(execError, code, firstError) {
+  return {
+    kind: "error_friendly",
+    value: "No he podido obtener una respuesta esta vez. " +
+           "Prueba a reformular tu pregunta con más detalle " +
+           "(por ejemplo, indicando el curso, la métrica concreta o las " +
+           "categorías exactas que quieres comparar).",
+    technical: execError.value || "",
+    trace: execError.trace || "",
+    firstError: firstError || null,
+    __codeUsed: code
+  };
+}
+
+
+// ---------- Generar conclusiones ----------
+
+async function generateInsights() {
+  if ((!lastUserQuery && !lastTurn) || busy) return;
+  if (!insightsScript) {
+    appendError("El script de análisis (insights_script.py) no se ha cargado correctamente.");
+    return;
+  }
+
+  var queryForInsights = (lastTurn && lastTurn.enrichedQuery) || lastUserQuery;
+  appendMsg("user", "Generar conclusiones sobre: \"" + (lastUserQuery || queryForInsights) + "\"");
+
+  setBusy(true);
+  var tid = appendTyping("analizando variaciones...");
+  setStatus("calculando drivers...", "busy");
 
   try {
-    pyodide.globals.set("last_user_query", lastUserQuery);
+    var prelimFilters = deriveFiltersFromTurn(lastTurn);
+    setInsightsContext(queryForInsights, null, prelimFilters);
     var execResult = await runPython(insightsScript);
-
+    execResult = await maybeReparseAndRerun(execResult, queryForInsights, prelimFilters, tid);
     removeTyping(tid);
-    appendResult(execResult, insightsScript, true);
-    setStatus("análisis completado", "ok");
-  } catch(e) {
+
+    // Si Pyodide devolvió el JSON anonimizado, hacemos una segunda pasada
+    // por el LLM para que redacte el párrafo de conclusión de negocio.
+    var payload = extractInsightsPayload(execResult);
+    if (payload) {
+      var tid2 = appendTyping("redactando conclusiones...");
+      setStatus("redactando conclusiones...", "busy");
+      try {
+        var paragraph = await writeInsightsParagraph(payload, lastUserQuery);
+        removeTyping(tid2);
+        appendAssistantText(paragraph);
+      } catch (e) {
+        removeTyping(tid2);
+        // Fallback: si el LLM falla, mostramos un texto mínimo basado en el
+        // propio payload para que el usuario al menos vea el delta.
+        appendAssistantText(fallbackParagraph(payload));
+      }
+      setStatus("análisis completado", "ok");
+    } else {
+      // Caso de error o de "necesita reformular": el render clásico ya lo
+      // muestra como aviso al usuario.
+      appendResult(execResult, insightsScript, true);
+      setStatus("análisis completado", "ok");
+    }
+  } catch (e) {
     removeTyping(tid);
     appendError("Error en el análisis: " + e.message);
     setStatus("error", "error");
   } finally {
-    busy = false;
-    document.getElementById("send-btn").disabled = false;
-    updateInsightButton();
+    setBusy(false);
   }
 }
+
+// Extrae el JSON anonimizado del resultado de Pyodide, o devuelve null si
+// el script no devolvió un payload válido (p.ej. devolvió un mensaje de
+// error o el aviso __NEEDS_LLM_PARSING__).
+function extractInsightsPayload(execResult) {
+  if (!execResult || execResult.kind !== "text") return null;
+  if (typeof execResult.value !== "string") return null;
+  var PREFIX = "__INSIGHTS_PAYLOAD__";
+  if (!execResult.value.startsWith(PREFIX)) return null;
+  var jsonStr = execResult.value.substring(PREFIX.length);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("[insights] No se pudo parsear el payload anonimizado:", e);
+    return null;
+  }
+}
+
+// Pide al LLM que redacte UN ÚNICO párrafo de conclusión de negocio a
+// partir del resumen anonimizado. No se envían nombres reales de
+// residencias, ciudades, orígenes o fuentes.
+async function writeInsightsParagraph(payload, originalQuery) {
+  var promptSys =
+    "Eres un analista de negocio del CRM de Resa (residencias de estudiantes). " +
+    "Recibes un resumen estadístico estructurado en JSON con la comparación " +
+    "entre dos cohortes y los drivers que más explican la variación. " +
+    "Las entidades sensibles (residencias, ciudades, canales y fuentes) " +
+    "están anonimizadas con identificadores genéricos (\"Residencia A\", " +
+    "\"Ciudad 1\", \"Canal B\"...). " +
+    "Cursos académicos como \"2024/2025\" son etiquetas válidas y no están anonimizadas.\n\n" +
+    "Tu tarea: redactar UN ÚNICO PÁRRAFO de conclusión de negocio, " +
+    "natural y coherente, de 4 a 7 frases, en español. El párrafo debe:\n" +
+    "  1. Empezar señalando el cambio principal en la métrica protagonista " +
+    "(direccion_cambio y kpis), con cifras concretas y el signo.\n" +
+    "  2. Mencionar las 1-2 variables que más explican ese cambio " +
+    "(variables_explicativas), nombrándolas por su dimensión legible.\n" +
+    "  3. Apoyarse en el desglose (desglose_drivers) para citar como mucho " +
+    "2-3 valores concretos, usando los identificadores genéricos tal cual " +
+    "vengan en el JSON (no inventes nombres reales).\n" +
+    "  4. Terminar con una recomendación accionable y breve.\n\n" +
+    "Restricciones de estilo:\n" +
+    "- NO uses markdown elaborado: nada de cabeceras (#, ##), tablas ni listas. " +
+    "Solo prosa fluida; puedes usar **negrita** muy puntualmente para enfatizar.\n" +
+    "- NO inventes datos que no estén en el JSON.\n" +
+    "- NO escribas saludos, presentaciones ni meta-comentarios " +
+    "(\"basándome en el JSON...\"). Empieza directamente con el análisis.\n" +
+    "- Formatea porcentajes con 1-2 decimales y números enteros con separador " +
+    "de miles cuando proceda. La conversión exprésala como porcentaje (cr × 100).\n" +
+    "- Si direccion_cambio = 'estable', señálalo y matiza si hay movimientos internos.";
+
+  var userMsg =
+    "Consulta original del usuario: \"" + (originalQuery || "(no disponible)") + "\"\n\n" +
+    "Resumen estadístico anonimizado:\n```json\n" +
+    JSON.stringify(payload, null, 2) +
+    "\n```\n\n" +
+    "Redacta el párrafo de conclusión siguiendo las reglas.";
+
+  var reply = await callModel(
+    [{ role: "user", content: userMsg }],
+    { systemOverride: promptSys, maxTokens: 600 }
+  );
+  return (reply || "").trim() || fallbackParagraph(payload);
+}
+
+// Fallback determinista si la llamada al LLM falla. Garantiza que el
+// usuario siempre vea algo coherente con los deltas calculados.
+function fallbackParagraph(payload) {
+  var c = payload.comparacion || {};
+  var k = payload.kpis || {};
+  var partes = [];
+  partes.push("Comparando " + (c.cohorte_a || "A") + " frente a " +
+              (c.cohorte_b || "B") + " por " + (c.dimension || "dimensión") + ":");
+  if (k.leads) {
+    partes.push("leads pasan de " + k.leads.valor_a + " a " + k.leads.valor_b +
+                " (Δ " + (k.leads.delta_abs >= 0 ? "+" : "") + k.leads.delta_abs + ")");
+  }
+  if (k.contactos) {
+    partes.push("contactos pasan de " + k.contactos.valor_a + " a " + k.contactos.valor_b +
+                " (Δ " + (k.contactos.delta_abs >= 0 ? "+" : "") + k.contactos.delta_abs + ")");
+  }
+  if (k.conversion) {
+    var crA = (k.conversion.valor_a * 100).toFixed(2);
+    var crB = (k.conversion.valor_b * 100).toFixed(2);
+    var dpp = (k.conversion.delta_pp >= 0 ? "+" : "") + k.conversion.delta_pp.toFixed(2);
+    partes.push("conversión pasa de " + crA + "% a " + crB + "% (" + dpp + " pp)");
+  }
+  return partes.join("; ") + ".";
+}
+
+function setInsightsContext(query, cohorts, filters) {
+  pyodide.globals.set("last_user_query", query);
+  pyodide.globals.set("llm_parsed_cohorts", cohorts);
+  pyodide.globals.set("llm_extra_filters", pyodide.toPy(filters || []));
+}
+
+async function maybeReparseAndRerun(execResult, query, prelimFilters, tid) {
+  if (execResult.kind !== "text" ||
+      typeof execResult.value !== "string" ||
+      !execResult.value.startsWith("__NEEDS_LLM_PARSING__")) {
+    return execResult;
+  }
+  removeTyping(tid);
+  var newTid = appendTyping("interpretando consulta...");
+  setStatus("interpretando consulta...", "busy");
+  var parsed = await parseQueryForInsights(query);
+  removeTyping(newTid);
+  if (!parsed) {
+    execResult.value = execResult.value.replace("__NEEDS_LLM_PARSING__\n", "");
+    return execResult;
+  }
+  var allFilters = mergeFilters(prelimFilters, parsed.filters || []);
+  setInsightsContext(query, parsed.cohorts, allFilters);
+  return await runPython(insightsScript);
+}
+
+function mergeFilters(base, extra) {
+  var merged = base.slice();
+  for (var i = 0; i < extra.length; i++) {
+    if (!filterByColumn(merged, extra[i].columna)) merged.push(extra[i]);
+  }
+  return merged;
+}
+
+function filterByColumn(list, columna) {
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].columna === columna) return true;
+  }
+  return false;
+}
+
+function deriveFiltersFromTurn(turn) {
+  var out = [];
+  if (!turn || !turn.answeredSlots) return out;
+  for (var i = 0; i < turn.answeredSlots.length; i++) {
+    var f = deriveFilterFromSlot(turn.answeredSlots[i]);
+    if (f) out.push(f);
+  }
+  return out;
+}
+
+function deriveFilterFromSlot(slotAnswer) {
+  var ans = (slotAnswer.answer || "").trim();
+  var slot = (slotAnswer.slot || "").toLowerCase();
+  var preg = (slotAnswer.pregunta || "").toLowerCase();
+
+  if (slot.indexOf("curso") >= 0 || preg.indexOf("curso") >= 0) {
+    var m = ans.match(/(20\d{2})\s*\/\s*(20\d{2})/);
+    if (m) return { columna: "Curso", valor: m[1] + "/" + m[2] };
+    return null;
+  }
+  if (slot.indexOf("tipo") >= 0 || preg.indexOf("tipo de registro") >= 0) {
+    if (/solo leads/i.test(ans)) return { columna: "Tipo de registro", valor: "Leads" };
+    if (/solo contactos|solo contacts/i.test(ans)) return { columna: "Tipo de registro", valor: "Contacts" };
+    return null;
+  }
+  return null;
+}
+
+async function parseQueryForInsights(query) {
+  var dimensiones = [
+    "Tipo de registro", "Particular o Grupo", "Curso", "Curso_corregido",
+    "Origen_Agrupado", "Fuente_Agrupada", "Ciudad_deinteres_corregido",
+    "Ciudad_actual_corregido", "Residencias_interes_corregido",
+    "Residencias_actual_corregido", "Residencia escogida", "Mes creación"
+  ];
+  var promptSys =
+    "Analiza la siguiente consulta de un usuario de un CRM de residencias " +
+    "de estudiantes y devuelve SOLO un JSON con esta estructura:\n" +
+    "{\n" +
+    '  "cohorts": {"dimension": "<col>", "valor_a": "<v>", "valor_b": "<v>", "metrica": "leads|contacts|cr|auto"},\n' +
+    '  "filters": [{"columna": "<col>", "valor": "<v>"}]\n' +
+    "}\n\n" +
+    "Reglas:\n" +
+    "- cohorts: las dos cosas que el usuario quiere comparar. Si no hay dos " +
+    "valores claros, devuelve cohorts: null.\n" +
+    "- filters: restricciones adicionales mencionadas en la consulta " +
+    "(curso fijado, tipo de registro fijado, etc.). NO incluyas en filters " +
+    "la propia dimensión de comparación. Si no hay restricciones extra, " +
+    "devuelve filters: [].\n" +
+    "- Las columnas válidas son: " + dimensiones.join(", ") + ".\n" +
+    "- métrica refleja qué le interesa al usuario: leads, contacts, cr o auto.\n\n" +
+    "Devuelve EXCLUSIVAMENTE el JSON.";
+  try {
+    var reply = await callModel(
+      [{ role: "user", content: query }],
+      { systemOverride: promptSys, maxTokens: 400 }
+    );
+    var j = extractJSON(reply);
+    if (!j) return null;
+    var cohorts = parseCohortsField(j.cohorts);
+    if (!cohorts) return null;
+    return { cohorts: cohorts, filters: parseFiltersField(j.filters) };
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseCohortsField(c) {
+  if (!c || !c.dimension || !c.valor_a || !c.valor_b) return null;
+  return {
+    dimension: String(c.dimension),
+    valor_a: String(c.valor_a),
+    valor_b: String(c.valor_b),
+    metrica: c.metrica ? String(c.metrica) : "auto"
+  };
+}
+
+function parseFiltersField(arr) {
+  var out = [];
+  if (!Array.isArray(arr)) return out;
+  for (var i = 0; i < arr.length; i++) {
+    var f = arr[i];
+    if (f && f.columna && f.valor) {
+      out.push({ columna: String(f.columna), valor: String(f.valor) });
+    }
+  }
+  return out;
+}
+
 
 function updateInsightButton() {
   var btn = document.getElementById("insight-btn");
@@ -574,13 +1511,13 @@ function updateInsightButton() {
   if (lastUserQuery && !busy && insightsScript) {
     btn.disabled = false;
     var truncated = lastUserQuery.length > 60 ? lastUserQuery.substring(0, 60) + "…" : lastUserQuery;
-    hint.textContent = "Analizar drivers de: \"" + truncated + "\"";
+    hint.textContent = "Explicar variación de: \"" + truncated + "\"";
   } else if (!insightsScript) {
     btn.disabled = true;
     hint.textContent = "Script de análisis no cargado.";
   } else if (!lastUserQuery) {
     btn.disabled = true;
-    hint.textContent = "Haz una consulta primero para activar el análisis.";
+    hint.textContent = "Haz una consulta comparativa para activar el análisis.";
   } else {
     btn.disabled = true;
     hint.textContent = "Procesando...";
@@ -589,58 +1526,8 @@ function updateInsightButton() {
 
 function quickAsk(t) { sendMessage(t); }
 
-function extractPython(reply) {
-  var m = reply.match(/```(?:python)?\s*\n([\s\S]*?)```/);
-  if (m) return m[1].trim();
-  var t = reply.trim();
-  if (/^(import |from |resultado\s*=|def |[a-zA-Z_]+\s*=)/.test(t)) return t;
-  return null;
-}
 
-async function runPython(code) {
-  var wrapper =
-    "import json as _json\n" +
-    "import io as _io, base64 as _base64\n" +
-    "_OUTPUT = {'kind': 'none', 'value': None}\n" +
-    "try:\n" +
-    indent(code, "    ") + "\n" +
-    "    _r = resultado\n" +
-    "    import pandas as _pd\n" +
-    "    import matplotlib.figure as _mf\n" +
-    "    if isinstance(_r, _mf.Figure):\n" +
-    "        _buf = _io.BytesIO()\n" +
-    "        _r.savefig(_buf, format='png', dpi=110, bbox_inches='tight')\n" +
-    "        _buf.seek(0)\n" +
-    "        _OUTPUT = {'kind': 'image', 'value': _base64.b64encode(_buf.read()).decode('ascii')}\n" +
-    "    elif isinstance(_r, _pd.DataFrame):\n" +
-    "        _OUTPUT = {'kind': 'dataframe', 'value': _r.to_json(orient='split', date_format='iso', force_ascii=False), 'shape': list(_r.shape)}\n" +
-    "    elif isinstance(_r, _pd.Series):\n" +
-    "        _df = _r.reset_index()\n" +
-    "        _OUTPUT = {'kind': 'dataframe', 'value': _df.to_json(orient='split', date_format='iso', force_ascii=False), 'shape': list(_df.shape)}\n" +
-    "    elif isinstance(_r, dict):\n" +
-    "        _OUTPUT = {'kind': 'dict', 'value': _json.dumps(_r, default=str, ensure_ascii=False)}\n" +
-    "    elif isinstance(_r, (int, float)):\n" +
-    "        _OUTPUT = {'kind': 'number', 'value': float(_r) if isinstance(_r, float) else int(_r)}\n" +
-    "    elif isinstance(_r, str):\n" +
-    "        _OUTPUT = {'kind': 'text', 'value': _r}\n" +
-    "    else:\n" +
-    "        _OUTPUT = {'kind': 'text', 'value': str(_r)}\n" +
-    "except Exception as _e:\n" +
-    "    import traceback as _tb\n" +
-    "    _OUTPUT = {'kind': 'error', 'value': str(_e), 'trace': _tb.format_exc()}\n" +
-    "_json.dumps(_OUTPUT, ensure_ascii=False)\n";
-
-  try {
-    var out = await pyodide.runPythonAsync(wrapper);
-    return JSON.parse(out);
-  } catch(e) {
-    return { kind: "error", value: e.message, trace: e.stack || "" };
-  }
-}
-
-function indent(text, prefix) {
-  return text.split("\n").map(function(l) { return prefix + l; }).join("\n");
-}
+// ---------- Render del chat ----------
 
 function appendMsg(role, text) {
   var box = document.getElementById("messages");
@@ -658,93 +1545,76 @@ function appendMsg(role, text) {
   scrollToBottom();
 }
 
-function appendAssistantText(text) {
-  appendMsg("assistant", text);
-}
+function appendAssistantText(text) { appendMsg("assistant", text); }
 
 function appendResult(result, code, isInsight) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg assistant";
-  var inner = '';
-  if (result.kind === "error") {
-    inner = renderError(result);
-  } else {
-    var cls = "result-box" + (isInsight ? " insight" : "");
-    inner = '<div class="' + cls + '">' + renderResult(result) + '</div>';
-  }
+  var inner = (result.kind === "error" || result.kind === "error_friendly")
+    ? renderError(result)
+    : '<div class="result-box' + (isInsight ? ' insight' : '') + '">' + renderResult(result) + '</div>';
   inner += renderCodeToggle(code, isInsight);
   d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + (isInsight ? ' · análisis de drivers' : '') + '</div>'
+    + '<div class="msg-role">Asistente' + (isInsight ? ' · análisis de variaciones' : '') + '</div>'
     + '<div class="msg-text">' + inner + '</div>'
     + '</div>';
   box.appendChild(d);
-  var toggle = d.querySelector(".code-toggle");
-  if (toggle) {
-    toggle.addEventListener("click", function() {
-      this.classList.toggle("expanded");
-      var blk = this.nextElementSibling;
-      if (blk) blk.classList.toggle("expanded");
-    });
-  }
+  attachCodeToggle(d);
   scrollToBottom();
 }
 
+function attachCodeToggle(container) {
+  var toggle = container.querySelector(".code-toggle");
+  if (!toggle) return;
+  toggle.addEventListener("click", function () {
+    this.classList.toggle("expanded");
+    var blk = this.nextElementSibling;
+    if (blk) blk.classList.toggle("expanded");
+  });
+}
+
 function renderResult(r) {
-  if (r.kind === "number") {
-    var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
-      ? r.value.toFixed(2)
-      : new Intl.NumberFormat("es-ES").format(r.value);
-    return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
-  }
-  if (r.kind === "text") {
-    return '<div class="text-result">' + marked.parse(r.value) + '</div>';
-  }
-  if (r.kind === "dict") {
-    var obj = JSON.parse(r.value);
-    var rows = '';
-    for (var k in obj) {
-      var v = obj[k];
-      if (typeof v === "number") v = new Intl.NumberFormat("es-ES").format(v);
-      rows += '<tr><td><strong>' + esc(k) + '</strong></td><td class="num">' + esc(String(v)) + '</td></tr>';
-    }
-    return '<table>' + rows + '</table>';
-  }
-  if (r.kind === "image") {
-    return '<img src="data:image/png;base64,' + r.value + '" alt="gráfico">';
-  }
-  if (r.kind === "dataframe") {
-    return renderDataFrame(JSON.parse(r.value), r.shape);
-  }
-  if (r.kind === "none") {
-    return '<div class="text-result"><em>El script no asignó nada a la variable <code>resultado</code>.</em></div>';
-  }
+  if (r.kind === "number") return renderNumber(r);
+  if (r.kind === "text") return '<div class="text-result">' + marked.parse(r.value) + '</div>';
+  if (r.kind === "dict") return renderDict(r);
+  if (r.kind === "image") return '<img src="data:image/png;base64,' + r.value + '" alt="gráfico">';
+  if (r.kind === "dataframe") return renderDataFrame(JSON.parse(r.value), r.shape);
+  if (r.kind === "none") return '<div class="text-result"><em>El script no asignó nada a la variable <code>resultado</code>.</em></div>';
   return '<div class="text-result">' + esc(JSON.stringify(r)) + '</div>';
+}
+
+function renderNumber(r) {
+  var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
+    ? r.value.toFixed(2)
+    : new Intl.NumberFormat("es-ES").format(r.value);
+  return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
+}
+
+function renderDict(r) {
+  var obj = JSON.parse(r.value);
+  var rows = '';
+  for (var k in obj) {
+    var v = obj[k];
+    if (typeof v === "number") v = new Intl.NumberFormat("es-ES").format(v);
+    rows += '<tr><td><strong>' + esc(k) + '</strong></td><td class="num">' + esc(String(v)) + '</td></tr>';
+  }
+  return '<table>' + rows + '</table>';
 }
 
 function renderDataFrame(df, shape) {
   var cols = df.columns || [];
   var rows = df.data || [];
-  if (rows.length === 0) {
-    return '<div class="text-result"><em>Sin resultados.</em></div>';
-  }
+  if (rows.length === 0) return '<div class="text-result"><em>Sin resultados.</em></div>';
   var html = '<table><thead><tr>';
-  for (var i = 0; i < cols.length; i++) {
-    html += '<th>' + esc(String(cols[i])) + '</th>';
-  }
+  for (var i = 0; i < cols.length; i++) html += '<th>' + esc(String(cols[i])) + '</th>';
   html += '</tr></thead><tbody>';
   var maxRows = Math.min(rows.length, 100);
   for (var r = 0; r < maxRows; r++) {
     html += '<tr>';
     for (var c = 0; c < rows[r].length; c++) {
-      var val = rows[r][c];
-      var isNum = typeof val === "number";
-      var display;
-      if (val === null || val === undefined) display = "—";
-      else if (isNum) display = Number.isInteger(val) ? new Intl.NumberFormat("es-ES").format(val) : val.toFixed(4).replace(/\.?0+$/, "");
-      else display = String(val);
-      html += '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+      html += renderCell(rows[r][c]);
     }
     html += '</tr>';
   }
@@ -755,9 +1625,43 @@ function renderDataFrame(df, shape) {
   return html;
 }
 
+function renderCell(val) {
+  var isNum = typeof val === "number";
+  var display;
+  if (val === null || val === undefined) display = "—";
+  else if (isNum) display = Number.isInteger(val) ? new Intl.NumberFormat("es-ES").format(val) : val.toFixed(4).replace(/\.?0+$/, "");
+  else display = String(val);
+  return '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+}
+
 function renderError(r) {
-  var trace = r.trace ? '<pre>' + esc(r.trace) + '</pre>' : '';
-  return '<div class="error-box"><strong>Error al ejecutar el código:</strong> ' + esc(r.value) + trace + '</div>';
+  // Construye bloque tecnico plegable con la traza Python completa.
+  // Para error_friendly incluye tambien el primer intento si existe.
+  var techParts = [];
+  var summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
+  if (summary) techParts.push('<div class="err-summary">' + esc(summary) + '</div>');
+  if (r.trace) techParts.push('<pre>' + esc(r.trace) + '</pre>');
+  if (r.firstError) {
+    techParts.push('<div class="err-section-label">Primer intento (falló, se reintentó):</div>');
+    if (r.firstError.value) techParts.push('<div class="err-summary">' + esc(r.firstError.value) + '</div>');
+    if (r.firstError.trace) techParts.push('<pre>' + esc(r.firstError.trace) + '</pre>');
+    if (r.firstError.code) {
+      techParts.push('<div class="err-section-label">Código del primer intento:</div>');
+      techParts.push('<pre>' + esc(r.firstError.code) + '</pre>');
+    }
+  }
+  var techHtml = techParts.join("");
+  var details = techHtml
+    ? '<details class="err-details"><summary>ver detalles técnicos del error</summary>' + techHtml + '</details>'
+    : "";
+  if (r.kind === "error_friendly") {
+    return '<div class="error-box error-friendly">'
+      + '<strong>No he podido responder.</strong> ' + esc(r.value)
+      + details + '</div>';
+  }
+  return '<div class="error-box">'
+    + '<strong>Error al ejecutar el código:</strong> ' + esc(r.value)
+    + details + '</div>';
 }
 
 function renderCodeToggle(code, isInsight) {
@@ -769,7 +1673,7 @@ function renderCodeToggle(code, isInsight) {
 
 function appendTyping(label) {
   var box = document.getElementById("messages");
-  var id = "t" + Date.now();
+  var id = "t" + Date.now() + "_" + Math.floor(Math.random() * 1000);
   var d = document.createElement("div");
   d.className = "msg assistant";
   d.id = id;
@@ -790,6 +1694,47 @@ function removeTyping(id) {
   if (e) e.remove();
 }
 
+function clearStaleTypings() {
+  var nodes = document.querySelectorAll(".typing-dots");
+  for (var i = 0; i < nodes.length; i++) {
+    var msg = nodes[i].closest(".msg");
+    if (msg) msg.remove();
+  }
+}
+
+// ---------- Utilidades de depuracion para el desarrollador ----------
+
+// Muestra un aviso destacado en el area de mensajes del chat.
+// Acepta HTML (usar esc() para valores externos).
+// Util para errores de carga, configuracion incorrecta, etc.
+function showDevAlert(htmlMsg) {
+  console.warn("[DEV ALERT]", htmlMsg.replace(/<[^>]+>/g, ""));
+  var box = document.getElementById("messages");
+  if (!box) return;
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.innerHTML =
+    '<div class="msg-avatar" style="background:#f5a623;">!</div>' +
+    '<div class="msg-body">' +
+    '<div class="msg-role" style="color:#b05a00;">Error de carga — revisa la consola del navegador (F12)</div>' +
+    '<div class="msg-text"><div class="error-box dev-alert">' + htmlMsg + '</div></div>' +
+    '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+// Banner de aviso que se muestra al abrir el chat cuando hay un problema de configuracion.
+// A diferencia de showDevAlert, este no tiene avatar de asistente y tiene fondo amarillo.
+function appendDevBanner(htmlMsg) {
+  console.warn("[DEV BANNER]", htmlMsg.replace(/<[^>]+>/g, ""));
+  var box = document.getElementById("messages");
+  if (!box) return;
+  var d = document.createElement("div");
+  d.className = "dev-banner";
+  d.innerHTML = htmlMsg;
+  box.insertBefore(d, box.firstChild);
+}
+
 function appendError(msg) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
@@ -802,6 +1747,85 @@ function appendError(msg) {
   box.appendChild(d);
   scrollToBottom();
 }
+
+function appendClarify(payload, step, total) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente · necesita aclaración</div>'
+    + '<div class="msg-text">' + buildClarifyBoxHtml(payload, step, total) + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  attachClarifyListeners(d, payload);
+  scrollToBottom();
+}
+
+function buildClarifyBoxHtml(payload, step, total) {
+  var opciones = (payload.opciones || []).slice(0, 4);
+  var optsHtml = '<div class="clarify-options">';
+  for (var i = 0; i < opciones.length; i++) {
+    optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
+                '">' + esc(opciones[i]) + '</button>';
+  }
+  // La caja de texto libre se renderiza SIEMPRE, sin importar el valor de
+  // `permitirOtro` que devuelva el modelo. El usuario debe poder escribir
+  // su propia respuesta como vía de escape en cualquier clarify.
+  optsHtml +=
+    '<div class="clarify-other-wrap">' +
+    '<input type="text" class="clarify-other-input" placeholder="Otro... (escribe tu respuesta)">' +
+    '<button class="clarify-other-btn">Enviar</button>' +
+    '</div>';
+  optsHtml += '</div>';
+  var progressHtml = (step && total && total > 1)
+    ? '<div class="clarify-progress">Aclaración ' + step + ' de ' + total + '</div>'
+    : '';
+  var razonHtml = payload.razon
+    ? '<div class="clarify-why">' + esc(payload.razon) + '</div>'
+    : '';
+  return '<div class="clarify-box">' + progressHtml
+    + '<div class="clarify-q">' + esc(payload.pregunta || "¿Puedes concretar?") + '</div>'
+    + razonHtml + optsHtml + '</div>';
+}
+
+function attachClarifyListeners(container, payload) {
+  var btns = container.querySelectorAll(".clarify-option");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function (ev) {
+      var txt = ev.currentTarget.getAttribute("data-opt");
+      answerClarify(txt);
+    });
+  }
+  var otherInput = container.querySelector(".clarify-other-input");
+  var otherBtn = container.querySelector(".clarify-other-btn");
+  if (otherInput && otherBtn) {
+    var submit = function () {
+      var v = otherInput.value.trim();
+      if (v) answerClarify(v);
+    };
+    otherBtn.addEventListener("click", submit);
+    otherInput.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); submit(); }
+    });
+  }
+}
+
+function appendRetryNotice(text) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.id = "retry-notice-" + Date.now();
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="retry-notice">' + esc(text) + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+
+// ---------- Utilidades de UI ----------
 
 function scrollToBottom() {
   var box = document.getElementById("messages");
@@ -817,7 +1841,11 @@ function setStatus(msg, kind) {
 }
 
 function esc(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function handleKey(e) {
@@ -829,7 +1857,7 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + "px";
 }
 
-document.getElementById("api-key-input").addEventListener("keydown", function(e) {
+document.getElementById("api-key-input").addEventListener("keydown", function (e) {
   if (e.key === "Enter") initChat();
 });
 </script>

@@ -1,23 +1,28 @@
 """
-Análisis de drivers — Random Forest sobre dimensiones del modelo.
+Análisis de variaciones — explicación en lenguaje de negocio.
 
-Objetivo: dada la última consulta del usuario, identificar qué variables
-explican la diferencia entre dos cohortes (típicamente dos cursos académicos).
+Dada una consulta del usuario que compara dos cohortes (dos cursos, dos
+ciudades, dos orígenes, dos fuentes...) este script:
 
-Estrategia:
-  1. Detectar las dos cohortes a comparar a partir de `last_user_query`.
-  2. Construir un dataset a nivel de registro con target binario
-       1 = pertenece a la cohorte "nueva", 0 = cohorte "vieja"
-     (técnica de drift-detection / A-vs-B explanation).
-  3. Entrenar un RandomForestClassifier sobre las dimensiones disponibles.
-  4. Extraer feature_importances_ y mapearlas a variables originales.
-  5. Para las top features, hacer breakdown univariado mostrando qué valores
-     concretos han cambiado y en qué magnitud.
-  6. Devolver markdown con KPIs de cabecera + ranking de drivers + lectura.
+  1. Detecta qué dimensión se está comparando y los dos valores (cohortes).
+  2. Detecta qué métrica le interesa al usuario: leads, contacts o CR.
+     Si no está clara, analiza las tres con igual peso.
+  3. Calcula los KPIs de las dos cohortes.
+  4. Identifica las variables más explicativas del cambio (sin nombrar el
+     método estadístico — el output va dirigido a un usuario de negocio).
+  5. Devuelve un markdown con explicación accionable.
 
-Variables globales esperadas en el entorno Pyodide:
+Variables globales esperadas:
   - leads_contacts (pd.DataFrame)
   - last_user_query (str)
+  - llm_parsed_cohorts (dict, opcional): si el frontend ha conseguido un
+    parseo extra vía LLM, lo inyecta aquí con la forma:
+        {"dimension": "<col>", "valor_a": "<str>", "valor_b": "<str>",
+         "metrica": "leads|contacts|cr|auto"}
+
+Si no detecta cohortes ni llega un parseo LLM, devuelve un string especial
+que comienza con "__NEEDS_LLM_PARSING__" para que el frontend orqueste el
+fallback.
 """
 
 import re
@@ -26,13 +31,167 @@ import pandas as pd
 
 # ===================== CONFIGURACIÓN =====================
 
-# Dimensiones categóricas que el RF puede usar como features.
-# IMPORTANTE: NO incluir `Curso` ni `Curso_corregido` aquí porque el target
-# binario se construye a partir del curso (sería información del propio
-# target y dominaría las importancias artificialmente).
+ID_COL = "Correo electrónico"
+COURSE_COL = "Curso"
+
+# -----------------------------------------------------------------------------
+# WHITELIST DE VARIABLES EXPLICATIVAS POR TIPO DE COMPARACIÓN
+# -----------------------------------------------------------------------------
+# La motivación: una variable solo se ofrece como "explicativa" si realmente
+# le aporta valor de negocio al usuario para ese tipo de comparación.
+#
+# Ejemplos de variables que NO aportan valor en la práctica y se han excluido:
+#   - "Ciudad de procedencia" cuando se comparan ciudades de interés: cambia
+#     poco entre cohortes y rara vez es accionable.
+#   - "Mes de entrada" cuando se comparan ciudades, residencias u orígenes:
+#     introduce ruido estacional que casi nunca explica el caso de negocio.
+#   - Variables post-conversión cuando se compara CR (ya las gestiona
+#     `LEAKAGE_VARS` más abajo).
+#
+# Estructura: clave = dimensión que SE ESTÁ COMPARANDO. Valor = lista de
+# dimensiones útiles como explicación de esa comparación.
+# La clave especial "__default__" cubre cualquier caso no listado.
+# -----------------------------------------------------------------------------
+
+EXPLICATIVAS_POR_TIPO = {
+    # Comparas dos CURSOS (2024/2025 vs 2025/2026)
+    # Tiene sentido ver cómo cambia el mix de origen/fuente, qué ciudades
+    # tiran del cambio, qué residencias y la procedencia.
+    "Curso_corregido": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Ciudad_deinteres_corregido",
+        "Residencias_interes_corregido",
+        "Residencia escogida",
+        "Ciudad_actual_corregido",
+    ],
+    "Curso": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Ciudad_deinteres_corregido",
+        "Residencias_interes_corregido",
+        "Residencia escogida",
+        "Ciudad_actual_corregido",
+    ],
+
+    # Comparas dos CIUDADES DE INTERÉS (Madrid vs Valencia)
+    # NO tiene sentido "ciudad de procedencia" ni "mes de entrada".
+    # Sí: curso (mix de público), origen/fuente (qué canales funcionan
+    # diferente entre ciudades) y residencia (qué producto se elige dentro
+    # de cada ciudad).
+    "Ciudad_deinteres_corregido": [
+        "Curso_corregido",
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Residencias_interes_corregido",
+        "Residencia escogida",
+    ],
+
+    # Comparas dos CIUDADES DE PROCEDENCIA (de dónde vienen los leads)
+    # Sí tiene sentido: a dónde quieren ir, curso, canal por el que entraron.
+    "Ciudad_actual_corregido": [
+        "Ciudad_deinteres_corregido",
+        "Curso_corregido",
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+    ],
+
+    # Comparas dos CANALES DE CAPTACIÓN (Paid Media vs SEO & Directo)
+    # Sí: qué tipo de público (ciudades, cursos) trae cada canal, qué fuente
+    # concreta dentro del canal, qué residencia eligen.
+    "Origen_Agrupado": [
+        "Fuente_Agrupada",
+        "Ciudad_deinteres_corregido",
+        "Curso_corregido",
+        "Residencias_interes_corregido",
+    ],
+
+    # Comparas dos FUENTES (Web Resa vs Unitour)
+    "Fuente_Agrupada": [
+        "Origen_Agrupado",
+        "Ciudad_deinteres_corregido",
+        "Curso_corregido",
+        "Residencias_interes_corregido",
+    ],
+
+    # Comparas dos RESIDENCIAS DE INTERÉS
+    # Sí: por dónde vienen (origen/fuente), de dónde son (procedencia), curso.
+    # No tiene sentido "ciudad de interés" porque cada residencia pertenece a
+    # una sola ciudad (la propia función `detectar_dims_dependientes` ya lo
+    # eliminaría, pero también lo dejamos fuera explícitamente).
+    "Residencias_interes_corregido": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Curso_corregido",
+        "Ciudad_actual_corregido",
+    ],
+    "Residencia escogida": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Curso_corregido",
+        "Ciudad_actual_corregido",
+    ],
+
+    # Comparas dos TIPOS DE REGISTRO (Leads vs Contacts) — caso raro,
+    # mantenemos todo lo de negocio.
+    "Tipo de registro": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Curso_corregido",
+        "Ciudad_deinteres_corregido",
+        "Residencias_interes_corregido",
+    ],
+
+    # Particular o Grupo
+    "Particular o Grupo": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Curso_corregido",
+        "Ciudad_deinteres_corregido",
+    ],
+
+    # Comparas dos MESES — aquí sí tiene sentido todo lo de marketing y
+    # geografía porque el cambio es estacional / de campaña.
+    "Mes creación": [
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Ciudad_deinteres_corregido",
+        "Curso_corregido",
+        "Residencias_interes_corregido",
+    ],
+
+    # Por defecto, conjunto razonablemente amplio pero ya filtrado de las dos
+    # variables que casi nunca le sirven al usuario (ciudad de procedencia y
+    # mes de entrada se incluyen solo cuando son la propia comparación).
+    "__default__": [
+        "Curso_corregido",
+        "Origen_Agrupado",
+        "Fuente_Agrupada",
+        "Ciudad_deinteres_corregido",
+        "Residencias_interes_corregido",
+        "Residencia escogida",
+    ],
+}
+
+
+def candidatas_para_comparacion(dim_comparacion):
+    """Devuelve las variables explicativas útiles cuando se compara `dim`.
+
+    Excluye SIEMPRE la propia dimensión de comparación.
+    """
+    base = EXPLICATIVAS_POR_TIPO.get(
+        dim_comparacion, EXPLICATIVAS_POR_TIPO["__default__"]
+    )
+    return [d for d in base if d != dim_comparacion]
+
+
+# Lista plana de todas las dimensiones que el motor puede llegar a manejar.
+# Se usa solo para la detección textual de cohortes (¿qué valor aparece en
+# la consulta del usuario?), no como espacio de búsqueda explicativo.
 CANDIDATE_DIMENSIONS = [
     "Tipo de registro",
     "Particular o Grupo",
+    "Curso_corregido",
     "Origen_Agrupado",
     "Fuente_Agrupada",
     "Ciudad_deinteres_corregido",
@@ -43,13 +202,6 @@ CANDIDATE_DIMENSIONS = [
     "Mes creación",
 ]
 
-# Columna ID para conteos únicos.
-ID_COL = "Correo electrónico"
-
-# Columna que define el "curso" (cohorte temporal por defecto).
-COURSE_COL = "Curso"
-
-# Parámetros del Random Forest (modestos para Pyodide).
 RF_PARAMS = dict(
     n_estimators=120,
     max_depth=8,
@@ -58,27 +210,104 @@ RF_PARAMS = dict(
     n_jobs=1,
 )
 
-# Cursos por defecto si la consulta no menciona ninguno.
-COURSE_DEFAULTS = ("2024/2025", "2025/2026")
-
-# Número de drivers a reportar.
 TOP_K_DRIVERS = 5
-
-# Para el breakdown univariado, mínimo de registros para considerar relevante.
 MIN_RECORDS_FOR_BREAKDOWN = 30
 
-# ===================== UTILIDADES =====================
+# ===================== UTILIDADES BÁSICAS =====================
 
 try:
     query_text = str(last_user_query) if last_user_query is not None else ""
 except NameError:
     query_text = ""
 
+try:
+    llm_hint = llm_parsed_cohorts  # type: ignore
+except NameError:
+    llm_hint = None
 
-def detectar_cursos(texto, default=COURSE_DEFAULTS):
-    """Extrae cursos del tipo 'YYYY/YYYY' o 'YY/YY' de la consulta del usuario.
-    Si solo hay uno, asume comparación contra el inmediatamente anterior.
-    Si no hay ninguno, devuelve el par por defecto."""
+# Filtros adicionales que el front inyecta (ej. "curso=2025/2026" cuando el
+# usuario ha preguntado "Madrid vs Valencia EN 2025/2026"). Lista de dicts
+# {"columna": "<col>", "valor": "<v>"}. Si el front ha pasado un PyProxy lo
+# convertimos a estructura nativa de Python.
+try:
+    _raw_extra = llm_extra_filters  # type: ignore
+except NameError:
+    _raw_extra = None
+
+def _normalizar_filtros(raw):
+    """Acepta None, lista de dicts, o un objeto convertible a lista. Devuelve
+    una lista de tuplas (columna, valor) limpia."""
+    if raw is None:
+        return []
+    try:
+        if hasattr(raw, "to_py"):
+            raw = raw.to_py()
+    except Exception:
+        pass
+    out = []
+    try:
+        for item in raw:
+            if item is None:
+                continue
+            if isinstance(item, dict):
+                col = item.get("columna") or item.get("column") or item.get("col")
+                val = item.get("valor") or item.get("value") or item.get("val")
+            else:
+                try:
+                    col, val = item[0], item[1]
+                except Exception:
+                    continue
+            if col and val is not None:
+                out.append((str(col), str(val)))
+    except Exception:
+        return []
+    return out
+
+extra_filters = _normalizar_filtros(_raw_extra)
+
+
+def aplicar_filtros_extra(df, filtros):
+    """Aplica una lista de filtros (columna, valor) al DataFrame."""
+    if not filtros:
+        return df
+    out = df
+    for col, val in filtros:
+        if col in out.columns:
+            out = out[out[col].astype(str) == str(val)]
+    return out
+
+
+def fmt_num(n):
+    if n is None or (isinstance(n, float) and np.isnan(n)):
+        return "—"
+    try:
+        return f"{int(n):,}".replace(",", ".")
+    except Exception:
+        return str(n)
+
+
+def fmt_pct(p, dec=2):
+    if p is None or (isinstance(p, float) and np.isnan(p)):
+        return "—"
+    return f"{p*100:+.{dec}f}%"
+
+
+def fmt_pct_abs(p, dec=2):
+    if p is None or (isinstance(p, float) and np.isnan(p)):
+        return "—"
+    return f"{p*100:.{dec}f}%"
+
+
+def var_pct(nuevo, viejo):
+    if viejo is None or viejo == 0:
+        return None
+    return (nuevo / viejo) - 1.0
+
+
+# ===================== DETECCIÓN DE COHORTES =====================
+
+def _detectar_cursos(texto):
+    """Devuelve hasta dos cursos detectados en la consulta."""
     patron = r"\b(20\d{2}|\d{2})\s*[-/]\s*(20\d{2}|\d{2})\b"
     cursos = []
     for ini, fin in re.findall(patron, texto):
@@ -96,326 +325,768 @@ def detectar_cursos(texto, default=COURSE_DEFAULTS):
 
     if len(cursos) >= 2:
         cursos = sorted(set(cursos))
-        return cursos[0], cursos[-1]
+        return COURSE_COL, cursos[0], cursos[-1]
     if len(cursos) == 1:
         unico = cursos[0]
         try:
             n = int(unico.split("/")[0])
-            return f"{n-1}/{n}", unico
+            return COURSE_COL, f"{n-1}/{n}", unico
         except Exception:
-            return default
-    return default
+            return None
+    return None
 
 
-def fmt_num(n):
-    try:
-        return f"{int(n):,}".replace(",", ".")
-    except Exception:
-        return str(n)
+def _detectar_valores_dimension(texto, df, columnas_excluidas=None):
+    """Busca pares de valores de cualquier dimensión categórica que aparezcan
+    en el texto. Devuelve (dimension, valor_a, valor_b) o None."""
+    columnas_excluidas = set(columnas_excluidas or [])
+    texto_lower = texto.lower()
 
+    mejores = []  # (dimension, [valores_encontrados])
+    for dim in CANDIDATE_DIMENSIONS:
+        if dim not in df.columns or dim == COURSE_COL:
+            continue
+        if dim in columnas_excluidas:
+            continue
+        valores_unicos = df[dim].dropna().astype(str).unique()
+        encontrados = []
+        for v in valores_unicos:
+            v_str = str(v).strip()
+            if len(v_str) < 3:
+                continue
+            if re.search(r"\b" + re.escape(v_str.lower()) + r"\b", texto_lower):
+                encontrados.append(v_str)
+        # eliminamos duplicados manteniendo el orden de aparición en el texto
+        seen = set()
+        unicos_orden = []
+        for v in encontrados:
+            if v.lower() not in seen:
+                seen.add(v.lower())
+                unicos_orden.append(v)
+        if len(unicos_orden) >= 2:
+            mejores.append((dim, unicos_orden))
 
-def fmt_pct(p, dec=2):
-    if p is None or pd.isna(p):
-        return "—"
-    return f"{p*100:+.{dec}f}%"
-
-
-def fmt_pct_abs(p, dec=2):
-    if p is None or pd.isna(p):
-        return "—"
-    return f"{p*100:.{dec}f}%"
-
-
-def contar_leads(df, curso=None):
-    f = df[df["Tipo de registro"] == "Leads"]
-    if curso is not None:
-        f = f[f[COURSE_COL] == curso]
-    return int(f[ID_COL].nunique()) if not f.empty else 0
-
-
-def contar_contacts(df, curso=None):
-    f = df[
-        (df["Tipo de registro"] == "Contacts") &
-        (df["Particular o Grupo"] == "Particular")
-    ]
-    if curso is not None:
-        f = f[f[COURSE_COL] == curso]
-    return int(f[ID_COL].nunique()) if not f.empty else 0
-
-
-def calcular_cr(contacts, leads):
-    denom = contacts + leads
-    return contacts / denom if denom > 0 else 0.0
-
-
-def var_pct(nuevo, viejo):
-    if viejo is None or viejo == 0:
+    if not mejores:
         return None
-    return (nuevo / viejo) - 1.0
+
+    mejores.sort(key=lambda x: (-len(x[1]), -sum(len(v) for v in x[1])))
+    dim, valores = mejores[0]
+    return dim, valores[0], valores[1]
 
 
-# ===================== ENTRENAR RANDOM FOREST =====================
+def detectar_cohortes(texto, df, hint=None, columnas_excluidas=None):
+    """Devuelve (dimension, valor_a, valor_b) o None si no consigue detectar.
+    `hint` es un dict opcional proveniente del LLM.
+    `columnas_excluidas` es un set de columnas que NO pueden ser la dimensión
+    de comparación (porque ya están fijadas como filtro)."""
+    columnas_excluidas = set(columnas_excluidas or [])
 
-def entrenar_rf(df_completo, curso_1, curso_2, dimensiones):
-    """Entrena un RandomForestClassifier para distinguir registros del curso_2
-    de los del curso_1. Devuelve (importancias_por_dimension, n_total)."""
-    from sklearn.ensemble import RandomForestClassifier
+    if hint and isinstance(hint, dict):
+        dim = hint.get("dimension")
+        va = hint.get("valor_a")
+        vb = hint.get("valor_b")
+        if dim and va and vb and dim in df.columns and dim not in columnas_excluidas:
+            return dim, va, vb
 
-    # Filtrar a las dos cohortes.
-    df = df_completo[df_completo[COURSE_COL].isin([curso_1, curso_2])].copy()
-    if df.empty:
-        return pd.DataFrame(), 0
+    # Solo detectamos cursos si Curso no está en los filtros fijos.
+    if COURSE_COL not in columnas_excluidas and "Curso_corregido" not in columnas_excluidas:
+        r = _detectar_cursos(texto)
+        if r:
+            return r
 
-    # Quedarse solo con dimensiones presentes en el df.
-    dims = [d for d in dimensiones if d in df.columns and d != COURSE_COL]
-    if not dims:
-        return pd.DataFrame(), 0
+    r = _detectar_valores_dimension(texto, df, columnas_excluidas=columnas_excluidas)
+    if r:
+        return r
 
-    # Rellenar nulos y forzar a string para get_dummies.
-    X_raw = df[dims].copy()
+    return None
+
+
+def detectar_dims_dependientes(df, dim_comparacion, candidatas, umbral_solape=0.05):
+    """Devuelve las dimensiones que están funcionalmente determinadas por
+    la dimensión de comparación (sus valores no se solapan entre las cohortes).
+    Estas dimensiones no aportan información explicativa real: si comparas
+    Madrid vs Bilbao, la "residencia de interés" solo toma valores diferentes
+    en cada cohorte (cada residencia pertenece a una sola ciudad), así que
+    aparece artificialmente como "100% explicativa"."""
+    excluir = set()
+    valores_dim = df[dim_comparacion].dropna().unique()
+    if len(valores_dim) < 2:
+        return excluir
+
+    for cand in candidatas:
+        if cand not in df.columns or cand == dim_comparacion:
+            continue
+        valores_cand_por_cohorte = []
+        for v in valores_dim:
+            sub = df[df[dim_comparacion].astype(str) == str(v)]
+            if len(sub) > 0:
+                valores_cand_por_cohorte.append(
+                    set(sub[cand].dropna().astype(str).unique())
+                )
+
+        if len(valores_cand_por_cohorte) < 2:
+            continue
+
+        solape_min = 1.0
+        for i in range(len(valores_cand_por_cohorte)):
+            for j in range(i + 1, len(valores_cand_por_cohorte)):
+                a = valores_cand_por_cohorte[i]
+                b = valores_cand_por_cohorte[j]
+                if not a or not b:
+                    continue
+                jaccard = len(a & b) / len(a | b) if (a | b) else 1.0
+                solape_min = min(solape_min, jaccard)
+
+        if solape_min < umbral_solape:
+            excluir.add(cand)
+    return excluir
+
+
+# ===================== DETECCIÓN DE MÉTRICA OBJETIVO =====================
+
+PATRONES_METRICA = {
+    "cr": [
+        r"\bconversi[oó]n\b", r"\bconversion rate\b", r"\bCR\b",
+        r"\btasa de conversi[oó]n\b", r"\befectividad\b", r"\beficiencia\b",
+        r"\bcierre\b", r"\bratio\b",
+    ],
+    "contacts": [
+        r"\bcontacts?\b", r"\bcontactos?\b", r"\bfirmas?\b", r"\bfirmados?\b",
+        r"\breservas?\b", r"\bconvertidos?\b", r"\bclientes?\b",
+        r"\bexpedientes?\b",
+    ],
+    "leads": [
+        r"\bleads?\b", r"\binteresad[oa]s?\b", r"\bcaptaci[oó]n\b",
+        r"\bvolumen\b", r"\bregistros?\b",
+    ],
+}
+
+
+def detectar_metrica(texto):
+    """Detecta la métrica que más le interesa al usuario. Devuelve uno de:
+    'leads', 'contacts', 'cr', 'auto'."""
+    if not texto:
+        return "auto"
+    matches = {}
+    for metrica, patrones in PATRONES_METRICA.items():
+        for p in patrones:
+            if re.search(p, texto, flags=re.IGNORECASE):
+                matches[metrica] = matches.get(metrica, 0) + 1
+
+    if not matches:
+        return "auto"
+    sorted_m = sorted(matches.items(), key=lambda x: -x[1])
+    if len(sorted_m) >= 2 and sorted_m[0][1] == sorted_m[1][1]:
+        return "auto"
+    return sorted_m[0][0]
+
+
+# ===================== CÁLCULO DE KPIS POR COHORTE =====================
+
+def kpis_cohorte(df_cohorte):
+    leads = int(df_cohorte[df_cohorte["Tipo de registro"] == "Leads"][ID_COL].nunique())
+    contacts = int(df_cohorte[
+        (df_cohorte["Tipo de registro"] == "Contacts") &
+        (df_cohorte["Particular o Grupo"] == "Particular")
+    ][ID_COL].nunique())
+    denom = leads + contacts
+    cr = contacts / denom if denom > 0 else 0.0
+    return {"leads": leads, "contacts": contacts, "cr": cr, "total": denom}
+
+
+def filtrar_cohorte(df, dim, valor):
+    return df[df[dim].astype(str) == str(valor)].copy()
+
+
+# ===================== MODELO EXPLICATIVO =====================
+
+def _preparar_features(df, dimensiones_a_usar):
+    X_raw = df[dimensiones_a_usar].copy()
     for c in X_raw.columns:
         X_raw[c] = X_raw[c].fillna("Sin info").astype(str)
 
-    # One-hot encoding con prefijo = nombre de la dimensión original.
-    # max_categories implícito via drop_first=False; controlamos cardinalidad antes.
-    # Para dimensiones muy cardinales, conservamos solo las top-N por frecuencia.
     MAX_CAT_PER_DIM = 25
-    for c in dims:
+    for c in dimensiones_a_usar:
         vc = X_raw[c].value_counts()
         if len(vc) > MAX_CAT_PER_DIM:
             top = set(vc.head(MAX_CAT_PER_DIM).index)
             X_raw[c] = X_raw[c].where(X_raw[c].isin(top), other="Otros (cola)")
 
     X = pd.get_dummies(X_raw, prefix_sep="||")
-    y = (df[COURSE_COL] == curso_2).astype(int).values
+    return X
 
+
+def _agregar_importancias_por_dim(importances, columnas):
+    por_dim = {}
+    for col, imp in zip(columnas, importances):
+        dim_original = col.split("||")[0]
+        por_dim[dim_original] = por_dim.get(dim_original, 0.0) + float(imp)
+    return (
+        pd.DataFrame({"dimension": list(por_dim.keys()),
+                      "peso": list(por_dim.values())})
+        .sort_values("peso", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
+def _calcular_importancias(rf, X, y):
+    """Calcula importancias por permutación (más fiables que feature_importances_,
+    que tiene sesgo hacia variables con alta cardinalidad). Si permutation_importance
+    falla por cualquier motivo, cae al método estándar."""
+    try:
+        from sklearn.inspection import permutation_importance
+        # n_repeats bajo para mantener tiempo razonable en Pyodide
+        result = permutation_importance(
+            rf, X.values, y,
+            n_repeats=5,
+            random_state=42,
+            n_jobs=1,
+        )
+        # Las importancias por permutación pueden ser negativas; clipamos a 0
+        return np.clip(result.importances_mean, 0, None)
+    except Exception:
+        return rf.feature_importances_
+
+
+def explicar_volumen(df_a, df_b, dimensiones, tipo_registro_filter=None):
+    """Explica qué dimensiones discriminan entre la cohorte A y la B, filtrando
+    primero por tipo de registro si se indica.
+
+    Para Contacts, excluimos variables post-conversión (Residencia escogida,
+    Residencia actual) porque solo se rellenan tras la firma — su correlación
+    con cualquier comparación viene determinada por la geografía del negocio.
+    """
+    from sklearn.ensemble import RandomForestClassifier
+
+    if tipo_registro_filter == "Leads":
+        df_a = df_a[df_a["Tipo de registro"] == "Leads"]
+        df_b = df_b[df_b["Tipo de registro"] == "Leads"]
+    elif tipo_registro_filter == "Contacts":
+        df_a = df_a[(df_a["Tipo de registro"] == "Contacts") &
+                    (df_a["Particular o Grupo"] == "Particular")]
+        df_b = df_b[(df_b["Tipo de registro"] == "Contacts") &
+                    (df_b["Particular o Grupo"] == "Particular")]
+        # En el modo Contacts, las variables post-conversión actúan como
+        # quasi-leakage: están casi siempre rellenas y replican la geografía.
+        POST_CONV = {"Residencia escogida", "Residencias_actual_corregido",
+                     "Residencia actual"}
+        dimensiones = [d for d in dimensiones if d not in POST_CONV]
+
+    dims = [d for d in dimensiones if d in df_a.columns]
+    if not dims or len(df_a) < 10 or len(df_b) < 10:
+        return pd.DataFrame(columns=["dimension", "peso"])
+
+    df_combined = pd.concat([df_a.assign(__y=0), df_b.assign(__y=1)], ignore_index=True)
+    X = _preparar_features(df_combined, dims)
+    y = df_combined["__y"].values
     if X.shape[1] == 0 or len(np.unique(y)) < 2:
-        return pd.DataFrame(), len(df)
+        return pd.DataFrame(columns=["dimension", "peso"])
 
     rf = RandomForestClassifier(**RF_PARAMS)
     rf.fit(X.values, y)
+    importancias = _calcular_importancias(rf, X, y)
+    return _agregar_importancias_por_dim(importancias, X.columns)
 
-    # Acumular importancias por dimensión original.
-    importancias = pd.Series(rf.feature_importances_, index=X.columns)
-    por_dim = {}
-    for col, imp in importancias.items():
-        dim_original = col.split("||")[0]
-        por_dim[dim_original] = por_dim.get(dim_original, 0.0) + float(imp)
 
-    df_imp = (
-        pd.DataFrame({"dimension": list(por_dim.keys()),
-                      "importancia": list(por_dim.values())})
-        .sort_values("importancia", ascending=False)
-        .reset_index(drop=True)
-    )
-    return df_imp, len(df)
+def explicar_cr(df_a, df_b, dimensiones):
+    """Explica qué dimensiones más contribuyen al cambio en CR entre A y B.
+
+    Enfoque: para cada dimensión, mide cuánto se desplaza el CR de sus
+    categorías entre las cohortes, ponderando por su volumen. Una dimensión
+    con grandes shifts de CR en sus categorías con peso significativo
+    aporta más a la variación del CR global.
+
+    Esto es mejor que entrenar un RF "predecir es Contact" sobre la unión,
+    porque ese enfoque mide qué predice CR globalmente, no qué causa el
+    cambio entre dos momentos.
+    """
+    LEAKAGE_VARS = {
+        "Tipo de registro",
+        "Particular o Grupo",
+        "Residencia escogida",
+        "Residencias_actual_corregido",
+        "Residencia actual",
+    }
+    dimensiones = [d for d in dimensiones if d not in LEAKAGE_VARS]
+    dimensiones = [d for d in dimensiones if d in df_a.columns]
+    if not dimensiones:
+        return pd.DataFrame(columns=["dimension", "peso"])
+
+    def _embudo(df):
+        return df[
+            (df["Tipo de registro"] == "Leads") |
+            ((df["Tipo de registro"] == "Contacts") &
+             (df["Particular o Grupo"] == "Particular"))
+        ].copy()
+
+    em_a = _embudo(df_a)
+    em_b = _embudo(df_b)
+    n_a = len(em_a)
+    n_b = len(em_b)
+    if n_a == 0 or n_b == 0:
+        return pd.DataFrame(columns=["dimension", "peso"])
+
+    cr_global_a = (em_a["Tipo de registro"] == "Contacts").mean()
+    cr_global_b = (em_b["Tipo de registro"] == "Contacts").mean()
+
+    resultados = []
+    for dim in dimensiones:
+        em_a_d = em_a.copy()
+        em_b_d = em_b.copy()
+        em_a_d[dim] = em_a_d[dim].fillna("Sin info").astype(str)
+        em_b_d[dim] = em_b_d[dim].fillna("Sin info").astype(str)
+
+        cr_a_por_cat = em_a_d.groupby(dim)["Tipo de registro"].apply(
+            lambda s: (s == "Contacts").mean()
+        )
+        cr_b_por_cat = em_b_d.groupby(dim)["Tipo de registro"].apply(
+            lambda s: (s == "Contacts").mean()
+        )
+        # Peso de cada categoría en la cohorte B (volumen total)
+        peso_b_por_cat = em_b_d.groupby(dim).size() / n_b
+
+        idx_comun = cr_a_por_cat.index.intersection(cr_b_por_cat.index)
+        if len(idx_comun) == 0:
+            continue
+
+        # Contribución de cada categoría = peso_b * (cr_b - cr_a)
+        # Suma absoluta de contribuciones = importancia de la dimensión
+        cra = cr_a_por_cat.reindex(idx_comun)
+        crb = cr_b_por_cat.reindex(idx_comun)
+        pesos = peso_b_por_cat.reindex(idx_comun).fillna(0)
+        # Filtramos categorías con volumen razonable en B
+        mask_vol = (em_b_d.groupby(dim).size().reindex(idx_comun) >= 20)
+        if not mask_vol.any():
+            continue
+        cra = cra[mask_vol]
+        crb = crb[mask_vol]
+        pesos = pesos[mask_vol]
+
+        contribuciones = pesos * (crb - cra)
+        importancia = contribuciones.abs().sum()
+        resultados.append({"dimension": dim, "peso": float(importancia)})
+
+    if not resultados:
+        return pd.DataFrame(columns=["dimension", "peso"])
+
+    return (pd.DataFrame(resultados)
+            .sort_values("peso", ascending=False)
+            .reset_index(drop=True))
 
 
 # ===================== BREAKDOWN UNIVARIADO =====================
 
-def breakdown_por_dimension(df_completo, dim, curso_1, curso_2,
-                            min_total=MIN_RECORDS_FOR_BREAKDOWN):
-    """Para una dimensión, devuelve un DataFrame con conteos de Leads y
-    Contacts y deltas entre las dos cohortes."""
-    if dim not in df_completo.columns:
+def breakdown_dimension(df_a, df_b, dim, min_total=MIN_RECORDS_FOR_BREAKDOWN):
+    """Para una dimensión, agrega leads, contacts y CR de cada valor en cada cohorte."""
+    if dim not in df_a.columns:
         return pd.DataFrame()
 
-    df = df_completo[df_completo[COURSE_COL].isin([curso_1, curso_2])].copy()
-    if df.empty:
-        return pd.DataFrame()
+    def _agg(df):
+        d = df.copy()
+        d[dim] = d[dim].fillna("Sin info").astype(str)
+        leads = (d[d["Tipo de registro"] == "Leads"]
+                 .groupby(dim)[ID_COL].nunique())
+        contacts = (d[(d["Tipo de registro"] == "Contacts") &
+                      (d["Particular o Grupo"] == "Particular")]
+                    .groupby(dim)[ID_COL].nunique())
+        return leads, contacts
 
-    df[dim] = df[dim].fillna("Sin info").astype(str)
+    leads_a, contacts_a = _agg(df_a)
+    leads_b, contacts_b = _agg(df_b)
 
-    leads_g = (
-        df[df["Tipo de registro"] == "Leads"]
-        .groupby([dim, COURSE_COL])[ID_COL].nunique()
-        .unstack(COURSE_COL, fill_value=0)
-    )
-    contacts_g = (
-        df[(df["Tipo de registro"] == "Contacts") &
-           (df["Particular o Grupo"] == "Particular")]
-        .groupby([dim, COURSE_COL])[ID_COL].nunique()
-        .unstack(COURSE_COL, fill_value=0)
-    )
-
-    idx = leads_g.index.union(contacts_g.index)
+    idx = leads_a.index.union(leads_b.index).union(contacts_a.index).union(contacts_b.index)
     out = pd.DataFrame(index=idx)
     out.index.name = dim
-    for c in (curso_1, curso_2):
-        out[f"Leads_{c}"] = leads_g.reindex(idx).get(c, pd.Series(0, index=idx)).fillna(0).astype(int)
-        out[f"Contacts_{c}"] = contacts_g.reindex(idx).get(c, pd.Series(0, index=idx)).fillna(0).astype(int)
+    out["Leads_A"] = leads_a.reindex(idx).fillna(0).astype(int)
+    out["Leads_B"] = leads_b.reindex(idx).fillna(0).astype(int)
+    out["Contacts_A"] = contacts_a.reindex(idx).fillna(0).astype(int)
+    out["Contacts_B"] = contacts_b.reindex(idx).fillna(0).astype(int)
 
-    out["Delta_Leads"] = out[f"Leads_{curso_2}"] - out[f"Leads_{curso_1}"]
-    out["Delta_Contacts"] = out[f"Contacts_{curso_2}"] - out[f"Contacts_{curso_1}"]
+    out["Delta_Leads"] = out["Leads_B"] - out["Leads_A"]
+    out["Delta_Contacts"] = out["Contacts_B"] - out["Contacts_A"]
 
-    denom_1 = out[f"Contacts_{curso_1}"] + out[f"Leads_{curso_1}"]
-    denom_2 = out[f"Contacts_{curso_2}"] + out[f"Leads_{curso_2}"]
-    out[f"CR_{curso_1}"] = np.where(denom_1 > 0, out[f"Contacts_{curso_1}"] / denom_1, 0.0)
-    out[f"CR_{curso_2}"] = np.where(denom_2 > 0, out[f"Contacts_{curso_2}"] / denom_2, 0.0)
-    out["Delta_CR_pp"] = (out[f"CR_{curso_2}"] - out[f"CR_{curso_1}"]) * 100
+    denom_a = out["Leads_A"] + out["Contacts_A"]
+    denom_b = out["Leads_B"] + out["Contacts_B"]
+    out["CR_A"] = np.where(denom_a > 0, out["Contacts_A"] / denom_a, 0.0)
+    out["CR_B"] = np.where(denom_b > 0, out["Contacts_B"] / denom_b, 0.0)
+    out["Delta_CR_pp"] = (out["CR_B"] - out["CR_A"]) * 100
 
-    # Filtrar valores con volumen mínimo.
-    total = denom_1 + denom_2
+    total = denom_a + denom_b
     out = out[total >= min_total]
-
     return out.reset_index()
 
 
-# ===================== EJECUCIÓN =====================
+# ===================== RENDER DE MARKDOWN =====================
 
-curso_1, curso_2 = detectar_cursos(query_text)
+def nombre_legible_dimension(dim):
+    legible = {
+        "Curso_corregido": "Curso",
+        "Curso": "Curso",
+        "Origen_Agrupado": "Canal de captación",
+        "Fuente_Agrupada": "Fuente",
+        "Ciudad_deinteres_corregido": "Ciudad de interés",
+        "Ciudad_actual_corregido": "Ciudad de procedencia",
+        "Residencias_interes_corregido": "Residencia de interés",
+        "Residencias_actual_corregido": "Residencia actual",
+        "Residencia escogida": "Residencia escogida",
+        "Tipo de registro": "Tipo de registro",
+        "Particular o Grupo": "Particular o grupo",
+        "Mes creación": "Mes de entrada",
+    }
+    return legible.get(dim, dim)
 
-# KPIs de cabecera.
-leads_1 = contar_leads(leads_contacts, curso_1)
-leads_2 = contar_leads(leads_contacts, curso_2)
-contacts_1 = contar_contacts(leads_contacts, curso_1)
-contacts_2 = contar_contacts(leads_contacts, curso_2)
-cr_1 = calcular_cr(contacts_1, leads_1)
-cr_2 = calcular_cr(contacts_2, leads_2)
 
-delta_leads = leads_2 - leads_1
-delta_contacts = contacts_2 - contacts_1
-delta_cr_pp = (cr_2 - cr_1) * 100
-var_leads = var_pct(leads_2, leads_1)
-var_contacts = var_pct(contacts_2, contacts_1)
-var_cr = var_pct(cr_2, cr_1)
+def render_tabla_breakdown(bd, label_a, label_b, ordenar_por="Delta_Leads", max_filas=5):
+    if bd.empty:
+        return "*Sin volumen suficiente para detallar.*"
 
-# Random Forest.
-df_imp, n_registros = entrenar_rf(leads_contacts, curso_1, curso_2, CANDIDATE_DIMENSIONS)
+    bd = bd.copy()
+    bd = bd.reindex(bd[ordenar_por].abs().sort_values(ascending=False).index).head(max_filas)
 
-# ===================== CONSTRUIR MARKDOWN =====================
-
-md = []
-md.append(f"## **Análisis de drivers · {curso_1} → {curso_2}**\n")
-md.append(f"*Consulta original: «{query_text if query_text else 'análisis por defecto'}»*\n")
-
-md.append("### KPIs de cabecera\n")
-md.append(
-    f"- **Leads:** {fmt_num(leads_1)} → {fmt_num(leads_2)} "
-    f"(**{'+' if delta_leads >= 0 else ''}{fmt_num(delta_leads)}**, {fmt_pct(var_leads)})"
-)
-md.append(
-    f"- **Contacts particulares:** {fmt_num(contacts_1)} → {fmt_num(contacts_2)} "
-    f"(**{'+' if delta_contacts >= 0 else ''}{fmt_num(delta_contacts)}**, {fmt_pct(var_contacts)})"
-)
-signo = "+" if delta_cr_pp >= 0 else ""
-md.append(
-    f"- **Conversion Rate:** {fmt_pct_abs(cr_1)} → {fmt_pct_abs(cr_2)} "
-    f"(**{signo}{delta_cr_pp:.2f} pp**, {fmt_pct(var_cr)})\n"
-)
-
-# ----- Sección Random Forest -----
-md.append("### Drivers detectados por Random Forest\n")
-md.append(
-    f"*Modelo entrenado para distinguir registros de {curso_2} frente a {curso_1}. "
-    f"Dataset: {fmt_num(n_registros)} registros.*\n"
-)
-
-if df_imp.empty:
-    md.append("- *No ha sido posible entrenar el modelo (datos insuficientes o dimensiones no disponibles).*\n")
-else:
-    top_drivers = df_imp.head(TOP_K_DRIVERS)
-    total_imp = top_drivers["importancia"].sum()
-
-    md.append("| # | Dimensión | Importancia | % del top |")
-    md.append("|---|---|---|---|")
-    for i, row in top_drivers.iterrows():
-        pct_local = (row["importancia"] / total_imp * 100) if total_imp > 0 else 0
-        md.append(
-            f"| {i+1} | **{row['dimension']}** | "
-            f"{row['importancia']:.4f} | {pct_local:.1f}% |"
+    dim_col = bd.columns[0]
+    lineas = [
+        f"| Valor | Leads {label_a} → {label_b} | Δ Leads | "
+        f"Contactos {label_a} → {label_b} | Δ Contactos | "
+        f"Conversión {label_a} → {label_b} | Δ Conv. (pp) |",
+        "|---|---|---|---|---|---|---|"
+    ]
+    for _, r in bd.iterrows():
+        valor = r[dim_col] if pd.notna(r[dim_col]) else "Sin info"
+        dl = int(r["Delta_Leads"]); s_dl = "+" if dl >= 0 else ""
+        dc = int(r["Delta_Contacts"]); s_dc = "+" if dc >= 0 else ""
+        dcr = r["Delta_CR_pp"]; s_dcr = "+" if dcr >= 0 else ""
+        lineas.append(
+            f"| **{valor}** | "
+            f"{fmt_num(r['Leads_A'])} → {fmt_num(r['Leads_B'])} | "
+            f"**{s_dl}{fmt_num(dl)}** | "
+            f"{fmt_num(r['Contacts_A'])} → {fmt_num(r['Contacts_B'])} | "
+            f"**{s_dc}{fmt_num(dc)}** | "
+            f"{fmt_pct_abs(r['CR_A'])} → {fmt_pct_abs(r['CR_B'])} | "
+            f"{s_dcr}{dcr:.2f} |"
         )
-    md.append("")
+    return "\n".join(lineas)
 
-    # ----- Breakdown de los top 3 drivers -----
-    md.append(f"### Breakdown de los {min(3, len(top_drivers))} drivers principales\n")
 
-    for i, row in top_drivers.head(3).iterrows():
-        dim = row["dimension"]
-        md.append(f"#### {i+1}. {dim} *(importancia: {row['importancia']:.4f})*\n")
+def describir_cambio_metrica(metrica, kpi_a, kpi_b):
+    if metrica == "leads":
+        v_a, v_b = kpi_a["leads"], kpi_b["leads"]
+        delta = v_b - v_a
+        pct = var_pct(v_b, v_a)
+        signo = "subido" if delta > 0 else ("bajado" if delta < 0 else "mantenido")
+        return f"Los **leads** han {signo} de **{fmt_num(v_a)}** a **{fmt_num(v_b)}** ({fmt_pct(pct)})."
+    if metrica == "contacts":
+        v_a, v_b = kpi_a["contacts"], kpi_b["contacts"]
+        delta = v_b - v_a
+        pct = var_pct(v_b, v_a)
+        signo = "subido" if delta > 0 else ("bajado" if delta < 0 else "mantenido")
+        return f"Los **contactos** han {signo} de **{fmt_num(v_a)}** a **{fmt_num(v_b)}** ({fmt_pct(pct)})."
+    if metrica == "cr":
+        v_a, v_b = kpi_a["cr"], kpi_b["cr"]
+        delta_pp = (v_b - v_a) * 100
+        signo = "subido" if delta_pp > 0 else ("bajado" if delta_pp < 0 else "mantenido")
+        s = "+" if delta_pp >= 0 else ""
+        return f"La **conversión** ha {signo} de **{fmt_pct_abs(v_a)}** a **{fmt_pct_abs(v_b)}** ({s}{delta_pp:.2f} puntos)."
+    return ""
 
-        bd = breakdown_por_dimension(leads_contacts, dim, curso_1, curso_2)
-        if bd.empty:
-            md.append("- *Sin volumen suficiente para desglose univariado.*\n")
-            continue
 
-        # Top movimientos por delta de leads (positivos y negativos).
-        bd_sorted = bd.reindex(bd["Delta_Leads"].abs().sort_values(ascending=False).index)
-        top_movs = bd_sorted.head(5)
+# ===================== EJECUCIÓN PRINCIPAL =====================
 
-        md.append(
-            f"| Valor | Leads {curso_1} → {curso_2} | Δ Leads | "
-            f"CR {curso_1} → {curso_2} | Δ CR (pp) |"
-        )
-        md.append("|---|---|---|---|---|")
-        for _, r in top_movs.iterrows():
-            val = r[dim] if pd.notna(r[dim]) else "Sin info"
-            dl = int(r["Delta_Leads"])
-            signo_dl = "+" if dl >= 0 else ""
-            cr_old = r[f"CR_{curso_1}"]
-            cr_new = r[f"CR_{curso_2}"]
-            dcr = r["Delta_CR_pp"]
-            signo_dcr = "+" if dcr >= 0 else ""
-            md.append(
-                f"| **{val}** | "
-                f"{fmt_num(r[f'Leads_{curso_1}'])} → {fmt_num(r[f'Leads_{curso_2}'])} | "
-                f"**{signo_dl}{fmt_num(dl)}** | "
-                f"{fmt_pct_abs(cr_old)} → {fmt_pct_abs(cr_new)} | "
-                f"{signo_dcr}{dcr:.2f} |"
-            )
-        md.append("")
+# Aplicamos primero los filtros adicionales (curso fijado, tipo de registro,
+# etc.) sobre el universo de trabajo. Las cohortes a comparar se calculan
+# DENTRO de ese universo, así "Madrid vs Valencia en 2025/2026" compara
+# Madrid y Valencia restringidas a ese curso.
+df_base = aplicar_filtros_extra(leads_contacts, extra_filters)
+columnas_fijadas = {col for col, _ in extra_filters}
 
-# ----- Lectura narrativa -----
-md.append("### Lectura\n")
+cohortes = detectar_cohortes(
+    query_text, df_base, hint=llm_hint, columnas_excluidas=columnas_fijadas
+)
 
-partes = []
-if not df_imp.empty:
-    top1 = df_imp.iloc[0]["dimension"]
-    partes.append(f"la variable que mejor explica el cambio entre {curso_1} y {curso_2} es **{top1}**")
-    if len(df_imp) > 1:
-        top2 = df_imp.iloc[1]["dimension"]
-        partes.append(f"seguida de **{top2}**")
-
-if delta_cr_pp < -0.5:
-    intro = f"El CR ha caído **{abs(delta_cr_pp):.2f} pp**"
-elif delta_cr_pp > 0.5:
-    intro = f"El CR ha subido **{delta_cr_pp:.2f} pp**"
+if cohortes is None:
+    # Señal especial para que el frontend orqueste el parseo vía LLM
+    resultado = (
+        "__NEEDS_LLM_PARSING__\n"
+        "No se ha podido identificar automáticamente qué dos elementos comparar "
+        "en la consulta. Reformula indicando claramente los dos términos a comparar "
+        "(por ejemplo: «Madrid vs Barcelona», «2024/2025 vs 2025/2026», "
+        "«Paid Media frente a SEO & Directo»)."
+    )
 else:
-    intro = f"El CR se mantiene relativamente estable ({signo}{delta_cr_pp:.2f} pp)"
+    dim, val_a, val_b = cohortes
+    dim_legible = nombre_legible_dimension(dim)
 
-if partes:
-    md.append(f"{intro}. Según el Random Forest, " + " y ".join(partes) + ".")
-else:
-    md.append(f"{intro}. No se han detectado drivers claros en las dimensiones analizadas.")
+    df_a = filtrar_cohorte(df_base, dim, val_a)
+    df_b = filtrar_cohorte(df_base, dim, val_b)
 
-# Recomendación según signo del cambio.
-if not df_imp.empty:
-    top1 = df_imp.iloc[0]["dimension"]
-    if delta_cr_pp < -0.5:
-        md.append(
-            f"\n**Recomendación:** investigar en detalle la dimensión **{top1}** "
-            f"para entender qué valores concretos están deteriorando el embudo. "
-            f"Revisar la tabla de breakdown anterior."
-        )
-    elif delta_cr_pp > 0.5:
-        md.append(
-            f"\n**Recomendación:** identificar los valores de **{top1}** que están "
-            f"empujando la mejora y reforzar la inversión o los procesos asociados."
+    if df_a.empty or df_b.empty:
+        resultado = (
+            f"No hay datos suficientes para una de las dos cohortes: "
+            f"«{val_a}» tiene {len(df_a)} registros, «{val_b}» tiene {len(df_b)}."
         )
     else:
-        md.append(
-            f"\n**Recomendación:** aunque el CR global no varía mucho, **{top1}** "
-            f"sí presenta movimientos internos relevantes. Vale la pena vigilarla."
+        kpis_a = kpis_cohorte(df_a)
+        kpis_b = kpis_cohorte(df_b)
+        metrica = detectar_metrica(query_text)
+        if llm_hint and isinstance(llm_hint, dict) and llm_hint.get("metrica"):
+            m_hint = llm_hint["metrica"]
+            if m_hint in ("leads", "contacts", "cr", "auto"):
+                metrica = m_hint
+
+        # Dimensiones que el modelo puede usar:
+        #  - Whitelist específica para este tipo de comparación (punto 1: ya
+        #    no se ofrecen variables que no aportan valor al usuario).
+        #  - Sin la propia dimensión de comparación.
+        #  - Sin dimensiones funcionalmente dependientes de la comparación
+        #    (ej: comparar Madrid vs Bilbao no se "explica" por residencia
+        #    de interés porque cada residencia es de una sola ciudad).
+        dims_modelo = candidatas_para_comparacion(dim)
+        dims_dependientes = detectar_dims_dependientes(
+            df_base, dim, dims_modelo
         )
+        dims_modelo = [d for d in dims_modelo if d not in dims_dependientes]
+        # Si hay filtros fijos (ej. el curso ya está fijado a 2025/2026), no
+        # tiene sentido ofrecer esa dimensión como "explicativa": no varía.
+        dims_filtradas = {col for col, _ in extra_filters}
+        dims_modelo = [d for d in dims_modelo if d not in dims_filtradas]
 
-md.append(
-    "\n---\n"
-    "*Metodología: clasificador binario (curso reciente vs anterior) sobre "
-    "one-hot encoding de las dimensiones del modelo. "
-    "Las importancias agregan la contribución de cada dimensión sumando "
-    "las importancias de sus categorías. "
-    "Las dimensiones con cardinalidad > 25 se truncan a las 25 categorías "
-    "más frecuentes para evitar overfitting.*"
-)
+        # =====================================================================
+        # CONSTRUCCIÓN DEL RESUMEN ESTADÍSTICO ANONIMIZADO
+        # ---------------------------------------------------------------------
+        # En vez de redactar Markdown narrativo aquí dentro, devolvemos al
+        # frontend un diccionario JSON-serializable con los deltas, métricas
+        # clave y variables explicativas. Los nombres reales de residencias,
+        # ciudades, orígenes y fuentes se sustituyen por identificadores
+        # genéricos (Residencia A, Ciudad 1, Categoría 1...) para no enviarlos
+        # a la API en la fase de redacción.
+        #
+        # Excepciones (NO se anonimizan, no son datos sensibles):
+        #   - Cursos académicos (ej. "2024/2025"): son etiquetas genéricas.
+        #   - Valores estructurales del CRM: "Leads", "Contacts", "Particular",
+        #     "Grupo", "Sin info" — son etiquetas de esquema, no datos.
+        #   - Nombres legibles de dimensiones (Ciudad de interés, Canal de
+        #     captación...): son metadatos del modelo.
+        # =====================================================================
 
-resultado = "\n".join(md)
+        # ----- Helpers de anonimización -----
+        DIMS_SENSIBLES = {
+            "Ciudad_deinteres_corregido": "Ciudad",
+            "Ciudad_actual_corregido": "Ciudad",
+            "Residencias_interes_corregido": "Residencia",
+            "Residencias_actual_corregido": "Residencia",
+            "Residencia escogida": "Residencia",
+            "Origen_Agrupado": "Canal",
+            "Fuente_Agrupada": "Fuente",
+            "Ciudades de interés": "Ciudad",
+            "Ciudad actual": "Ciudad",
+            "Residencias de interés": "Residencia",
+            "Residencia actual": "Residencia",
+            "Origen/Campaña Posibles Clientes": "Canal",
+            "Fuente de Posible Cliente": "Fuente",
+        }
+        VALORES_ESTRUCTURALES = {
+            "Leads", "Contacts", "Particular", "Grupo",
+            "Sin info", "Otros (cola)", "Otros", "---",
+        }
+
+        def es_curso(v):
+            return bool(re.match(r"^\d{4}/\d{4}$", str(v).strip()))
+
+        def es_estructural(v):
+            return str(v).strip() in VALORES_ESTRUCTURALES
+
+        def anonimizar_valor(valor, dim_origen, mapping):
+            """Devuelve un alias estable para `valor` dentro de `dim_origen`.
+
+            Cursos y etiquetas estructurales pasan tal cual. Para el resto se
+            asigna un alias genérico ("Residencia A", "Ciudad 1"...) reusable
+            durante toda la ejecución para que el LLM pueda referirse al mismo
+            elemento de forma consistente.
+            """
+            v_str = str(valor).strip()
+            if dim_origen not in DIMS_SENSIBLES:
+                return v_str
+            if es_curso(v_str) or es_estructural(v_str):
+                return v_str
+            key = (dim_origen, v_str)
+            if key in mapping:
+                return mapping[key]
+            tipo = DIMS_SENSIBLES[dim_origen]
+            # Contador independiente por tipo (Residencia A, B, C... / Ciudad 1, 2, 3...)
+            prefijo_existentes = [a for (d, _), a in mapping.items()
+                                  if DIMS_SENSIBLES.get(d) == tipo]
+            idx = len(prefijo_existentes) + 1
+            if tipo in ("Residencia", "Canal", "Fuente"):
+                # Letras: A, B, ..., Z, AA, AB...
+                def letra(n):
+                    s = ""
+                    while n > 0:
+                        n, r = divmod(n - 1, 26)
+                        s = chr(65 + r) + s
+                    return s
+                alias = f"{tipo} {letra(idx)}"
+            else:
+                alias = f"{tipo} {idx}"
+            mapping[key] = alias
+            return alias
+
+        # Mapa compartido durante toda la construcción del resumen
+        alias_map = {}
+
+        # ----- Cohortes (etiquetas de comparación) -----
+        # La propia dimensión de comparación también puede ser sensible.
+        val_a_anon = anonimizar_valor(val_a, dim, alias_map)
+        val_b_anon = anonimizar_valor(val_b, dim, alias_map)
+
+        # ----- KPIs principales -----
+        d_leads = kpis_b["leads"] - kpis_a["leads"]
+        d_contacts = kpis_b["contacts"] - kpis_a["contacts"]
+        d_cr_pp = (kpis_b["cr"] - kpis_a["cr"]) * 100
+
+        kpis_payload = {
+            "leads": {
+                "valor_a": int(kpis_a["leads"]),
+                "valor_b": int(kpis_b["leads"]),
+                "delta_abs": int(d_leads),
+                "delta_pct": var_pct(kpis_b["leads"], kpis_a["leads"]),
+            },
+            "contactos": {
+                "valor_a": int(kpis_a["contacts"]),
+                "valor_b": int(kpis_b["contacts"]),
+                "delta_abs": int(d_contacts),
+                "delta_pct": var_pct(kpis_b["contacts"], kpis_a["contacts"]),
+            },
+            "conversion": {
+                "valor_a": round(float(kpis_a["cr"]), 6),
+                "valor_b": round(float(kpis_b["cr"]), 6),
+                "delta_pp": round(float(d_cr_pp), 4),
+                "delta_pct": var_pct(kpis_b["cr"], kpis_a["cr"]),
+            },
+        }
+
+        # ----- Métrica protagonista y rankings explicativos -----
+        if metrica == "auto":
+            metricas_a_analizar = ["leads", "contacts", "cr"]
+        else:
+            metricas_a_analizar = [metrica]
+
+        rankings_por_metrica = {}
+        for m in metricas_a_analizar:
+            if m == "leads":
+                rk = explicar_volumen(df_a, df_b, dims_modelo, tipo_registro_filter="Leads")
+            elif m == "contacts":
+                rk = explicar_volumen(df_a, df_b, dims_modelo, tipo_registro_filter="Contacts")
+            else:
+                rk = explicar_cr(df_a, df_b, dims_modelo)
+            rankings_por_metrica[m] = rk
+
+        ranking_payload = {}
+        for m in metricas_a_analizar:
+            rk = rankings_por_metrica[m]
+            if rk.empty:
+                ranking_payload[m] = []
+                continue
+            top = rk.head(TOP_K_DRIVERS).copy()
+            peso_total = top["peso"].sum()
+            entradas = []
+            for _, r in top.iterrows():
+                pct = float(r["peso"]) / peso_total * 100 if peso_total > 0 else 0.0
+                entradas.append({
+                    "dimension": nombre_legible_dimension(r["dimension"]),
+                    "peso_pct": round(pct, 1),
+                })
+            ranking_payload[m] = entradas
+
+        # ----- Breakdown del/los driver(s) principal(es), anonimizado -----
+        dimensiones_a_desglosar = []
+        if len(metricas_a_analizar) == 1:
+            rk_unico = rankings_por_metrica[metricas_a_analizar[0]]
+            dimensiones_a_desglosar = list(rk_unico.head(3)["dimension"].values)
+        else:
+            for m in metricas_a_analizar:
+                rk_m = rankings_por_metrica[m]
+                if not rk_m.empty:
+                    top_dim_m = rk_m.iloc[0]["dimension"]
+                    if top_dim_m not in dimensiones_a_desglosar:
+                        dimensiones_a_desglosar.append(top_dim_m)
+
+        if metrica == "cr":
+            orden = "Delta_CR_pp"
+        elif metrica == "contacts":
+            orden = "Delta_Contacts"
+        else:
+            orden = "Delta_Leads"
+
+        breakdown_payload = []
+        for d in dimensiones_a_desglosar:
+            bd = breakdown_dimension(df_a, df_b, d)
+            if bd.empty:
+                continue
+            bd_ord = bd.reindex(
+                bd[orden].abs().sort_values(ascending=False).index
+            ).head(5)
+            dim_col = bd_ord.columns[0]
+            filas = []
+            for _, r in bd_ord.iterrows():
+                valor_real = r[dim_col] if pd.notna(r[dim_col]) else "Sin info"
+                filas.append({
+                    "valor": anonimizar_valor(valor_real, d, alias_map),
+                    "leads_a": int(r["Leads_A"]),
+                    "leads_b": int(r["Leads_B"]),
+                    "delta_leads": int(r["Delta_Leads"]),
+                    "contacts_a": int(r["Contacts_A"]),
+                    "contacts_b": int(r["Contacts_B"]),
+                    "delta_contacts": int(r["Delta_Contacts"]),
+                    "cr_a": round(float(r["CR_A"]), 6),
+                    "cr_b": round(float(r["CR_B"]), 6),
+                    "delta_cr_pp": round(float(r["Delta_CR_pp"]), 4),
+                })
+            breakdown_payload.append({
+                "dimension": nombre_legible_dimension(d),
+                "filas": filas,
+            })
+
+        # ----- Filtros aplicados (cursos sí van; el resto, anonimizado) -----
+        filtros_payload = []
+        for col, val in extra_filters:
+            filtros_payload.append({
+                "dimension": nombre_legible_dimension(col),
+                "valor": anonimizar_valor(val, col, alias_map),
+            })
+
+        # ----- Sentido del cambio para la métrica protagonista -----
+        if metrica == "cr":
+            direccion_valor = d_cr_pp
+        elif metrica == "contacts":
+            direccion_valor = d_contacts
+        elif metrica == "leads":
+            direccion_valor = d_leads
+        else:
+            direccion_valor = d_cr_pp
+        if direccion_valor > 0:
+            direccion = "mejora"
+        elif direccion_valor < 0:
+            direccion = "deterioro"
+        else:
+            direccion = "estable"
+
+        # ----- Payload final -----
+        import json as _json
+        payload = {
+            "comparacion": {
+                "dimension": dim_legible,
+                "cohorte_a": val_a_anon,
+                "cohorte_b": val_b_anon,
+            },
+            "filtros_aplicados": filtros_payload,
+            "metrica_protagonista": metrica,  # "leads" | "contacts" | "cr" | "auto"
+            "direccion_cambio": direccion,    # "mejora" | "deterioro" | "estable"
+            "kpis": kpis_payload,
+            "variables_explicativas": ranking_payload,
+            "desglose_drivers": breakdown_payload,
+            "volumen_cohortes": {
+                "registros_a": int(kpis_a["total"]),
+                "registros_b": int(kpis_b["total"]),
+            },
+        }
+
+        resultado = "__INSIGHTS_PAYLOAD__" + _json.dumps(payload, ensure_ascii=False)
