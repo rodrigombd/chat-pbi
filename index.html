@@ -400,9 +400,6 @@ var lastUserQuery = null;
 var lastTurn = null;
 var pendingPipeline = null;
 
-// Modelo en estrella desnormalizado: todas las dimensiones categóricas
-// (ciudad, curso, residencia, origen, fuente...) viven dentro de la tabla
-// de hechos `leads_contacts`. No hace falta cargar satélites.
 var CSV_TABLES = {
   "leads_contacts": "Leads_Contacts.csv"
 };
@@ -415,9 +412,6 @@ var API_VERSION = "2023-06-01";
 var MAX_HISTORY = 12;
 
 marked.use({ breaks: true, gfm: true });
-
-
-// ---------- Bootstrap ----------
 
 async function initChat() {
   var key = readApiKey();
@@ -441,9 +435,7 @@ async function initChat() {
       appendDevBanner(
         "⚠️ <strong>El CSV principal no se cargó.</strong> " +
         "Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>" +
-        "Abre el proyecto con un servidor HTTP local, no con <code>file://</code>. " +
-        "Desde la carpeta: <code>python -m http.server 8000</code> " +
-        "y luego ve a <code>http://localhost:8000</code>." +
+        "Abre el proyecto con un servidor HTTP local." +
         "Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>."
       );
     }
@@ -493,9 +485,6 @@ async function loadPyodidePackages() {
   setStep("step-pkgs", "done");
 }
 
-// Instala dos helpers persistentes en el namespace global de Pyodide:
-//   __reset_resultado__()   : elimina la variable resultado de un turno previo
-//   __serialize_resultado__(): empaqueta la variable resultado como JSON
 async function installRuntimeHelpers() {
   var helpers =
     "def __reset_resultado__():\n" +
@@ -573,8 +562,6 @@ function setStep(id, state) {
 }
 
 
-// ---------- Carga de datos ----------
-
 async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) {
     console.log("[loadCsv] ya cargado:", varName);
@@ -596,16 +583,16 @@ async function loadCsv(varName) {
         "&bull; Est&aacute;s abriendo el HTML con <code>file://</code> &mdash; usa un servidor local " +
         "(<code>python -m http.server</code> en la carpeta del proyecto).<br>" +
         "&bull; El CSV no est&aacute; en la misma carpeta que <code>index.html</code>.<br>" +
-        "&bull; El nombre del fichero no coincide exactamente (may&uacute;sculas/min&uacute;sculas)."
+        "&bull; El nombre del fichero no coincide exactamente (mayusculas/minusculas)."
       );
       return false;
     }
     var text = await r.text();
     if (!text || text.trim().length === 0) {
-      showDevAlert("<strong>El fichero " + esc(file) + " se descarg&oacute; vac&iacute;o (0 bytes).</strong><br>Comprueba que el archivo no est&aacute; corrupto.");
+      showDevAlert("<strong>El fichero " + esc(file) + " se descargó vacío (0 bytes).</strong><br>Comprueba que el archivo no está corrupto.");
       return false;
     }
-    console.log("[loadCsv] fetch OK", text.length, "bytes &mdash; primeras l&iacute;neas:", text.split("\n").slice(0, 2).join(" | "));
+    console.log("[loadCsv] fetch OK", text.length, "bytes primeras líneas:", text.split("\n").slice(0, 2).join(" | "));
     pyodide.globals.set("__csv_buffer__", text);
     var parseDates = (varName === PRIMARY_CSV)
       ? "parse_dates=" + JSON.stringify(PRIMARY_DATE_COLUMNS)
@@ -645,14 +632,6 @@ async function loadCsv(varName) {
 
     console.log("[loadCsv] DataFrame \"" + varName + "\" cargado:", shapeArr[0], "filas x", shapeArr[1], "cols:", Array.from(colsArr).join(", "));
 
-    if (shapeArr[0] < 2) {
-      showDevAlert(
-        "<strong>Aviso: " + varName + " se carg&oacute; con solo " + shapeArr[0] + " fila(s).</strong><br>" +
-        "Posible problema de separador o archivo mal formado.<br>" +
-        "Columnas detectadas: " + Array.from(colsArr).join(", ")
-      );
-    }
-
     loadedCsvs.add(varName);
     return true;
   } catch (e) {
@@ -678,8 +657,6 @@ async function ensureTablesLoaded(pythonCode) {
     }
   }
 }
-
-// ---------- API de modelo ----------
 
 function buildCodeSystem() {
   return systemCtx ||
@@ -718,8 +695,6 @@ async function callModel(messages, opts) {
   return (d.content && d.content[0] && d.content[0].text) || "";
 }
 
-
-// ---------- Parseo de respuestas ----------
 
 function extractJSON(reply) {
   if (!reply) return null;
@@ -790,8 +765,6 @@ function stripCommonLeadingWhitespace(code) {
 }
 
 
-// ---------- Ejecución en Pyodide ----------
-
 async function runPython(code) {
   if (!code) return { kind: "error", value: "Código vacío" };
   var normalized = normalizeCode(code);
@@ -815,7 +788,6 @@ async function runPython(code) {
     var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
     return JSON.parse(jsonStr);
   } catch (e) {
-    // Serialización rota: capturamos tipo y repr del resultado para diagnóstico
     var serMsg = e && e.message ? e.message : String(e);
     var diagnostic = serMsg;
     try {
@@ -844,8 +816,6 @@ function extractPyErrorMessage(traceback) {
   return lines[lines.length - 1] || "Error en la ejecución";
 }
 
-
-// ---------- Pipeline conversacional ----------
 
 async function sendMessage(text) {
   if (busy) return;
@@ -911,8 +881,6 @@ function setBusy(b) {
   else updateInsightButton();
 }
 
-
-// Paso 1: clasifica el mensaje en saludo_meta o pregunta_negocio
 async function classifyMessage(text) {
   var tid = appendTyping("interpretando consulta...");
   setStatus("clasificando consulta...", "busy");
@@ -942,8 +910,6 @@ async function classifyMessage(text) {
   }
 }
 
-
-// Respuesta para saludos: corta, sin context grande
 async function answerSmallTalk(text) {
   var promptSys =
     "Eres el asistente analítico de Resa (CRM de residencias de estudiantes). " +
@@ -973,8 +939,6 @@ function fallbackSmallTalk() {
   return "¡Hola! Soy el asistente analítico. Puedo contar leads y contactos, calcular conversión, comparar periodos, hacer rankings y gráficos. ¿Qué quieres saber?";
 }
 
-
-// Paso 2: planifica los slots a aclarar
 async function planSlots(text) {
   var tid = appendTyping("comprobando si necesito aclaraciones...");
   setStatus("planificando...", "busy");
@@ -1050,8 +1014,6 @@ function sanitizeSlots(raw) {
   return clean;
 }
 
-
-// Paso 3: pinta el siguiente clarify y espera respuesta
 function askNextSlot() {
   if (!pendingPipeline || pendingPipeline.missing.length === 0) {
     finalizePipeline();
@@ -1111,8 +1073,6 @@ async function finalizePipeline() {
   }
 }
 
-
-// Paso 4: ejecuta el código generado
 async function runFullQuery(userText, answeredSlots) {
   var enriched = buildEnrichedQuery(userText, answeredSlots);
   trimHistory();
@@ -1184,8 +1144,6 @@ function setExecutionStatus(execResult) {
   setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
 }
 
-
-// Si el código falla en Pyodide, pide una corrección y reintenta una vez
 async function retryWithModelFix(originalCode, firstError) {
   appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
   var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
@@ -1230,9 +1188,6 @@ function friendlyError(execError, code, firstError) {
   };
 }
 
-
-// ---------- Generar conclusiones ----------
-
 async function generateInsights() {
   if ((!lastUserQuery && !lastTurn) || busy) return;
   if (!insightsScript) {
@@ -1254,29 +1209,31 @@ async function generateInsights() {
     execResult = await maybeReparseAndRerun(execResult, queryForInsights, prelimFilters, tid);
     removeTyping(tid);
 
-    // Si Pyodide devolvió el JSON anonimizado, hacemos una segunda pasada
-    // por el LLM para que redacte el párrafo de conclusión de negocio.
-    var payload = extractInsightsPayload(execResult);
-    if (payload) {
-      var tid2 = appendTyping("redactando conclusiones...");
-      setStatus("redactando conclusiones...", "busy");
-      try {
-        var paragraph = await writeInsightsParagraph(payload, lastUserQuery);
-        removeTyping(tid2);
-        appendAssistantText(paragraph);
-      } catch (e) {
-        removeTyping(tid2);
-        // Fallback: si el LLM falla, mostramos un texto mínimo basado en el
-        // propio payload para que el usuario al menos vea el delta.
-        appendAssistantText(fallbackParagraph(payload));
-      }
-      setStatus("análisis completado", "ok");
-    } else {
-      // Caso de error o de "necesita reformular": el render clásico ya lo
-      // muestra como aviso al usuario.
+    var pkg = extractInsightsPayload(execResult);
+    if (!pkg) {
       appendResult(execResult, insightsScript, true);
       setStatus("análisis completado", "ok");
+      return;
     }
+    appendResult(
+      { kind: "text", value: pkg.markdown_real || "*(sin tablas)*" },
+      insightsScript,
+      true
+    );
+    var tid2 = appendTyping("redactando conclusiones...");
+    setStatus("redactando conclusiones...", "busy");
+    var anonParagraph;
+    try {
+      anonParagraph = await writeInsightsParagraph(pkg.payload, lastUserQuery);
+    } catch (e) {
+      anonParagraph = fallbackParagraph(pkg.payload);
+    }
+    removeTyping(tid2);
+    var finalParagraph = deanonymizeText(anonParagraph, pkg.alias_to_real || {});
+
+    appendInsightConclusion(finalParagraph);
+
+    setStatus("análisis completado", "ok");
   } catch (e) {
     removeTyping(tid);
     appendError("Error en el análisis: " + e.message);
@@ -1286,9 +1243,6 @@ async function generateInsights() {
   }
 }
 
-// Extrae el JSON anonimizado del resultado de Pyodide, o devuelve null si
-// el script no devolvió un payload válido (p.ej. devolvió un mensaje de
-// error o el aviso __NEEDS_LLM_PARSING__).
 function extractInsightsPayload(execResult) {
   if (!execResult || execResult.kind !== "text") return null;
   if (typeof execResult.value !== "string") return null;
@@ -1296,16 +1250,51 @@ function extractInsightsPayload(execResult) {
   if (!execResult.value.startsWith(PREFIX)) return null;
   var jsonStr = execResult.value.substring(PREFIX.length);
   try {
-    return JSON.parse(jsonStr);
+    var parsed = JSON.parse(jsonStr);
+    if (parsed && parsed.kind === "insights_v2" && parsed.payload) return parsed;
+    if (parsed && parsed.comparacion && parsed.kpis) {
+      return { kind: "insights_v2", payload: parsed, alias_to_real: {}, markdown_real: "" };
+    }
+    return null;
   } catch (e) {
     console.error("[insights] No se pudo parsear el payload anonimizado:", e);
     return null;
   }
 }
 
-// Pide al LLM que redacte UN ÚNICO párrafo de conclusión de negocio a
-// partir del resumen anonimizado. No se envían nombres reales de
-// residencias, ciudades, orígenes o fuentes.
+function deanonymizeText(text, aliasToReal) {
+  if (!text || !aliasToReal) return text || "";
+  var aliases = Object.keys(aliasToReal);
+  if (aliases.length === 0) return text;
+  aliases.sort(function (a, b) { return b.length - a.length; });
+  var out = text;
+  for (var i = 0; i < aliases.length; i++) {
+    var alias = aliases[i];
+    var real = aliasToReal[alias];
+    if (!alias || real == null) continue;
+    var escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    var re = new RegExp("(^|[^\\w])" + escaped + "(?![\\w])", "g");
+    out = out.replace(re, "$1" + real);
+  }
+  return out;
+}
+
+function appendInsightConclusion(text) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var html = '<div class="result-box insight">'
+    + '<div class="text-result">' + marked.parse(text || "") + '</div>'
+    + '</div>';
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente · conclusión</div>'
+    + '<div class="msg-text">' + html + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
 async function writeInsightsParagraph(payload, originalQuery) {
   var promptSys =
     "Eres un analista de negocio del CRM de Resa (residencias de estudiantes). " +
@@ -1313,8 +1302,13 @@ async function writeInsightsParagraph(payload, originalQuery) {
     "entre dos cohortes y los drivers que más explican la variación. " +
     "Las entidades sensibles (residencias, ciudades, canales y fuentes) " +
     "están anonimizadas con identificadores genéricos (\"Residencia A\", " +
-    "\"Ciudad 1\", \"Canal B\"...). " +
-    "Cursos académicos como \"2024/2025\" son etiquetas válidas y no están anonimizadas.\n\n" +
+    "\"Ciudad 1\", \"Canal B\"...). Cursos académicos como \"2024/2025\" son " +
+    "etiquetas válidas y no están anonimizadas.\n\n" +
+    "IMPORTANTE sobre los identificadores: úsalos EXACTAMENTE como aparecen " +
+    "en el JSON (mismas mayúsculas, mismos espacios). No los reformatees " +
+    "(\"ciudad 1\" o \"Ciudad-1\" son incorrectos; lo correcto es \"Ciudad 1\"). " +
+    "El frontend reemplazará cada alias por su nombre real al pintar la " +
+    "respuesta, por lo que cualquier desviación rompe la sustitución.\n\n" +
     "Tu tarea: redactar UN ÚNICO PÁRRAFO de conclusión de negocio, " +
     "natural y coherente, de 4 a 7 frases, en español. El párrafo debe:\n" +
     "  1. Empezar señalando el cambio principal en la métrica protagonista " +
@@ -1349,8 +1343,6 @@ async function writeInsightsParagraph(payload, originalQuery) {
   return (reply || "").trim() || fallbackParagraph(payload);
 }
 
-// Fallback determinista si la llamada al LLM falla. Garantiza que el
-// usuario siempre vea algo coherente con los deltas calculados.
 function fallbackParagraph(payload) {
   var c = payload.comparacion || {};
   var k = payload.kpis || {};
@@ -1527,8 +1519,6 @@ function updateInsightButton() {
 function quickAsk(t) { sendMessage(t); }
 
 
-// ---------- Render del chat ----------
-
 function appendMsg(role, text) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
@@ -1635,8 +1625,6 @@ function renderCell(val) {
 }
 
 function renderError(r) {
-  // Construye bloque tecnico plegable con la traza Python completa.
-  // Para error_friendly incluye tambien el primer intento si existe.
   var techParts = [];
   var summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
   if (summary) techParts.push('<div class="err-summary">' + esc(summary) + '</div>');
@@ -1702,11 +1690,6 @@ function clearStaleTypings() {
   }
 }
 
-// ---------- Utilidades de depuracion para el desarrollador ----------
-
-// Muestra un aviso destacado en el area de mensajes del chat.
-// Acepta HTML (usar esc() para valores externos).
-// Util para errores de carga, configuracion incorrecta, etc.
 function showDevAlert(htmlMsg) {
   console.warn("[DEV ALERT]", htmlMsg.replace(/<[^>]+>/g, ""));
   var box = document.getElementById("messages");
@@ -1723,8 +1706,6 @@ function showDevAlert(htmlMsg) {
   scrollToBottom();
 }
 
-// Banner de aviso que se muestra al abrir el chat cuando hay un problema de configuracion.
-// A diferencia de showDevAlert, este no tiene avatar de asistente y tiene fondo amarillo.
 function appendDevBanner(htmlMsg) {
   console.warn("[DEV BANNER]", htmlMsg.replace(/<[^>]+>/g, ""));
   var box = document.getElementById("messages");
@@ -1769,9 +1750,6 @@ function buildClarifyBoxHtml(payload, step, total) {
     optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
                 '">' + esc(opciones[i]) + '</button>';
   }
-  // La caja de texto libre se renderiza SIEMPRE, sin importar el valor de
-  // `permitirOtro` que devuelva el modelo. El usuario debe poder escribir
-  // su propia respuesta como vía de escape en cualquier clarify.
   optsHtml +=
     '<div class="clarify-other-wrap">' +
     '<input type="text" class="clarify-other-input" placeholder="Otro... (escribe tu respuesta)">' +
@@ -1824,8 +1802,6 @@ function appendRetryNotice(text) {
   scrollToBottom();
 }
 
-
-// ---------- Utilidades de UI ----------
 
 function scrollToBottom() {
   var box = document.getElementById("messages");

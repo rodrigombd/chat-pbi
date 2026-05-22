@@ -1,62 +1,12 @@
-"""
-Análisis de variaciones — explicación en lenguaje de negocio.
-
-Dada una consulta del usuario que compara dos cohortes (dos cursos, dos
-ciudades, dos orígenes, dos fuentes...) este script:
-
-  1. Detecta qué dimensión se está comparando y los dos valores (cohortes).
-  2. Detecta qué métrica le interesa al usuario: leads, contacts o CR.
-     Si no está clara, analiza las tres con igual peso.
-  3. Calcula los KPIs de las dos cohortes.
-  4. Identifica las variables más explicativas del cambio (sin nombrar el
-     método estadístico — el output va dirigido a un usuario de negocio).
-  5. Devuelve un markdown con explicación accionable.
-
-Variables globales esperadas:
-  - leads_contacts (pd.DataFrame)
-  - last_user_query (str)
-  - llm_parsed_cohorts (dict, opcional): si el frontend ha conseguido un
-    parseo extra vía LLM, lo inyecta aquí con la forma:
-        {"dimension": "<col>", "valor_a": "<str>", "valor_b": "<str>",
-         "metrica": "leads|contacts|cr|auto"}
-
-Si no detecta cohortes ni llega un parseo LLM, devuelve un string especial
-que comienza con "__NEEDS_LLM_PARSING__" para que el frontend orqueste el
-fallback.
-"""
-
 import re
 import numpy as np
 import pandas as pd
 
-# ===================== CONFIGURACIÓN =====================
-
 ID_COL = "Correo electrónico"
 COURSE_COL = "Curso"
 
-# -----------------------------------------------------------------------------
-# WHITELIST DE VARIABLES EXPLICATIVAS POR TIPO DE COMPARACIÓN
-# -----------------------------------------------------------------------------
-# La motivación: una variable solo se ofrece como "explicativa" si realmente
-# le aporta valor de negocio al usuario para ese tipo de comparación.
-#
-# Ejemplos de variables que NO aportan valor en la práctica y se han excluido:
-#   - "Ciudad de procedencia" cuando se comparan ciudades de interés: cambia
-#     poco entre cohortes y rara vez es accionable.
-#   - "Mes de entrada" cuando se comparan ciudades, residencias u orígenes:
-#     introduce ruido estacional que casi nunca explica el caso de negocio.
-#   - Variables post-conversión cuando se compara CR (ya las gestiona
-#     `LEAKAGE_VARS` más abajo).
-#
-# Estructura: clave = dimensión que SE ESTÁ COMPARANDO. Valor = lista de
-# dimensiones útiles como explicación de esa comparación.
-# La clave especial "__default__" cubre cualquier caso no listado.
-# -----------------------------------------------------------------------------
 
 EXPLICATIVAS_POR_TIPO = {
-    # Comparas dos CURSOS (2024/2025 vs 2025/2026)
-    # Tiene sentido ver cómo cambia el mix de origen/fuente, qué ciudades
-    # tiran del cambio, qué residencias y la procedencia.
     "Curso_corregido": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
@@ -65,6 +15,7 @@ EXPLICATIVAS_POR_TIPO = {
         "Residencia escogida",
         "Ciudad_actual_corregido",
     ],
+
     "Curso": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
@@ -74,11 +25,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Ciudad_actual_corregido",
     ],
 
-    # Comparas dos CIUDADES DE INTERÉS (Madrid vs Valencia)
-    # NO tiene sentido "ciudad de procedencia" ni "mes de entrada".
-    # Sí: curso (mix de público), origen/fuente (qué canales funcionan
-    # diferente entre ciudades) y residencia (qué producto se elige dentro
-    # de cada ciudad).
     "Ciudad_deinteres_corregido": [
         "Curso_corregido",
         "Origen_Agrupado",
@@ -87,8 +33,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Residencia escogida",
     ],
 
-    # Comparas dos CIUDADES DE PROCEDENCIA (de dónde vienen los leads)
-    # Sí tiene sentido: a dónde quieren ir, curso, canal por el que entraron.
     "Ciudad_actual_corregido": [
         "Ciudad_deinteres_corregido",
         "Curso_corregido",
@@ -96,9 +40,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Fuente_Agrupada",
     ],
 
-    # Comparas dos CANALES DE CAPTACIÓN (Paid Media vs SEO & Directo)
-    # Sí: qué tipo de público (ciudades, cursos) trae cada canal, qué fuente
-    # concreta dentro del canal, qué residencia eligen.
     "Origen_Agrupado": [
         "Fuente_Agrupada",
         "Ciudad_deinteres_corregido",
@@ -106,7 +47,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Residencias_interes_corregido",
     ],
 
-    # Comparas dos FUENTES (Web Resa vs Unitour)
     "Fuente_Agrupada": [
         "Origen_Agrupado",
         "Ciudad_deinteres_corregido",
@@ -114,17 +54,13 @@ EXPLICATIVAS_POR_TIPO = {
         "Residencias_interes_corregido",
     ],
 
-    # Comparas dos RESIDENCIAS DE INTERÉS
-    # Sí: por dónde vienen (origen/fuente), de dónde son (procedencia), curso.
-    # No tiene sentido "ciudad de interés" porque cada residencia pertenece a
-    # una sola ciudad (la propia función `detectar_dims_dependientes` ya lo
-    # eliminaría, pero también lo dejamos fuera explícitamente).
     "Residencias_interes_corregido": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
         "Curso_corregido",
         "Ciudad_actual_corregido",
     ],
+
     "Residencia escogida": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
@@ -132,8 +68,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Ciudad_actual_corregido",
     ],
 
-    # Comparas dos TIPOS DE REGISTRO (Leads vs Contacts) — caso raro,
-    # mantenemos todo lo de negocio.
     "Tipo de registro": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
@@ -142,7 +76,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Residencias_interes_corregido",
     ],
 
-    # Particular o Grupo
     "Particular o Grupo": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
@@ -150,8 +83,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Ciudad_deinteres_corregido",
     ],
 
-    # Comparas dos MESES — aquí sí tiene sentido todo lo de marketing y
-    # geografía porque el cambio es estacional / de campaña.
     "Mes creación": [
         "Origen_Agrupado",
         "Fuente_Agrupada",
@@ -160,9 +91,6 @@ EXPLICATIVAS_POR_TIPO = {
         "Residencias_interes_corregido",
     ],
 
-    # Por defecto, conjunto razonablemente amplio pero ya filtrado de las dos
-    # variables que casi nunca le sirven al usuario (ciudad de procedencia y
-    # mes de entrada se incluyen solo cuando son la propia comparación).
     "__default__": [
         "Curso_corregido",
         "Origen_Agrupado",
@@ -184,10 +112,6 @@ def candidatas_para_comparacion(dim_comparacion):
     )
     return [d for d in base if d != dim_comparacion]
 
-
-# Lista plana de todas las dimensiones que el motor puede llegar a manejar.
-# Se usa solo para la detección textual de cohortes (¿qué valor aparece en
-# la consulta del usuario?), no como espacio de búsqueda explicativo.
 CANDIDATE_DIMENSIONS = [
     "Tipo de registro",
     "Particular o Grupo",
@@ -213,8 +137,6 @@ RF_PARAMS = dict(
 TOP_K_DRIVERS = 5
 MIN_RECORDS_FOR_BREAKDOWN = 30
 
-# ===================== UTILIDADES BÁSICAS =====================
-
 try:
     query_text = str(last_user_query) if last_user_query is not None else ""
 except NameError:
@@ -225,10 +147,6 @@ try:
 except NameError:
     llm_hint = None
 
-# Filtros adicionales que el front inyecta (ej. "curso=2025/2026" cuando el
-# usuario ha preguntado "Madrid vs Valencia EN 2025/2026"). Lista de dicts
-# {"columna": "<col>", "valor": "<v>"}. Si el front ha pasado un PyProxy lo
-# convertimos a estructura nativa de Python.
 try:
     _raw_extra = llm_extra_filters  # type: ignore
 except NameError:
@@ -267,7 +185,6 @@ extra_filters = _normalizar_filtros(_raw_extra)
 
 
 def aplicar_filtros_extra(df, filtros):
-    """Aplica una lista de filtros (columna, valor) al DataFrame."""
     if not filtros:
         return df
     out = df
@@ -304,10 +221,7 @@ def var_pct(nuevo, viejo):
     return (nuevo / viejo) - 1.0
 
 
-# ===================== DETECCIÓN DE COHORTES =====================
-
 def _detectar_cursos(texto):
-    """Devuelve hasta dos cursos detectados en la consulta."""
     patron = r"\b(20\d{2}|\d{2})\s*[-/]\s*(20\d{2}|\d{2})\b"
     cursos = []
     for ini, fin in re.findall(patron, texto):
@@ -337,8 +251,6 @@ def _detectar_cursos(texto):
 
 
 def _detectar_valores_dimension(texto, df, columnas_excluidas=None):
-    """Busca pares de valores de cualquier dimensión categórica que aparezcan
-    en el texto. Devuelve (dimension, valor_a, valor_b) o None."""
     columnas_excluidas = set(columnas_excluidas or [])
     texto_lower = texto.lower()
 
@@ -356,7 +268,6 @@ def _detectar_valores_dimension(texto, df, columnas_excluidas=None):
                 continue
             if re.search(r"\b" + re.escape(v_str.lower()) + r"\b", texto_lower):
                 encontrados.append(v_str)
-        # eliminamos duplicados manteniendo el orden de aparición en el texto
         seen = set()
         unicos_orden = []
         for v in encontrados:
@@ -375,10 +286,6 @@ def _detectar_valores_dimension(texto, df, columnas_excluidas=None):
 
 
 def detectar_cohortes(texto, df, hint=None, columnas_excluidas=None):
-    """Devuelve (dimension, valor_a, valor_b) o None si no consigue detectar.
-    `hint` es un dict opcional proveniente del LLM.
-    `columnas_excluidas` es un set de columnas que NO pueden ser la dimensión
-    de comparación (porque ya están fijadas como filtro)."""
     columnas_excluidas = set(columnas_excluidas or [])
 
     if hint and isinstance(hint, dict):
@@ -388,7 +295,6 @@ def detectar_cohortes(texto, df, hint=None, columnas_excluidas=None):
         if dim and va and vb and dim in df.columns and dim not in columnas_excluidas:
             return dim, va, vb
 
-    # Solo detectamos cursos si Curso no está en los filtros fijos.
     if COURSE_COL not in columnas_excluidas and "Curso_corregido" not in columnas_excluidas:
         r = _detectar_cursos(texto)
         if r:
@@ -402,12 +308,6 @@ def detectar_cohortes(texto, df, hint=None, columnas_excluidas=None):
 
 
 def detectar_dims_dependientes(df, dim_comparacion, candidatas, umbral_solape=0.05):
-    """Devuelve las dimensiones que están funcionalmente determinadas por
-    la dimensión de comparación (sus valores no se solapan entre las cohortes).
-    Estas dimensiones no aportan información explicativa real: si comparas
-    Madrid vs Bilbao, la "residencia de interés" solo toma valores diferentes
-    en cada cohorte (cada residencia pertenece a una sola ciudad), así que
-    aparece artificialmente como "100% explicativa"."""
     excluir = set()
     valores_dim = df[dim_comparacion].dropna().unique()
     if len(valores_dim) < 2:
@@ -442,8 +342,6 @@ def detectar_dims_dependientes(df, dim_comparacion, candidatas, umbral_solape=0.
     return excluir
 
 
-# ===================== DETECCIÓN DE MÉTRICA OBJETIVO =====================
-
 PATRONES_METRICA = {
     "cr": [
         r"\bconversi[oó]n\b", r"\bconversion rate\b", r"\bCR\b",
@@ -463,8 +361,6 @@ PATRONES_METRICA = {
 
 
 def detectar_metrica(texto):
-    """Detecta la métrica que más le interesa al usuario. Devuelve uno de:
-    'leads', 'contacts', 'cr', 'auto'."""
     if not texto:
         return "auto"
     matches = {}
@@ -481,8 +377,6 @@ def detectar_metrica(texto):
     return sorted_m[0][0]
 
 
-# ===================== CÁLCULO DE KPIS POR COHORTE =====================
-
 def kpis_cohorte(df_cohorte):
     leads = int(df_cohorte[df_cohorte["Tipo de registro"] == "Leads"][ID_COL].nunique())
     contacts = int(df_cohorte[
@@ -497,8 +391,6 @@ def kpis_cohorte(df_cohorte):
 def filtrar_cohorte(df, dim, valor):
     return df[df[dim].astype(str) == str(valor)].copy()
 
-
-# ===================== MODELO EXPLICATIVO =====================
 
 def _preparar_features(df, dimensiones_a_usar):
     X_raw = df[dimensiones_a_usar].copy()
@@ -530,32 +422,20 @@ def _agregar_importancias_por_dim(importances, columnas):
 
 
 def _calcular_importancias(rf, X, y):
-    """Calcula importancias por permutación (más fiables que feature_importances_,
-    que tiene sesgo hacia variables con alta cardinalidad). Si permutation_importance
-    falla por cualquier motivo, cae al método estándar."""
     try:
         from sklearn.inspection import permutation_importance
-        # n_repeats bajo para mantener tiempo razonable en Pyodide
         result = permutation_importance(
             rf, X.values, y,
             n_repeats=5,
             random_state=42,
             n_jobs=1,
         )
-        # Las importancias por permutación pueden ser negativas; clipamos a 0
         return np.clip(result.importances_mean, 0, None)
     except Exception:
         return rf.feature_importances_
 
 
 def explicar_volumen(df_a, df_b, dimensiones, tipo_registro_filter=None):
-    """Explica qué dimensiones discriminan entre la cohorte A y la B, filtrando
-    primero por tipo de registro si se indica.
-
-    Para Contacts, excluimos variables post-conversión (Residencia escogida,
-    Residencia actual) porque solo se rellenan tras la firma — su correlación
-    con cualquier comparación viene determinada por la geografía del negocio.
-    """
     from sklearn.ensemble import RandomForestClassifier
 
     if tipo_registro_filter == "Leads":
@@ -566,8 +446,6 @@ def explicar_volumen(df_a, df_b, dimensiones, tipo_registro_filter=None):
                     (df_a["Particular o Grupo"] == "Particular")]
         df_b = df_b[(df_b["Tipo de registro"] == "Contacts") &
                     (df_b["Particular o Grupo"] == "Particular")]
-        # En el modo Contacts, las variables post-conversión actúan como
-        # quasi-leakage: están casi siempre rellenas y replican la geografía.
         POST_CONV = {"Residencia escogida", "Residencias_actual_corregido",
                      "Residencia actual"}
         dimensiones = [d for d in dimensiones if d not in POST_CONV]
@@ -589,17 +467,6 @@ def explicar_volumen(df_a, df_b, dimensiones, tipo_registro_filter=None):
 
 
 def explicar_cr(df_a, df_b, dimensiones):
-    """Explica qué dimensiones más contribuyen al cambio en CR entre A y B.
-
-    Enfoque: para cada dimensión, mide cuánto se desplaza el CR de sus
-    categorías entre las cohortes, ponderando por su volumen. Una dimensión
-    con grandes shifts de CR en sus categorías con peso significativo
-    aporta más a la variación del CR global.
-
-    Esto es mejor que entrenar un RF "predecir es Contact" sobre la unión,
-    porque ese enfoque mide qué predice CR globalmente, no qué causa el
-    cambio entre dos momentos.
-    """
     LEAKAGE_VARS = {
         "Tipo de registro",
         "Particular o Grupo",
@@ -642,19 +509,15 @@ def explicar_cr(df_a, df_b, dimensiones):
         cr_b_por_cat = em_b_d.groupby(dim)["Tipo de registro"].apply(
             lambda s: (s == "Contacts").mean()
         )
-        # Peso de cada categoría en la cohorte B (volumen total)
         peso_b_por_cat = em_b_d.groupby(dim).size() / n_b
 
         idx_comun = cr_a_por_cat.index.intersection(cr_b_por_cat.index)
         if len(idx_comun) == 0:
             continue
 
-        # Contribución de cada categoría = peso_b * (cr_b - cr_a)
-        # Suma absoluta de contribuciones = importancia de la dimensión
         cra = cr_a_por_cat.reindex(idx_comun)
         crb = cr_b_por_cat.reindex(idx_comun)
         pesos = peso_b_por_cat.reindex(idx_comun).fillna(0)
-        # Filtramos categorías con volumen razonable en B
         mask_vol = (em_b_d.groupby(dim).size().reindex(idx_comun) >= 20)
         if not mask_vol.any():
             continue
@@ -673,8 +536,6 @@ def explicar_cr(df_a, df_b, dimensiones):
             .sort_values("peso", ascending=False)
             .reset_index(drop=True))
 
-
-# ===================== BREAKDOWN UNIVARIADO =====================
 
 def breakdown_dimension(df_a, df_b, dim, min_total=MIN_RECORDS_FOR_BREAKDOWN):
     """Para una dimensión, agrega leads, contacts y CR de cada valor en cada cohorte."""
@@ -715,8 +576,6 @@ def breakdown_dimension(df_a, df_b, dim, min_total=MIN_RECORDS_FOR_BREAKDOWN):
     out = out[total >= min_total]
     return out.reset_index()
 
-
-# ===================== RENDER DE MARKDOWN =====================
 
 def nombre_legible_dimension(dim):
     legible = {
@@ -788,13 +647,6 @@ def describir_cambio_metrica(metrica, kpi_a, kpi_b):
         return f"La **conversión** ha {signo} de **{fmt_pct_abs(v_a)}** a **{fmt_pct_abs(v_b)}** ({s}{delta_pp:.2f} puntos)."
     return ""
 
-
-# ===================== EJECUCIÓN PRINCIPAL =====================
-
-# Aplicamos primero los filtros adicionales (curso fijado, tipo de registro,
-# etc.) sobre el universo de trabajo. Las cohortes a comparar se calculan
-# DENTRO de ese universo, así "Madrid vs Valencia en 2025/2026" compara
-# Madrid y Valencia restringidas a ese curso.
 df_base = aplicar_filtros_extra(leads_contacts, extra_filters)
 columnas_fijadas = {col for col, _ in extra_filters}
 
@@ -803,7 +655,6 @@ cohortes = detectar_cohortes(
 )
 
 if cohortes is None:
-    # Señal especial para que el frontend orqueste el parseo vía LLM
     resultado = (
         "__NEEDS_LLM_PARSING__\n"
         "No se ha podido identificar automáticamente qué dos elementos comparar "
@@ -832,42 +683,14 @@ else:
             if m_hint in ("leads", "contacts", "cr", "auto"):
                 metrica = m_hint
 
-        # Dimensiones que el modelo puede usar:
-        #  - Whitelist específica para este tipo de comparación (punto 1: ya
-        #    no se ofrecen variables que no aportan valor al usuario).
-        #  - Sin la propia dimensión de comparación.
-        #  - Sin dimensiones funcionalmente dependientes de la comparación
-        #    (ej: comparar Madrid vs Bilbao no se "explica" por residencia
-        #    de interés porque cada residencia es de una sola ciudad).
         dims_modelo = candidatas_para_comparacion(dim)
         dims_dependientes = detectar_dims_dependientes(
             df_base, dim, dims_modelo
         )
         dims_modelo = [d for d in dims_modelo if d not in dims_dependientes]
-        # Si hay filtros fijos (ej. el curso ya está fijado a 2025/2026), no
-        # tiene sentido ofrecer esa dimensión como "explicativa": no varía.
         dims_filtradas = {col for col, _ in extra_filters}
         dims_modelo = [d for d in dims_modelo if d not in dims_filtradas]
 
-        # =====================================================================
-        # CONSTRUCCIÓN DEL RESUMEN ESTADÍSTICO ANONIMIZADO
-        # ---------------------------------------------------------------------
-        # En vez de redactar Markdown narrativo aquí dentro, devolvemos al
-        # frontend un diccionario JSON-serializable con los deltas, métricas
-        # clave y variables explicativas. Los nombres reales de residencias,
-        # ciudades, orígenes y fuentes se sustituyen por identificadores
-        # genéricos (Residencia A, Ciudad 1, Categoría 1...) para no enviarlos
-        # a la API en la fase de redacción.
-        #
-        # Excepciones (NO se anonimizan, no son datos sensibles):
-        #   - Cursos académicos (ej. "2024/2025"): son etiquetas genéricas.
-        #   - Valores estructurales del CRM: "Leads", "Contacts", "Particular",
-        #     "Grupo", "Sin info" — son etiquetas de esquema, no datos.
-        #   - Nombres legibles de dimensiones (Ciudad de interés, Canal de
-        #     captación...): son metadatos del modelo.
-        # =====================================================================
-
-        # ----- Helpers de anonimización -----
         DIMS_SENSIBLES = {
             "Ciudad_deinteres_corregido": "Ciudad",
             "Ciudad_actual_corregido": "Ciudad",
@@ -895,13 +718,6 @@ else:
             return str(v).strip() in VALORES_ESTRUCTURALES
 
         def anonimizar_valor(valor, dim_origen, mapping):
-            """Devuelve un alias estable para `valor` dentro de `dim_origen`.
-
-            Cursos y etiquetas estructurales pasan tal cual. Para el resto se
-            asigna un alias genérico ("Residencia A", "Ciudad 1"...) reusable
-            durante toda la ejecución para que el LLM pueda referirse al mismo
-            elemento de forma consistente.
-            """
             v_str = str(valor).strip()
             if dim_origen not in DIMS_SENSIBLES:
                 return v_str
@@ -911,12 +727,10 @@ else:
             if key in mapping:
                 return mapping[key]
             tipo = DIMS_SENSIBLES[dim_origen]
-            # Contador independiente por tipo (Residencia A, B, C... / Ciudad 1, 2, 3...)
             prefijo_existentes = [a for (d, _), a in mapping.items()
                                   if DIMS_SENSIBLES.get(d) == tipo]
             idx = len(prefijo_existentes) + 1
             if tipo in ("Residencia", "Canal", "Fuente"):
-                # Letras: A, B, ..., Z, AA, AB...
                 def letra(n):
                     s = ""
                     while n > 0:
@@ -929,15 +743,11 @@ else:
             mapping[key] = alias
             return alias
 
-        # Mapa compartido durante toda la construcción del resumen
         alias_map = {}
 
-        # ----- Cohortes (etiquetas de comparación) -----
-        # La propia dimensión de comparación también puede ser sensible.
         val_a_anon = anonimizar_valor(val_a, dim, alias_map)
         val_b_anon = anonimizar_valor(val_b, dim, alias_map)
 
-        # ----- KPIs principales -----
         d_leads = kpis_b["leads"] - kpis_a["leads"]
         d_contacts = kpis_b["contacts"] - kpis_a["contacts"]
         d_cr_pp = (kpis_b["cr"] - kpis_a["cr"]) * 100
@@ -963,7 +773,6 @@ else:
             },
         }
 
-        # ----- Métrica protagonista y rankings explicativos -----
         if metrica == "auto":
             metricas_a_analizar = ["leads", "contacts", "cr"]
         else:
@@ -996,7 +805,6 @@ else:
                 })
             ranking_payload[m] = entradas
 
-        # ----- Breakdown del/los driver(s) principal(es), anonimizado -----
         dimensiones_a_desglosar = []
         if len(metricas_a_analizar) == 1:
             rk_unico = rankings_por_metrica[metricas_a_analizar[0]]
@@ -1045,15 +853,12 @@ else:
                 "filas": filas,
             })
 
-        # ----- Filtros aplicados (cursos sí van; el resto, anonimizado) -----
         filtros_payload = []
         for col, val in extra_filters:
             filtros_payload.append({
                 "dimension": nombre_legible_dimension(col),
                 "valor": anonimizar_valor(val, col, alias_map),
             })
-
-        # ----- Sentido del cambio para la métrica protagonista -----
         if metrica == "cr":
             direccion_valor = d_cr_pp
         elif metrica == "contacts":
@@ -1069,7 +874,6 @@ else:
         else:
             direccion = "estable"
 
-        # ----- Payload final -----
         import json as _json
         payload = {
             "comparacion": {
@@ -1078,8 +882,8 @@ else:
                 "cohorte_b": val_b_anon,
             },
             "filtros_aplicados": filtros_payload,
-            "metrica_protagonista": metrica,  # "leads" | "contacts" | "cr" | "auto"
-            "direccion_cambio": direccion,    # "mejora" | "deterioro" | "estable"
+            "metrica_protagonista": metrica,
+            "direccion_cambio": direccion,
             "kpis": kpis_payload,
             "variables_explicativas": ranking_payload,
             "desglose_drivers": breakdown_payload,
@@ -1089,4 +893,95 @@ else:
             },
         }
 
-        resultado = "__INSIGHTS_PAYLOAD__" + _json.dumps(payload, ensure_ascii=False)
+        md = []
+        md.append(f"## Análisis de **{val_a}** frente a **{val_b}**\n")
+        md.append(f"*Comparación por **{dim_legible}**.*\n")
+        if extra_filters:
+            partes_filtro = []
+            for col, val in extra_filters:
+                partes_filtro.append(
+                    f"**{nombre_legible_dimension(col)}** = {val}"
+                )
+            md.append(
+                "*Filtros aplicados a toda la comparación: "
+                + "; ".join(partes_filtro) + ".*\n"
+            )
+
+        md.append("### Resumen de la comparación\n")
+        md.append(f"|  | {val_a} | {val_b} | Variación |")
+        md.append("|---|---|---|---|")
+        s_leads = "+" if d_leads >= 0 else ""
+        md.append(
+            f"| **Leads** | {fmt_num(kpis_a['leads'])} | {fmt_num(kpis_b['leads'])} | "
+            f"{s_leads}{fmt_num(d_leads)} ({fmt_pct(var_pct(kpis_b['leads'], kpis_a['leads']))}) |"
+        )
+        s_contacts = "+" if d_contacts >= 0 else ""
+        md.append(
+            f"| **Contactos** | {fmt_num(kpis_a['contacts'])} | {fmt_num(kpis_b['contacts'])} | "
+            f"{s_contacts}{fmt_num(d_contacts)} ({fmt_pct(var_pct(kpis_b['contacts'], kpis_a['contacts']))}) |"
+        )
+        s_cr = "+" if d_cr_pp >= 0 else ""
+        md.append(
+            f"| **Conversión** | {fmt_pct_abs(kpis_a['cr'])} | {fmt_pct_abs(kpis_b['cr'])} | "
+            f"{s_cr}{d_cr_pp:.2f} pp ({fmt_pct(var_pct(kpis_b['cr'], kpis_a['cr']))}) |"
+        )
+        md.append("")
+
+        if metrica == "auto":
+            md.append("### Variables que más explican el cambio")
+            md.append(
+                "*Se analizan las tres métricas (leads, contactos y conversión) "
+                "porque la consulta no especifica una en concreto.*\n"
+            )
+        else:
+            etiqueta = {"leads": "los leads", "contacts": "los contactos",
+                        "cr": "la conversión"}[metrica]
+            md.append(f"### Variables que más explican el cambio en {etiqueta}\n")
+
+        for m in metricas_a_analizar:
+            rk = rankings_por_metrica[m]
+            if len(metricas_a_analizar) > 1:
+                etiqueta_m = {"leads": "Volumen de leads",
+                              "contacts": "Volumen de contactos",
+                              "cr": "Tasa de conversión"}[m]
+                md.append(f"#### {etiqueta_m}\n")
+
+            if rk.empty:
+                md.append("*No hay suficiente información para identificar variables relevantes.*\n")
+                continue
+
+            top = rk.head(TOP_K_DRIVERS).copy()
+            peso_total = top["peso"].sum()
+            top["pct"] = top["peso"] / peso_total * 100 if peso_total > 0 else 0
+            md.append("| Variable | Peso en la explicación |")
+            md.append("|---|---|")
+            for _, r in top.iterrows():
+                md.append(
+                    f"| **{nombre_legible_dimension(r['dimension'])}** | {r['pct']:.1f}% |"
+                )
+            md.append("")
+
+        md.append("### Detalle de los cambios principales\n")
+
+        if not dimensiones_a_desglosar:
+            md.append("*No se pueden mostrar desgloses (datos insuficientes).*\n")
+        else:
+            for d in dimensiones_a_desglosar:
+                md.append(f"#### Por {nombre_legible_dimension(d).lower()}\n")
+                bd = breakdown_dimension(df_a, df_b, d)
+                md.append(render_tabla_breakdown(bd, val_a, val_b, ordenar_por=orden))
+                md.append("")
+
+        markdown_real = "\n".join(md)
+
+        alias_to_real = {}
+        for (_dim_origen, real_val), alias_val in alias_map.items():
+            alias_to_real.setdefault(alias_val, real_val)
+
+        salida = {
+            "kind": "insights_v2",
+            "payload": payload,
+            "alias_to_real": alias_to_real,
+            "markdown_real": markdown_real,
+        }
+        resultado = "__INSIGHTS_PAYLOAD__" + _json.dumps(salida, ensure_ascii=False)
