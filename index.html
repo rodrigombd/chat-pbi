@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KPI Assistant</title>
+<title>Analytics Assistant — RESA</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -38,14 +39,14 @@ header {
   padding: 11px 20px; border-bottom: 1px solid var(--border); background: var(--bg);
   display: flex; align-items: center; gap: 14px; flex-shrink: 0;
 }
-header img { height: 26px; width: auto; display: block; }
-.header-sep { width: 1px; height: 18px; background: var(--border2); }
-.header-title { font-size: 14px; color: var(--text2); }
+.header-title { font-size: 15px; font-weight: 600; color: var(--text); }
 .header-model {
   margin-left: auto; font-size: 12px; color: var(--text3);
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 20px; padding: 2px 10px;
 }
+
+/* ---- Setup ---- */
 #setup-panel {
   flex: 1; display: flex; align-items: center; justify-content: center;
   background: var(--bg); padding: 24px;
@@ -65,14 +66,14 @@ label {
 input[type="password"] {
   width: 100%; background: var(--bg); border: 1px solid var(--border2);
   border-radius: var(--radius-sm); color: var(--text);
-  font-family: Arial, Helvetica, sans-serif; font-size: 15px;
+  font-family: inherit; font-size: 15px;
   padding: 9px 12px; outline: none; transition: border-color 0.15s;
 }
 input[type="password"]:focus { border-color: var(--accent-dk); }
 .hint { font-size: 12px; color: var(--text3); margin-top: 5px; line-height: 1.5; }
 .btn-primary {
   width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none;
-  border-radius: var(--radius-sm); font-family: Arial, Helvetica, sans-serif;
+  border-radius: var(--radius-sm); font-family: inherit;
   font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s;
 }
 .btn-primary:hover { background: var(--accent-dk); }
@@ -89,6 +90,8 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .boot-progress .step.active .dot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
 .boot-progress .step.error .dot { background: var(--error); }
 @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+/* ---- Chat ---- */
 #chat-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
 #messages {
   flex: 1; overflow-y: auto; padding: 20px 20px 8px;
@@ -113,6 +116,15 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .msg-text p { margin-bottom: 8px; }
 .msg-text p:last-child { margin-bottom: 0; }
 .msg-text strong { color: var(--text); font-weight: 700; }
+.msg-text code {
+  background: var(--surface); border-radius: 3px; padding: 1px 5px;
+  font-family: "Menlo","Monaco","Courier New",monospace; font-size: 13px;
+}
+.msg-text h2, .msg-text h3 { font-size: 16px; margin: 10px 0 6px; font-weight: 600; }
+.msg-text ul { margin: 6px 0 8px 22px; }
+.msg-text li { margin-bottom: 3px; }
+
+/* ---- Result boxes ---- */
 .result-box {
   background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 4px;
@@ -121,9 +133,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .result-box .scalar { font-size: 26px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
 .result-box .scalar-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
 .result-box .text-result { font-size: 15px; color: var(--text); line-height: 1.7; }
-.result-box .text-result h2, .result-box .text-result h3 { font-size: 16px; margin: 10px 0 6px; }
-.result-box .text-result ul { margin-left: 20px; margin-bottom: 8px; }
-.result-box img { max-width: 100%; border-radius: var(--radius-sm); display: block; }
 .result-box table {
   width: 100%; border-collapse: collapse; font-size: 14px;
   border-radius: var(--radius-sm); overflow: hidden; box-shadow: 0 0 0 1px var(--border);
@@ -138,6 +147,14 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .result-box tr:last-child td { border-bottom: none; }
 .result-box tr:hover { background-color: #fafafa; }
 .result-box td.num, .result-box th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Plotly chart container */
+.plot-container {
+  width: 100%; min-height: 380px;
+  background: var(--bg); border-radius: var(--radius-sm);
+}
+
+/* ---- Code toggle ---- */
 .code-toggle {
   margin-top: 10px; font-size: 12px; color: var(--text3); cursor: pointer;
   user-select: none; display: inline-flex; align-items: center; gap: 5px;
@@ -152,29 +169,31 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 }
 .code-block.expanded { display: block; }
 .code-block pre {
-  margin: 0; font-family: "Menlo", "Monaco", "Courier New", monospace;
+  margin: 0; font-family: "Menlo","Monaco","Courier New",monospace;
   font-size: 12.5px; color: #e6e6e6; line-height: 1.55; white-space: pre;
 }
+
+/* ---- Errors ---- */
 .error-box {
   background: var(--error-bg); border: 1px solid var(--error-bd);
   border-radius: var(--radius-sm); color: var(--error);
   padding: 10px 14px; font-size: 14px; line-height: 1.5;
 }
 .error-box pre {
-  margin-top: 6px; font-family: "Menlo", "Monaco", "Courier New", monospace;
+  margin-top: 6px; font-family: "Menlo","Monaco","Courier New",monospace;
   font-size: 12px; white-space: pre-wrap; color: #7a1f15;
 }
-/* --- Estilos para alertas de desarrollador --- */
-.error-box.dev-alert {
-  background: #fff8e1; border-color: #f5c842; color: #5a3e00; font-size: 13px;
+.err-details { margin-top: 8px; font-size: 12.5px; }
+.err-details summary {
+  cursor: pointer; user-select: none; color: var(--text2);
+  padding: 4px 0; font-weight: 500; list-style: none;
 }
-.error-box.dev-alert code {
-  background: rgba(0,0,0,0.07); border-radius: 3px;
-  padding: 1px 5px; font-family: "Menlo","Monaco","Courier New",monospace; font-size: 12px;
+.err-details summary::-webkit-details-marker { display: none; }
+.err-details summary::before {
+  content: "▶"; display: inline-block; margin-right: 6px;
+  font-size: 10px; transition: transform 0.15s;
 }
-.error-box.dev-alert pre {
-  color: #5a3e00; background: rgba(0,0,0,0.06); border-radius: 4px; padding: 6px 8px; margin-top: 6px;
-}
+.err-details[open] summary::before { transform: rotate(90deg); }
 .dev-banner {
   margin: 10px 16px 4px; padding: 12px 16px;
   background: #fffbea; border: 1px solid #f5d97a; border-radius: 6px;
@@ -184,47 +203,31 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   background: rgba(0,0,0,0.07); border-radius: 3px;
   padding: 1px 5px; font-family: "Menlo","Monaco","Courier New",monospace; font-size: 12px;
 }
-/* Bloque plegable para traza tecnica en errores */
-.err-details { margin-top: 8px; font-size: 12.5px; }
-.err-details summary {
-  cursor: pointer; user-select: none; color: var(--text2);
-  padding: 4px 0; font-weight: 500; list-style: none;
-}
-.err-details summary::-webkit-details-marker { display: none; }
-.err-details summary::before {
-  content: "BA"; display: inline-block; margin-right: 6px;
-  font-size: 10px; transition: transform 0.15s;
-}
-.err-details[open] summary::before { transform: rotate(90deg); }
-.err-details summary:hover { color: var(--text); }
-.err-summary {
-  font-family: "Menlo","Monaco","Courier New",monospace;
-  font-size: 12.5px; padding: 4px 0; color: #7a1f15;
-}
-.error-box.error-friendly .err-summary { color: #7a5a00; }
-.err-section-label {
-  margin-top: 10px; font-size: 12px; font-weight: 600;
-  color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px;
-}
+
+/* ---- Typing dots ---- */
 .typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
 .typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
 @keyframes tpulse { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
-.typing-label { font-size: 12px; color: var(--text3); margin-left: 4px; }
+.typing-label { font-size: 12px; color: var(--text3); margin-left: 6px; }
+
+/* ---- Quick questions ---- */
 #quick-questions { padding: 2px 18px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
 .quick-btn {
   background: var(--bg); border: 1px solid var(--border2); border-radius: 20px;
-  color: var(--text2); font-family: Arial, Helvetica, sans-serif; font-size: 13px;
+  color: var(--text2); font-family: inherit; font-size: 13px;
   padding: 5px 13px; cursor: pointer; transition: all 0.12s; white-space: nowrap;
 }
 .quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: var(--accent-lt); }
+
+/* ---- Actions bar (Generar conclusiones) ---- */
 #actions-bar {
   padding: 0 18px 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
 }
 .action-btn {
   background: var(--insight-lt); border: 1px solid #b8cdf7; border-radius: 20px;
-  color: var(--insight-dk); font-family: Arial, Helvetica, sans-serif;
+  color: var(--insight-dk); font-family: inherit;
   font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer;
   transition: all 0.12s; white-space: nowrap;
   display: inline-flex; align-items: center; gap: 6px;
@@ -234,13 +237,15 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 }
 .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .action-hint { font-size: 12px; color: var(--text3); }
+
+/* ---- Input ---- */
 #input-area {
   padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--bg);
   display: flex; gap: 8px; align-items: flex-end;
 }
 #user-input {
   flex: 1; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius-sm);
-  color: var(--text); font-family: Arial, Helvetica, sans-serif; font-size: 15px;
+  color: var(--text); font-family: inherit; font-size: 15px;
   padding: 9px 13px; outline: none; resize: none; min-height: 40px; max-height: 120px;
   line-height: 1.5; transition: border-color 0.15s;
 }
@@ -256,16 +261,31 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 #send-btn:active { transform: scale(0.95); }
 #send-btn:disabled { background: var(--surface2); cursor: not-allowed; opacity: 0.6; }
 #send-btn svg { width: 16px; height: 16px; }
+
+/* ---- Footer ---- */
 .footer-bar { padding: 7px 18px; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; flex-shrink: 0; }
 .footer-status { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .status-dot.busy { background: #f0a020; animation: pulse 1s ease-in-out infinite; }
 .status-dot.error { background: var(--error); }
+
+/* ---- Welcome ---- */
 .welcome-area { text-align: center; padding: 44px 20px 20px; }
 .welcome-area h3 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-.welcome-area p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 360px; margin: 0 auto; }
+.welcome-area p { font-size: 14px; color: var(--text2); line-height: 1.7; max-width: 420px; margin: 0 auto; }
 
-/* --- Aclaración (modo CLARIFY) --- */
+/* ---- Route badge ---- */
+.route-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 2px 7px; border-radius: 10px; margin-left: 6px;
+}
+.route-badge.modelo { background: var(--insight-lt); color: var(--insight-dk); }
+.route-badge.datos  { background: var(--accent-lt);  color: var(--accent-dk); }
+.route-badge.saludo { background: var(--surface2);   color: var(--text2); }
+.route-badge.insight { background: var(--insight-lt); color: var(--insight-dk); }
+
+/* ---- Clarify box ---- */
 .clarify-box {
   background: #fffbea; border: 1px solid #f5d97a; border-left: 3px solid #d49f00;
   border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 4px;
@@ -294,9 +314,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .clarify-option.selected {
   background: var(--accent-lt); border-color: var(--accent-dk); color: var(--accent-dk);
 }
-.clarify-other-wrap {
-  display: flex; gap: 6px; margin-top: 2px;
-}
+.clarify-other-wrap { display: flex; gap: 6px; margin-top: 2px; }
 .clarify-other-input {
   flex: 1; background: var(--bg); border: 1px solid var(--border2);
   border-radius: var(--radius-sm); color: var(--text);
@@ -313,7 +331,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .clarify-other-btn:hover { background: var(--accent-dk); }
 .clarify-other-btn:disabled { opacity: 0.5; cursor: not-allowed; background: var(--surface2); }
 
-/* --- Aviso de reintento por error --- */
 .retry-notice {
   font-size: 12px; color: var(--text3); font-style: italic;
   padding: 4px 0; margin-bottom: 4px;
@@ -323,9 +340,8 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <body>
 
 <header>
-  <div class="header-sep"></div>
-  <span class="header-title">KPI Assistant</span>
-  <span class="header-model">claude-haiku-4-5 · pyodide</span>
+  <span class="header-title">Analytics Assistant — RESA</span>
+  <span class="header-model" id="header-model">claude · pyodide · plotly</span>
 </header>
 
 <div id="setup-panel">
@@ -339,10 +355,10 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     </div>
     <button class="btn-primary" id="connect-btn" onclick="initChat()">Conectar &rarr;</button>
     <div class="boot-progress" id="boot-progress">
-      <div class="step" id="step-ctx"><span class="dot"></span><span>Cargando contexto del modelo</span></div>
+      <div class="step" id="step-prompts"><span class="dot"></span><span>Cargando archivos de contexto</span></div>
       <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
-      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy, matplotlib, scikit-learn</span></div>
-      <div class="step" id="step-csv"><span class="dot"></span><span>Cargando datos</span></div>
+      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy, scikit-learn</span></div>
+      <div class="step" id="step-csv"><span class="dot"></span><span>Cargando datos principales</span></div>
       <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de an&aacute;lisis</span></div>
     </div>
   </div>
@@ -352,15 +368,16 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   <div id="messages">
     <div class="welcome-area" id="welcome">
       <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
-      <p>Pregunta sobre el modelo de datos, indicadores o tendencias. El asistente generar&aacute; c&oacute;digo Python que se ejecuta en tu navegador sobre los datos cargados.</p>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y produce un gr&aacute;fico interactivo. Tras cada consulta puedes pulsar <strong>Generar conclusiones</strong> para entender el porqu&eacute; de una variaci&oacute;n.</p>
     </div>
   </div>
 
   <div id="quick-questions">
-    <button class="quick-btn" onclick="quickAsk('\u00bfQu\u00e9 tablas hay en el modelo?')">tablas del modelo</button>
-    <button class="quick-btn" onclick="quickAsk('Resumen de indicadores principales')">resumen KPIs</button>
-    <button class="quick-btn" onclick="quickAsk('Compara los dos \u00faltimos periodos')">comparar periodos</button>
-    <button class="quick-btn" onclick="quickAsk('Top 5 categor\u00edas por volumen')">top categor&iacute;as</button>
+    <button class="quick-btn" onclick="quickAsk('&iquest;Qu&eacute; tablas hay en el modelo?')">&iquest;qu&eacute; tablas hay?</button>
+    <button class="quick-btn" onclick="quickAsk('&iquest;Qu&eacute; significa Curso_corregido?')">qu&eacute; es Curso_corregido</button>
+    <button class="quick-btn" onclick="quickAsk('&iquest;Cu&aacute;ntos leads hay en el curso 2025/2026?')">leads 2025/2026</button>
+    <button class="quick-btn" onclick="quickAsk('Gr&aacute;fico de evoluci&oacute;n mensual de leads en 2025')">evoluci&oacute;n mensual</button>
+    <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
   </div>
 
   <div id="actions-bar">
@@ -389,32 +406,63 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 </div>
 
 <script>
-var apiKey = "";
-var systemCtx = "";
-var insightsScript = "";
-var chatHistory = [];
-var busy = false;
-var pyodide = null;
-var loadedCsvs = new Set();
-var lastUserQuery = null;
-var lastTurn = null;
-var pendingPipeline = null;
+// ============================================================================
+//  Configuración general
+// ============================================================================
 
-var CSV_TABLES = {
-  "leads_contacts": "Leads_Contacts.csv"
-};
-var PRIMARY_CSV = "leads_contacts";
-var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
-
-var MODEL_ID = "claude-haiku-4-5-20251001";
-var API_URL = "https://api.anthropic.com/v1/messages";
+var MODEL_ID    = "claude-haiku-4-5-20251001";
+var API_URL     = "https://api.anthropic.com/v1/messages";
 var API_VERSION = "2023-06-01";
 var MAX_HISTORY = 12;
 
+// Archivos de contexto que se cargan desde la carpeta del proyecto.
+// Cada uno se usa en UN paso concreto del flujo (router, clarify, generación,
+// modelo de datos, parser de insights). Mantenerlos separados permite enviar
+// a la API SOLO el system prompt que toca → mínimo coste en tokens.
+var PROMPT_FILES = {
+  router:          "context_router.txt",
+  clarify:         "context_clarify.txt",
+  modelo_datos:    "context_modelo_datos.txt",
+  general:         "context_general.txt",
+  insights_parser: "context_insights_parser.txt"
+};
+
+// Tablas disponibles -> fichero CSV correspondiente.
+// Solo trabajamos con la tabla de hechos `leads_contacts`. Las antiguas tablas
+// de dimensiones (catálogos de ciudades, residencias, etc.) ya no se cargan:
+// no aportan información que no esté en la tabla de hechos y, al no existir
+// los ficheros, generaban errores 404 al pulsar "Generar conclusiones".
+var CSV_TABLES = {
+  "leads_contacts":             "Leads_Contacts.csv"
+};
+var PRIMARY_CSV          = "leads_contacts";
+var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
+
 marked.use({ breaks: true, gfm: true });
 
+
+// ============================================================================
+//  Estado
+// ============================================================================
+
+var apiKey         = "";
+var prompts        = {};                 // contenido de los .txt
+var insightsScript = "";                 // contenido de insights_script.py
+var pyodide        = null;
+var loadedCsvs     = new Set();
+var busy           = false;
+var chatHistory    = [];                 // historial general (solo modo "datos")
+var pendingClarify = null;               // pipeline en curso de clarify
+var lastUserQuery  = null;               // consulta original del usuario (para insights)
+var lastTurn       = null;               // info del último turno datos completado
+
+
+// ============================================================================
+//  Bootstrap
+// ============================================================================
+
 async function initChat() {
-  var key = readApiKey();
+  var key = document.getElementById("api-key-input").value.trim();
   if (!key) { alert("Introduce tu API key."); return; }
 
   var btn = document.getElementById("connect-btn");
@@ -423,7 +471,7 @@ async function initChat() {
   document.getElementById("boot-progress").classList.add("active");
 
   try {
-    await loadContext();
+    await loadPrompts();
     await initPyodide();
     await loadPyodidePackages();
     await installRuntimeHelpers();
@@ -435,8 +483,25 @@ async function initChat() {
       appendDevBanner(
         "⚠️ <strong>El CSV principal no se cargó.</strong> " +
         "Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>" +
-        "Abre el proyecto con un servidor HTTP local." +
+        "Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). " +
+        "Desde la carpeta: <code>python -m http.server 8000</code> " +
+        "y luego ve a <code>http://localhost:8000</code>. " +
         "Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>."
+      );
+    }
+    var missing = [];
+    for (var k in PROMPT_FILES) { if (!prompts[k]) missing.push(PROMPT_FILES[k]); }
+    if (missing.length > 0) {
+      appendDevBanner(
+        "⚠️ <strong>Faltan archivos de contexto:</strong> <code>" +
+        missing.join("</code>, <code>") + "</code>.<br>" +
+        "Asegúrate de que están en la misma carpeta que <code>index.html</code>."
+      );
+    }
+    if (!insightsScript) {
+      appendDevBanner(
+        "⚠️ <strong>No se cargó <code>insights_script.py</code>.</strong> " +
+        "El botón \"Generar conclusiones\" no estará disponible."
       );
     }
   } catch (e) {
@@ -447,20 +512,26 @@ async function initChat() {
   }
 }
 
-function readApiKey() {
-  return document.getElementById("api-key-input").value.trim();
-}
-
-async function loadContext() {
-  setStep("step-ctx", "active");
-  try {
-    var r = await fetch("context.txt?v=" + Date.now());
-    if (r.ok) {
-      var txt = await r.text();
-      if (txt.trim()) systemCtx = txt;
+async function loadPrompts() {
+  setStep("step-prompts", "active");
+  var keys = Object.keys(PROMPT_FILES);
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    try {
+      var r = await fetch(PROMPT_FILES[key] + "?v=" + Date.now());
+      if (r.ok) {
+        var txt = await r.text();
+        if (txt && txt.trim()) prompts[key] = txt;
+      } else {
+        console.warn("No se pudo cargar " + PROMPT_FILES[key] + " (HTTP " + r.status + ")");
+      }
+    } catch (e) {
+      console.warn("Error cargando " + PROMPT_FILES[key], e);
     }
-  } catch (e) {}
-  setStep("step-ctx", "done");
+  }
+  var allOk = true;
+  for (var k in PROMPT_FILES) { if (!prompts[k]) { allOk = false; break; } }
+  setStep("step-prompts", allOk ? "done" : "error");
 }
 
 async function initPyodide() {
@@ -473,52 +544,91 @@ async function initPyodide() {
 
 async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
-  await pyodide.loadPackage(["pandas", "numpy", "matplotlib", "scikit-learn"]);
+  // scikit-learn lo necesita insights_script.py (RandomForest + permutation importance)
+  await pyodide.loadPackage(["pandas", "numpy", "scikit-learn"]);
   await pyodide.runPythonAsync(
     "import pandas as pd\n" +
     "import numpy as np\n" +
-    "import matplotlib\n" +
-    "matplotlib.use('AGG')\n" +
-    "import matplotlib.pyplot as plt\n" +
-    "import io, base64, json, traceback\n"
+    "import io, json, traceback\n"
   );
   setStep("step-pkgs", "done");
 }
 
+// Helpers persistentes en el namespace global de Pyodide.
+//   __parse_fechas_es__(df, cols) — parsea fechas en formato "dd de mes de yyyy"
+//   __reset_resultado__()         — limpia la variable de turno anterior
+//   __serialize_resultado__()     — empaqueta `resultado` como JSON
 async function installRuntimeHelpers() {
   var helpers =
+    "import re as _re\n" +
+    "_MES_ES_MAP = {\n" +
+    "    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,\n" +
+    "    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10,\n" +
+    "    'noviembre': 11, 'diciembre': 12,\n" +
+    "}\n" +
+    "_RE_FECHA_ES = _re.compile(r'(\\d{1,2})\\s+de\\s+([a-záéíóúñ]+)\\s+de\\s+(\\d{4})', _re.IGNORECASE)\n" +
+    "\n" +
+    "def __parse_fecha_es__(s):\n" +
+    "    if not isinstance(s, str):\n" +
+    "        return pd.NaT\n" +
+    "    m = _RE_FECHA_ES.search(s.lower())\n" +
+    "    if not m:\n" +
+    "        try:\n" +
+    "            return pd.to_datetime(s, errors='coerce', dayfirst=True)\n" +
+    "        except Exception:\n" +
+    "            return pd.NaT\n" +
+    "    d, mes, y = m.group(1), m.group(2), m.group(3)\n" +
+    "    mes_num = _MES_ES_MAP.get(mes)\n" +
+    "    if not mes_num:\n" +
+    "        return pd.NaT\n" +
+    "    try:\n" +
+    "        return pd.Timestamp(year=int(y), month=mes_num, day=int(d))\n" +
+    "    except Exception:\n" +
+    "        return pd.NaT\n" +
+    "\n" +
+    "def __parse_fechas_es__(df, cols):\n" +
+    "    for c in cols:\n" +
+    "        if c in df.columns:\n" +
+    "            df[c] = df[c].apply(__parse_fecha_es__)\n" +
+    "    return df\n" +
+    "\n" +
     "def __reset_resultado__():\n" +
     "    if 'resultado' in globals():\n" +
     "        del globals()['resultado']\n" +
     "\n" +
-    "def __serialize_resultado__():\n" +
-    "    import json as _j, io as _io, base64 as _b64\n" +
+    "def _default_json(o):\n" +
+    "    import numpy as _np\n" +
     "    import pandas as _pd\n" +
+    "    if isinstance(o, (_np.integer,)): return int(o)\n" +
+    "    if isinstance(o, (_np.floating,)): return float(o)\n" +
+    "    if isinstance(o, _np.ndarray): return o.tolist()\n" +
+    "    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()\n" +
+    "    return str(o)\n" +
+    "\n" +
+    "def __serialize_resultado__():\n" +
+    "    import json as _j\n" +
+    "    import pandas as _pd\n" +
+    "    import numpy as _np\n" +
     "    if 'resultado' not in globals():\n" +
     "        return _j.dumps({'kind':'none','value':None})\n" +
     "    _r = globals()['resultado']\n" +
-    "    try:\n" +
-    "        import matplotlib.figure as _mf\n" +
-    "        _is_fig = isinstance(_r, _mf.Figure)\n" +
-    "    except Exception:\n" +
-    "        _is_fig = False\n" +
-    "    if _is_fig:\n" +
-    "        _buf = _io.BytesIO()\n" +
-    "        _r.savefig(_buf, format='png', dpi=110, bbox_inches='tight')\n" +
-    "        _buf.seek(0)\n" +
-    "        return _j.dumps({'kind':'image','value':_b64.b64encode(_buf.read()).decode('ascii')})\n" +
+    "    # Plotly: dict con clave __plotly__\n" +
+    "    if isinstance(_r, dict) and _r.get('__plotly__') is True:\n" +
+    "        spec = {k: v for k, v in _r.items() if k != '__plotly__'}\n" +
+    "        return _j.dumps({'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)\n" +
     "    if isinstance(_r, _pd.DataFrame):\n" +
     "        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)\n" +
     "    if isinstance(_r, _pd.Series):\n" +
     "        _df = _r.reset_index()\n" +
     "        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)\n" +
     "    if isinstance(_r, dict):\n" +
-    "        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=str, ensure_ascii=False)}, ensure_ascii=False)\n" +
+    "        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)\n" +
     "    if isinstance(_r, bool):\n" +
     "        return _j.dumps({'kind':'text','value':str(_r)})\n" +
-    "    if isinstance(_r, (int, float)):\n" +
-    "        v = float(_r) if isinstance(_r, float) else int(_r)\n" +
-    "        return _j.dumps({'kind':'number','value':v})\n" +
+    "    if isinstance(_r, (int, _np.integer)):\n" +
+    "        return _j.dumps({'kind':'number','value':int(_r)})\n" +
+    "    if isinstance(_r, (float, _np.floating)):\n" +
+    "        return _j.dumps({'kind':'number','value':float(_r)})\n" +
     "    if isinstance(_r, str):\n" +
     "        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)\n" +
     "    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)\n";
@@ -562,120 +672,93 @@ function setStep(id, state) {
 }
 
 
+// ============================================================================
+//  Carga de CSV
+// ============================================================================
+
 async function loadCsv(varName) {
-  if (loadedCsvs.has(varName)) {
-    console.log("[loadCsv] ya cargado:", varName);
-    return true;
-  }
+  if (loadedCsvs.has(varName)) return true;
   var file = CSV_TABLES[varName];
   if (!file) {
-    showDevAlert("loadCsv: &laquo;" + varName + "&raquo; no existe en CSV_TABLES. Comprueba el nombre de la variable.");
+    showDevAlert("loadCsv: «" + varName + "» no existe en CSV_TABLES.");
     return false;
   }
-  console.log("[loadCsv] fetch de", file, "para variable", varName);
   try {
     var r = await fetch(file + "?v=" + Date.now());
     if (!r.ok) {
       showDevAlert(
         "<strong>No se pudo cargar " + esc(file) + "</strong><br>" +
         "HTTP " + r.status + " " + esc(r.statusText) + "<br><br>" +
-        "<strong>Causas habituales:</strong><br>" +
-        "&bull; Est&aacute;s abriendo el HTML con <code>file://</code> &mdash; usa un servidor local " +
-        "(<code>python -m http.server</code> en la carpeta del proyecto).<br>" +
-        "&bull; El CSV no est&aacute; en la misma carpeta que <code>index.html</code>.<br>" +
-        "&bull; El nombre del fichero no coincide exactamente (mayusculas/minusculas)."
+        "Comprueba que el fichero está en la carpeta del proyecto y que estás " +
+        "abriendo el HTML con un servidor HTTP local."
       );
       return false;
     }
     var text = await r.text();
-    if (!text || text.trim().length === 0) {
-      showDevAlert("<strong>El fichero " + esc(file) + " se descargó vacío (0 bytes).</strong><br>Comprueba que el archivo no está corrupto.");
+    if (!text || !text.trim()) {
+      showDevAlert("<strong>El fichero " + esc(file) + " está vacío.</strong>");
       return false;
     }
-    console.log("[loadCsv] fetch OK", text.length, "bytes primeras líneas:", text.split("\n").slice(0, 2).join(" | "));
     pyodide.globals.set("__csv_buffer__", text);
-    var parseDates = (varName === PRIMARY_CSV)
-      ? "parse_dates=" + JSON.stringify(PRIMARY_DATE_COLUMNS)
-      : "";
+    var isPrimary = (varName === PRIMARY_CSV);
     var pyCode =
       "from io import StringIO as _SIO\n" +
       "import traceback as _tb\n" +
       "try:\n" +
-      "    " + varName + " = pd.read_csv(_SIO(__csv_buffer__), sep=';'" +
-          (parseDates ? ", " + parseDates : "") + ")\n" +
+      "    " + varName + " = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)\n" +
+      (isPrimary
+        ? "    " + varName + " = __parse_fechas_es__(" + varName + ", " + JSON.stringify(PRIMARY_DATE_COLUMNS) + ")\n"
+        : "") +
       "    __csv_load_ok__ = True\n" +
-      "    __csv_shape__   = list(" + varName + ".shape)\n" +
-      "    __csv_cols__    = list(" + varName + ".columns)\n" +
       "    __csv_error__   = ''\n" +
       "except Exception as _e:\n" +
       "    __csv_load_ok__ = False\n" +
-      "    __csv_shape__   = [0, 0]\n" +
-      "    __csv_cols__    = []\n" +
       "    __csv_error__   = _tb.format_exc()\n" +
       "del __csv_buffer__\n";
     await pyodide.runPythonAsync(pyCode);
-
-    var ok      = pyodide.globals.get("__csv_load_ok__");
-    var errTxt  = pyodide.globals.get("__csv_error__") || "";
-    var shapePx = pyodide.globals.get("__csv_shape__");
-    var colsPx  = pyodide.globals.get("__csv_cols__");
-    var shapeArr = shapePx && shapePx.toJs ? shapePx.toJs() : [0, 0];
-    var colsArr  = colsPx  && colsPx.toJs  ? colsPx.toJs()  : [];
-
+    var ok = pyodide.globals.get("__csv_load_ok__");
+    var errTxt = pyodide.globals.get("__csv_error__") || "";
     if (!ok) {
       showDevAlert(
-        "<strong>pd.read_csv fall&oacute; parseando " + esc(file) + "</strong>" +
+        "<strong>pd.read_csv falló parseando " + esc(file) + "</strong>" +
         "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(String(errTxt)) + "</pre>"
       );
       return false;
     }
-
-    console.log("[loadCsv] DataFrame \"" + varName + "\" cargado:", shapeArr[0], "filas x", shapeArr[1], "cols:", Array.from(colsArr).join(", "));
-
     loadedCsvs.add(varName);
     return true;
   } catch (e) {
     showDevAlert(
       "<strong>Error inesperado cargando " + esc(file) + "</strong>" +
-      "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(e && e.message ? e.message : String(e)) + "</pre>"
+      "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(e.message || String(e)) + "</pre>"
     );
     return false;
   }
 }
 
 async function ensureTablesLoaded(pythonCode) {
-  var needed = [];
   for (var v in CSV_TABLES) {
     var re = new RegExp("\\b" + v + "\\b");
-    if (re.test(pythonCode) && !loadedCsvs.has(v)) needed.push(v);
-  }
-  for (var i = 0; i < needed.length; i++) {
-    setStatus("cargando " + CSV_TABLES[needed[i]] + "...", "busy");
-    var ok = await loadCsv(needed[i]);
-    if (!ok) {
-      console.warn("[ensureTablesLoaded] no se pudo cargar:", needed[i], "(", CSV_TABLES[needed[i]], ")");
+    if (re.test(pythonCode) && !loadedCsvs.has(v)) {
+      setStatus("cargando " + CSV_TABLES[v] + "...", "busy");
+      await loadCsv(v);
     }
   }
 }
 
-function buildCodeSystem() {
-  return systemCtx ||
-    "Eres un generador de código Python/Pandas. Responde solo con un bloque ```python ... ``` que asigne el resultado a una variable `resultado`. Los DataFrames están cargados como variables globales.";
-}
 
-async function callModel(messages, opts) {
+// ============================================================================
+//  API del modelo
+// ============================================================================
+
+async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  var system = opts.systemOverride
-    ? opts.systemOverride
-    : buildCodeSystem() + (opts.extraSystem ? "\n\n" + opts.extraSystem : "");
-
   var body = {
     model: opts.model || MODEL_ID,
     max_tokens: opts.maxTokens || 1500,
-    system: system,
+    system: systemPrompt,
     messages: messages
   };
-
   var r = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -686,7 +769,6 @@ async function callModel(messages, opts) {
     },
     body: JSON.stringify(body)
   });
-
   if (!r.ok) {
     var errData = await r.json().catch(function () { return {}; });
     throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
@@ -696,126 +778,16 @@ async function callModel(messages, opts) {
 }
 
 
-function extractJSON(reply) {
-  if (!reply) return null;
-  var m = reply.match(/```(?:json)?\s*\n?([\s\S]*?)```/i);
-  var candidate = m ? m[1].trim() : reply.trim();
-  var startObj = candidate.indexOf("{");
-  var startArr = candidate.indexOf("[");
-  var start;
-  if (startObj >= 0 && startArr >= 0) start = Math.min(startObj, startArr);
-  else start = Math.max(startObj, startArr);
-  if (start < 0) return null;
-  var endObj = candidate.lastIndexOf("}");
-  var endArr = candidate.lastIndexOf("]");
-  var end = Math.max(endObj, endArr);
-  if (end < start) return null;
-  var sliced = candidate.substring(start, end + 1)
-    .replace(/[\u201c\u201d]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/,\s*([\]}])/g, "$1");
-  try { return JSON.parse(sliced); } catch (e) { return null; }
-}
-
-function extractReply(reply) {
-  if (!reply || typeof reply !== "string") {
-    return { mode: "text", payload: reply || "" };
-  }
-  var clarifyMatch = reply.match(/```clarify[^\n]*\n([\s\S]*?)```/i);
-  if (clarifyMatch) {
-    var json = extractJSON(clarifyMatch[1]);
-    if (json && json.pregunta && Array.isArray(json.opciones) && json.opciones.length > 0) {
-      return { mode: "clarify", payload: json };
-    }
-  }
-  var codeMatch = reply.match(/```(?:python|py)?[^\n]*\n([\s\S]*?)```/i);
-  if (codeMatch) {
-    return { mode: "code", payload: normalizeCode(codeMatch[1]) };
-  }
-  var t = reply.trim();
-  if (/(?:^|\n)\s*resultado\s*=/.test(t) ||
-      /^(?:import\s+\w|from\s+\w+\s+import|def\s+\w+\s*\()/.test(t)) {
-    return { mode: "code", payload: normalizeCode(t) };
-  }
-  return { mode: "text", payload: reply };
-}
-
-function normalizeCode(code) {
-  code = code.replace(/^\uFEFF/, "")
-             .replace(/\r\n/g, "\n")
-             .replace(/\r/g, "\n");
-  code = stripCommonLeadingWhitespace(code);
-  return code.trim();
-}
-
-function stripCommonLeadingWhitespace(code) {
-  var lines = code.split("\n");
-  var minLead = Infinity;
-  for (var i = 0; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    var lead = lines[i].match(/^[ \t]*/)[0].length;
-    if (lead < minLead) minLead = lead;
-    if (minLead === 0) break;
-  }
-  if (minLead === Infinity || minLead === 0) return code;
-  for (var j = 0; j < lines.length; j++) {
-    if (lines[j].length >= minLead) lines[j] = lines[j].substring(minLead);
-  }
-  return lines.join("\n");
-}
-
-
-async function runPython(code) {
-  if (!code) return { kind: "error", value: "Código vacío" };
-  var normalized = normalizeCode(code);
-
-  try {
-    await pyodide.runPythonAsync("__reset_resultado__()");
-  } catch (e) {}
-
-  try {
-    await pyodide.runPythonAsync(normalized);
-  } catch (e) {
-    var msg = e && e.message ? e.message : String(e);
-    return {
-      kind: "error",
-      value: extractPyErrorMessage(msg),
-      trace: msg
-    };
-  }
-
-  try {
-    var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    var serMsg = e && e.message ? e.message : String(e);
-    var diagnostic = serMsg;
-    try {
-      var diag = await pyodide.runPythonAsync(
-        "(type(resultado).__name__ + ' => ' + repr(resultado)[:400]) if 'resultado' in globals() else 'resultado no asignado'"
-      );
-      diagnostic = "Tipo de resultado: " + String(diag) + "\n\n" + serMsg;
-    } catch (e2) {}
-    return {
-      kind: "error",
-      value: "No se pudo serializar el resultado — comprueba el tipo de la variable",
-      trace: diagnostic
-    };
-  }
-}
-
-function extractPyErrorMessage(traceback) {
-  if (!traceback) return "Error desconocido";
-  var lines = traceback.split("\n").filter(function (l) { return l.trim(); });
-  for (var i = lines.length - 1; i >= 0; i--) {
-    var line = lines[i];
-    if (/^[A-Z]\w*Error:/.test(line) || /^[A-Z]\w*Warning:/.test(line)) {
-      return line;
-    }
-  }
-  return lines[lines.length - 1] || "Error en la ejecución";
-}
-
+// ============================================================================
+//  Pipeline principal SECUENCIAL
+//
+//   router  →  saludo  ──────────────────────────────────────────────────►
+//          \─►  modelo  → respuesta texto ────────────────────────────────►
+//          \─►  datos   → clarify  → (slots?) → ejecutar python  →  result
+//
+//  Cada paso usa SU PROPIO system prompt (context_*.txt) para minimizar
+//  tokens en cada llamada a la API.
+// ============================================================================
 
 async function sendMessage(text) {
   if (busy) return;
@@ -826,21 +798,27 @@ async function sendMessage(text) {
   resetInput(input);
   hideWelcomeAndQuicks();
   appendMsg("user", userText);
-  pendingPipeline = null;
+  pendingClarify = null;
   setBusy(true);
 
   try {
-    var clase = await classifyMessage(userText);
-    if (clase.tipo === "saludo_meta") {
-      var reply = await answerSmallTalk(userText);
-      appendAssistantText(reply);
+    // ----- Paso 1: enrutado -----
+    var decision = await routeMessage(userText);
+
+    if (decision.tipo === "saludo") {
+      appendAssistantText(decision.respuesta || fallbackGreeting(), "saludo");
       setStatus("listo", "ok");
       return;
     }
+    if (decision.tipo === "modelo") {
+      await answerModelQuery(userText);
+      return;
+    }
 
+    // ----- Paso 2: clarify (solo para tipo "datos") -----
     var plan = await planSlots(userText);
     if (plan && plan.slots && plan.slots.length > 0) {
-      pendingPipeline = {
+      pendingClarify = {
         userQuery: userText,
         missing: plan.slots.slice(),
         answered: [],
@@ -848,17 +826,18 @@ async function sendMessage(text) {
       };
       lastUserQuery = userText;
       askNextSlot();
-      return;
+      return;   // setBusy(false) lo hará finalizeClarify cuando termine
     }
 
+    // ----- Paso 3: ir directo a generación si no hay slots -----
     lastUserQuery = userText;
-    await runFullQuery(userText, []);
+    await answerDataQuery(userText, []);
   } catch (e) {
     clearStaleTypings();
-    appendError("Error en la consulta: " + e.message);
+    appendError("Error en la consulta: " + (e.message || String(e)));
     setStatus("error", "error");
   } finally {
-    if (!pendingPipeline) setBusy(false);
+    if (!pendingClarify) setBusy(false);
   }
 }
 
@@ -881,108 +860,77 @@ function setBusy(b) {
   else updateInsightButton();
 }
 
-async function classifyMessage(text) {
+function fallbackGreeting() {
+  return "Hola. Soy un asistente analítico. Puedo responder dudas sobre el modelo de datos o ejecutar consultas. ¿En qué te ayudo?";
+}
+
+
+// ----- Paso 1: enrutado (usa context_router.txt) -----
+
+async function routeMessage(userText) {
+  if (!prompts.router) {
+    return { tipo: "datos", respuesta: "" };
+  }
   var tid = appendTyping("interpretando consulta...");
   setStatus("clasificando consulta...", "busy");
-  var promptSys =
-    "Eres un clasificador binario. Tu salida es SOLO un JSON con esta forma:\n" +
-    '{"tipo": "<saludo_meta|pregunta_negocio>"}\n\n' +
-    "Reglas:\n" +
-    "- saludo_meta: hola, gracias, qué puedes hacer, quién eres, ayuda, " +
-    "preguntas sobre el propio asistente o uso de la herramienta, mensajes " +
-    "sin contenido analítico real.\n" +
-    "- pregunta_negocio: cualquier consulta sobre datos, KPIs, leads, " +
-    "contactos, conversión, ciudades, residencias, cursos, comparaciones, " +
-    "rankings, gráficos, evolución, estructura del modelo de datos.\n\n" +
-    "Devuelve EXCLUSIVAMENTE el JSON, sin explicaciones.";
   try {
     var reply = await callModel(
-      [{ role: "user", content: text }],
-      { systemOverride: promptSys, maxTokens: 50 }
+      [{ role: "user", content: userText }],
+      prompts.router,
+      { maxTokens: 300 }
     );
     removeTyping(tid);
     var j = extractJSON(reply);
-    if (j && j.tipo === "saludo_meta") return { tipo: "saludo_meta" };
-    return { tipo: "pregunta_negocio" };
+    if (!j || !j.tipo) {
+      console.warn("[router] respuesta no parseable:", reply);
+      return { tipo: "datos", respuesta: "" };
+    }
+    var tipo = String(j.tipo).toLowerCase();
+    if (tipo !== "saludo" && tipo !== "modelo" && tipo !== "datos") {
+      return { tipo: "datos", respuesta: "" };
+    }
+    return { tipo: tipo, respuesta: j.respuesta || "" };
   } catch (e) {
     removeTyping(tid);
-    return { tipo: "pregunta_negocio" };
+    console.warn("[router] error:", e);
+    return { tipo: "datos", respuesta: "" };
   }
 }
 
-async function answerSmallTalk(text) {
-  var promptSys =
-    "Eres el asistente analítico de Resa (CRM de residencias de estudiantes). " +
-    "El usuario te ha enviado un saludo o una pregunta sobre cómo te usa. " +
-    "Responde en español, en 2-4 frases breves, amable y directo. Si procede, " +
-    "sugiere ejemplos de lo que puedes hacer:\n" +
-    "  - contar leads y contactos por curso, ciudad, residencia, canal...\n" +
-    "  - calcular tasa de conversión y comparar entre periodos\n" +
-    "  - rankings (top ciudades, residencias) y gráficos\n" +
-    "  - analizar variaciones entre dos cohortes (botón \"Generar conclusiones\")\n\n" +
-    "NO generes código. NO uses markdown elaborado. NO inventes datos.";
-  var tid = appendTyping("preparando respuesta...");
+
+// ----- Paso 2a: consulta sobre el modelo (usa context_modelo_datos.txt) -----
+
+async function answerModelQuery(userText) {
+  var tid = appendTyping("consultando el modelo de datos...");
+  setStatus("respondiendo sobre el modelo...", "busy");
   try {
     var reply = await callModel(
-      [{ role: "user", content: text }],
-      { systemOverride: promptSys, maxTokens: 250 }
+      [{ role: "user", content: userText }],
+      prompts.modelo_datos,
+      { maxTokens: 1200 }
     );
     removeTyping(tid);
-    return reply.trim() || fallbackSmallTalk();
+    appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
+    setStatus("listo", "ok");
   } catch (e) {
     removeTyping(tid);
-    return fallbackSmallTalk();
+    appendError("Error al consultar el modelo: " + e.message);
+    setStatus("error", "error");
   }
 }
 
-function fallbackSmallTalk() {
-  return "¡Hola! Soy el asistente analítico. Puedo contar leads y contactos, calcular conversión, comparar periodos, hacer rankings y gráficos. ¿Qué quieres saber?";
-}
+
+// ----- Paso 2b: planificación de clarify (usa context_clarify.txt) -----
 
 async function planSlots(text) {
+  if (!prompts.clarify) return { slots: [] };
   var tid = appendTyping("comprobando si necesito aclaraciones...");
   setStatus("planificando...", "busy");
-  var promptSys =
-    "Eres un analista de requisitos. Recibes una consulta de un usuario de un " +
-    "CRM de residencias de estudiantes y tienes que detectar si le faltan " +
-    "piezas para responderla con datos. Las dimensiones del modelo son:\n" +
-    "  - Curso (2024/2025, 2025/2026, 2026/2027, histórico de todos los cursos)\n" +
-    "  - Tipo de registro (Leads, Contacts, ambos)\n" +
-    "  - Métrica (volumen de leads, volumen de contactos, tasa de conversión)\n" +
-    "  - Dimensión geográfica/comercial (ciudad de interés, ciudad de procedencia, residencia de interés, residencia escogida, canal/origen, fuente)\n\n" +
-    "Tu salida debe ser SOLO un JSON con esta forma:\n" +
-    '{ "slots": [\n' +
-    '   { "slot": "<id>", "pregunta": "<frase>", "opciones": ["..","..",".."], ' +
-    '"razon": "<por qué>", "permitirOtro": true|false } \n' +
-    "] }\n\n" +
-    "Reglas para detectar slots:\n" +
-    "1. Periodo/curso. Si pide KPIs concretos (leads, contactos, conversión, " +
-    "ranking, comparación) y NO especifica curso, añade slot 'curso' con opciones " +
-    "['2024/2025', '2025/2026', '2026/2027', 'Histórico (todos los cursos)']. " +
-    "Excepción: si la pregunta es estructural ('qué tablas hay'), no preguntes.\n" +
-    "2. Métrica. Si la consulta es genérica ('¿cómo va Madrid?', 'compara X vs Y' " +
-    "sin métrica clara), añade slot 'metrica' con opciones ['Volumen de leads', " +
-    "'Volumen de contactos', 'Tasa de conversión', 'Las tres'].\n" +
-    "3. Tipo de registro. Si dice 'usuarios', 'gente', 'registros' de forma " +
-    "genérica, añade slot 'tipo_registro' con opciones ['Solo leads', " +
-    "'Solo contactos', 'Leads y contactos por separado'].\n" +
-    "4. Dimensión ambigua. Si dice 'por residencia' (¿interés/actual/escogida?) o " +
-    "'por ciudad' (¿interés/procedencia?), añade slot 'dimension' con las opciones.\n\n" +
-    "Reglas para NO crear slots:\n" +
-    "- Si la consulta es estructural ('qué tablas hay', 'qué columnas tiene X').\n" +
-    "- Si el usuario YA ha sido explícito (ej. 'leads del 2025/2026 por ciudad de interés' → no preguntes nada, devuelve {\"slots\": []}).\n" +
-    "- Si la pregunta es simple y solo admite una interpretación (ej. '¿cuántos leads hay?' → todos, sin slots).\n\n" +
-    "Reglas de formato:\n" +
-    "- Cada opción debe ser CONCRETA y mutuamente excluyente. Máximo 4 opciones.\n" +
-    "- Pon 'permitirOtro': true si tiene sentido que el usuario escriba un valor libre (ciudades raras, residencias específicas, otros canales). Pon false para slots cerrados (curso, métrica, tipo de registro).\n" +
-    "- Slots máximo 4 por consulta. Empieza por los más imprescindibles.\n" +
-    "- Devuelve {\"slots\": []} si la consulta no necesita aclaración.\n\n" +
-    "Devuelve EXCLUSIVAMENTE el JSON, sin texto antes ni después.";
-
   try {
     var reply = await callModel(
       [{ role: "user", content: text }],
-      { systemOverride: promptSys, maxTokens: 800 }
+      prompts.clarify,
+      { maxTokens: 600 }
     );
     removeTyping(tid);
     var j = extractJSON(reply);
@@ -1015,32 +963,32 @@ function sanitizeSlots(raw) {
 }
 
 function askNextSlot() {
-  if (!pendingPipeline || pendingPipeline.missing.length === 0) {
-    finalizePipeline();
+  if (!pendingClarify || pendingClarify.missing.length === 0) {
+    finalizeClarify();
     return;
   }
-  var slot = pendingPipeline.missing[0];
-  var idx = pendingPipeline.answered.length + 1;
-  var total = pendingPipeline.total;
+  var slot = pendingClarify.missing[0];
+  var idx = pendingClarify.answered.length + 1;
+  var total = pendingClarify.total;
   appendClarify(slot, idx, total);
   setStatus("esperando aclaración (" + idx + "/" + total + ")...", "busy");
 }
 
 async function answerClarify(answerText) {
-  if (!pendingPipeline) return;
-  var slot = pendingPipeline.missing.shift();
+  if (!pendingClarify) return;
+  var slot = pendingClarify.missing.shift();
   if (!slot) return;
   markClarifyAnswered(answerText);
-  pendingPipeline.answered.push({
+  pendingClarify.answered.push({
     slot: slot.slot,
     pregunta: slot.pregunta,
     answer: answerText
   });
-  if (pendingPipeline.missing.length > 0) {
+  if (pendingClarify.missing.length > 0) {
     askNextSlot();
     return;
   }
-  await finalizePipeline();
+  await finalizeClarify();
 }
 
 function markClarifyAnswered(answerText) {
@@ -1058,13 +1006,13 @@ function markClarifyAnswered(answerText) {
   if (ob) ob.disabled = true;
 }
 
-async function finalizePipeline() {
-  if (!pendingPipeline) return;
-  var pipe = pendingPipeline;
-  pendingPipeline = null;
+async function finalizeClarify() {
+  if (!pendingClarify) return;
+  var pipe = pendingClarify;
+  pendingClarify = null;
   setBusy(true);
   try {
-    await runFullQuery(pipe.userQuery, pipe.answered);
+    await answerDataQuery(pipe.userQuery, pipe.answered);
   } catch (e) {
     appendError("Error en la consulta: " + e.message);
     setStatus("error", "error");
@@ -1073,7 +1021,10 @@ async function finalizePipeline() {
   }
 }
 
-async function runFullQuery(userText, answeredSlots) {
+
+// ----- Paso 3: generación de código y ejecución (usa context_general.txt) -----
+
+async function answerDataQuery(userText, answeredSlots) {
   var enriched = buildEnrichedQuery(userText, answeredSlots);
   trimHistory();
   chatHistory.push({ role: "user", content: enriched });
@@ -1082,7 +1033,7 @@ async function runFullQuery(userText, answeredSlots) {
   setStatus("llamando a la API...", "busy");
   var reply;
   try {
-    reply = await callModel(chatHistory, null);
+    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800 });
   } catch (e) {
     removeTyping(tid);
     appendError("Error de API: " + e.message);
@@ -1092,29 +1043,24 @@ async function runFullQuery(userText, answeredSlots) {
   chatHistory.push({ role: "assistant", content: reply });
   removeTyping(tid);
 
-  var parsed = extractReply(reply);
-  if (parsed.mode === "clarify") {
+  var code = extractPythonCode(reply);
+  if (!code) {
     appendAssistantText(
-      "(El modelo ha intentado preguntar de nuevo. Reformula tu consulta con más detalle.)"
-      + (parsed.payload.pregunta ? "\n\n" + parsed.payload.pregunta : "")
+      "El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n" + reply,
+      "datos"
     );
-    setStatus("aclaración no resuelta", "error");
-    return;
-  }
-  if (parsed.mode === "text") {
-    appendAssistantText(parsed.payload || "Sin respuesta.");
-    setStatus("respuesta sin código · revisa el prompt", "error");
+    setStatus("respuesta sin código", "error");
     return;
   }
 
   setStatus("ejecutando código...", "busy");
-  await ensureTablesLoaded(parsed.payload);
-  var execResult = await runPython(parsed.payload);
+  await ensureTablesLoaded(code);
+  var execResult = await runPython(code);
   if (execResult.kind === "error") {
-    execResult = await retryWithModelFix(parsed.payload, execResult);
+    execResult = await retryWithModelFix(code, execResult);
   }
 
-  appendResult(execResult, execResult.__codeUsed || parsed.payload, false);
+  appendResult(execResult, execResult.__codeUsed || code, "datos");
   setExecutionStatus(execResult);
 
   lastTurn = {
@@ -1144,6 +1090,11 @@ function setExecutionStatus(execResult) {
   setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
 }
 
+
+// ============================================================================
+//  Reintento ante fallo de ejecución
+// ============================================================================
+
 async function retryWithModelFix(originalCode, firstError) {
   appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
   var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
@@ -1159,14 +1110,14 @@ async function retryWithModelFix(originalCode, firstError) {
       "final. NO escribas explicaciones."
   });
   try {
-    var reply = await callModel(fixMessages, null);
-    var parsed = extractReply(reply);
-    if (parsed.mode !== "code") return friendlyError(firstError, originalCode, firstErrorPack);
-    if (parsed.payload.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
-    await ensureTablesLoaded(parsed.payload);
-    var second = await runPython(parsed.payload);
-    if (second.kind === "error") return friendlyError(second, parsed.payload, firstErrorPack);
-    second.__codeUsed = parsed.payload;
+    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800 });
+    var code = extractPythonCode(reply);
+    if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
+    if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
+    await ensureTablesLoaded(code);
+    var second = await runPython(code);
+    if (second.kind === "error") return friendlyError(second, code, firstErrorPack);
+    second.__codeUsed = code;
     chatHistory.push({ role: "assistant", content: reply });
     return second;
   } catch (e) {
@@ -1188,6 +1139,11 @@ function friendlyError(execError, code, firstError) {
   };
 }
 
+
+// ============================================================================
+//  Generar conclusiones (insights_script.py + parser LLM fallback)
+// ============================================================================
+
 async function generateInsights() {
   if ((!lastUserQuery && !lastTurn) || busy) return;
   if (!insightsScript) {
@@ -1195,10 +1151,15 @@ async function generateInsights() {
     return;
   }
 
+  setBusy(true);
+  // El script de insights solo necesita `leads_contacts` (la tabla de hechos),
+  // que ya se carga en el arranque. Las antiguas tablas de dimensiones se
+  // eliminaron de `CSV_TABLES`: intentar cargarlas aquí fallaba con 404 porque
+  // los ficheros no están en el despliegue.
+
   var queryForInsights = (lastTurn && lastTurn.enrichedQuery) || lastUserQuery;
   appendMsg("user", "Generar conclusiones sobre: \"" + (lastUserQuery || queryForInsights) + "\"");
 
-  setBusy(true);
   var tid = appendTyping("analizando variaciones...");
   setStatus("calculando drivers...", "busy");
 
@@ -1208,31 +1169,7 @@ async function generateInsights() {
     var execResult = await runPython(insightsScript);
     execResult = await maybeReparseAndRerun(execResult, queryForInsights, prelimFilters, tid);
     removeTyping(tid);
-
-    var pkg = extractInsightsPayload(execResult);
-    if (!pkg) {
-      appendResult(execResult, insightsScript, true);
-      setStatus("análisis completado", "ok");
-      return;
-    }
-    appendResult(
-      { kind: "text", value: pkg.markdown_real || "*(sin tablas)*" },
-      insightsScript,
-      true
-    );
-    var tid2 = appendTyping("redactando conclusiones...");
-    setStatus("redactando conclusiones...", "busy");
-    var anonParagraph;
-    try {
-      anonParagraph = await writeInsightsParagraph(pkg.payload, lastUserQuery);
-    } catch (e) {
-      anonParagraph = fallbackParagraph(pkg.payload);
-    }
-    removeTyping(tid2);
-    var finalParagraph = deanonymizeText(anonParagraph, pkg.alias_to_real || {});
-
-    appendInsightConclusion(finalParagraph);
-
+    appendResult(execResult, insightsScript, "insight");
     setStatus("análisis completado", "ok");
   } catch (e) {
     removeTyping(tid);
@@ -1243,135 +1180,15 @@ async function generateInsights() {
   }
 }
 
-function extractInsightsPayload(execResult) {
-  if (!execResult || execResult.kind !== "text") return null;
-  if (typeof execResult.value !== "string") return null;
-  var PREFIX = "__INSIGHTS_PAYLOAD__";
-  if (!execResult.value.startsWith(PREFIX)) return null;
-  var jsonStr = execResult.value.substring(PREFIX.length);
-  try {
-    var parsed = JSON.parse(jsonStr);
-    if (parsed && parsed.kind === "insights_v2" && parsed.payload) return parsed;
-    if (parsed && parsed.comparacion && parsed.kpis) {
-      return { kind: "insights_v2", payload: parsed, alias_to_real: {}, markdown_real: "" };
-    }
-    return null;
-  } catch (e) {
-    console.error("[insights] No se pudo parsear el payload anonimizado:", e);
-    return null;
-  }
-}
-
-function deanonymizeText(text, aliasToReal) {
-  if (!text || !aliasToReal) return text || "";
-  var aliases = Object.keys(aliasToReal);
-  if (aliases.length === 0) return text;
-  aliases.sort(function (a, b) { return b.length - a.length; });
-  var out = text;
-  for (var i = 0; i < aliases.length; i++) {
-    var alias = aliases[i];
-    var real = aliasToReal[alias];
-    if (!alias || real == null) continue;
-    var escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    var re = new RegExp("(^|[^\\w])" + escaped + "(?![\\w])", "g");
-    out = out.replace(re, "$1" + real);
-  }
-  return out;
-}
-
-function appendInsightConclusion(text) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  var html = '<div class="result-box insight">'
-    + '<div class="text-result">' + marked.parse(text || "") + '</div>'
-    + '</div>';
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente · conclusión</div>'
-    + '<div class="msg-text">' + html + '</div>'
-    + '</div>';
-  box.appendChild(d);
-  scrollToBottom();
-}
-
-async function writeInsightsParagraph(payload, originalQuery) {
-  var promptSys =
-    "Eres un analista de negocio del CRM de Resa (residencias de estudiantes). " +
-    "Recibes un resumen estadístico estructurado en JSON con la comparación " +
-    "entre dos cohortes y los drivers que más explican la variación. " +
-    "Las entidades sensibles (residencias, ciudades, canales y fuentes) " +
-    "están anonimizadas con identificadores genéricos (\"Residencia A\", " +
-    "\"Ciudad 1\", \"Canal B\"...). Cursos académicos como \"2024/2025\" son " +
-    "etiquetas válidas y no están anonimizadas.\n\n" +
-    "IMPORTANTE sobre los identificadores: úsalos EXACTAMENTE como aparecen " +
-    "en el JSON (mismas mayúsculas, mismos espacios). No los reformatees " +
-    "(\"ciudad 1\" o \"Ciudad-1\" son incorrectos; lo correcto es \"Ciudad 1\"). " +
-    "El frontend reemplazará cada alias por su nombre real al pintar la " +
-    "respuesta, por lo que cualquier desviación rompe la sustitución.\n\n" +
-    "Tu tarea: redactar UN ÚNICO PÁRRAFO de conclusión de negocio, " +
-    "natural y coherente, de 4 a 7 frases, en español. El párrafo debe:\n" +
-    "  1. Empezar señalando el cambio principal en la métrica protagonista " +
-    "(direccion_cambio y kpis), con cifras concretas y el signo.\n" +
-    "  2. Mencionar las 1-2 variables que más explican ese cambio " +
-    "(variables_explicativas), nombrándolas por su dimensión legible.\n" +
-    "  3. Apoyarse en el desglose (desglose_drivers) para citar como mucho " +
-    "2-3 valores concretos, usando los identificadores genéricos tal cual " +
-    "vengan en el JSON (no inventes nombres reales).\n" +
-    "  4. Terminar con una recomendación accionable y breve.\n\n" +
-    "Restricciones de estilo:\n" +
-    "- NO uses markdown elaborado: nada de cabeceras (#, ##), tablas ni listas. " +
-    "Solo prosa fluida; puedes usar **negrita** muy puntualmente para enfatizar.\n" +
-    "- NO inventes datos que no estén en el JSON.\n" +
-    "- NO escribas saludos, presentaciones ni meta-comentarios " +
-    "(\"basándome en el JSON...\"). Empieza directamente con el análisis.\n" +
-    "- Formatea porcentajes con 1-2 decimales y números enteros con separador " +
-    "de miles cuando proceda. La conversión exprésala como porcentaje (cr × 100).\n" +
-    "- Si direccion_cambio = 'estable', señálalo y matiza si hay movimientos internos.";
-
-  var userMsg =
-    "Consulta original del usuario: \"" + (originalQuery || "(no disponible)") + "\"\n\n" +
-    "Resumen estadístico anonimizado:\n```json\n" +
-    JSON.stringify(payload, null, 2) +
-    "\n```\n\n" +
-    "Redacta el párrafo de conclusión siguiendo las reglas.";
-
-  var reply = await callModel(
-    [{ role: "user", content: userMsg }],
-    { systemOverride: promptSys, maxTokens: 600 }
-  );
-  return (reply || "").trim() || fallbackParagraph(payload);
-}
-
-function fallbackParagraph(payload) {
-  var c = payload.comparacion || {};
-  var k = payload.kpis || {};
-  var partes = [];
-  partes.push("Comparando " + (c.cohorte_a || "A") + " frente a " +
-              (c.cohorte_b || "B") + " por " + (c.dimension || "dimensión") + ":");
-  if (k.leads) {
-    partes.push("leads pasan de " + k.leads.valor_a + " a " + k.leads.valor_b +
-                " (Δ " + (k.leads.delta_abs >= 0 ? "+" : "") + k.leads.delta_abs + ")");
-  }
-  if (k.contactos) {
-    partes.push("contactos pasan de " + k.contactos.valor_a + " a " + k.contactos.valor_b +
-                " (Δ " + (k.contactos.delta_abs >= 0 ? "+" : "") + k.contactos.delta_abs + ")");
-  }
-  if (k.conversion) {
-    var crA = (k.conversion.valor_a * 100).toFixed(2);
-    var crB = (k.conversion.valor_b * 100).toFixed(2);
-    var dpp = (k.conversion.delta_pp >= 0 ? "+" : "") + k.conversion.delta_pp.toFixed(2);
-    partes.push("conversión pasa de " + crA + "% a " + crB + "% (" + dpp + " pp)");
-  }
-  return partes.join("; ") + ".";
-}
-
 function setInsightsContext(query, cohorts, filters) {
   pyodide.globals.set("last_user_query", query);
   pyodide.globals.set("llm_parsed_cohorts", cohorts);
   pyodide.globals.set("llm_extra_filters", pyodide.toPy(filters || []));
 }
 
+// Si el script Python pide ayuda al LLM (devuelve "__NEEDS_LLM_PARSING__..."),
+// invocamos context_insights_parser.txt para que el LLM extraiga las cohortes
+// y los filtros, y volvemos a ejecutar el script con esos hints.
 async function maybeReparseAndRerun(execResult, query, prelimFilters, tid) {
   if (execResult.kind !== "text" ||
       typeof execResult.value !== "string" ||
@@ -1421,7 +1238,6 @@ function deriveFilterFromSlot(slotAnswer) {
   var ans = (slotAnswer.answer || "").trim();
   var slot = (slotAnswer.slot || "").toLowerCase();
   var preg = (slotAnswer.pregunta || "").toLowerCase();
-
   if (slot.indexOf("curso") >= 0 || preg.indexOf("curso") >= 0) {
     var m = ans.match(/(20\d{2})\s*\/\s*(20\d{2})/);
     if (m) return { columna: "Curso", valor: m[1] + "/" + m[2] };
@@ -1435,34 +1251,14 @@ function deriveFilterFromSlot(slotAnswer) {
   return null;
 }
 
+// Llamada al LLM con context_insights_parser.txt (system prompt corto, dedicado).
 async function parseQueryForInsights(query) {
-  var dimensiones = [
-    "Tipo de registro", "Particular o Grupo", "Curso", "Curso_corregido",
-    "Origen_Agrupado", "Fuente_Agrupada", "Ciudad_deinteres_corregido",
-    "Ciudad_actual_corregido", "Residencias_interes_corregido",
-    "Residencias_actual_corregido", "Residencia escogida", "Mes creación"
-  ];
-  var promptSys =
-    "Analiza la siguiente consulta de un usuario de un CRM de residencias " +
-    "de estudiantes y devuelve SOLO un JSON con esta estructura:\n" +
-    "{\n" +
-    '  "cohorts": {"dimension": "<col>", "valor_a": "<v>", "valor_b": "<v>", "metrica": "leads|contacts|cr|auto"},\n' +
-    '  "filters": [{"columna": "<col>", "valor": "<v>"}]\n' +
-    "}\n\n" +
-    "Reglas:\n" +
-    "- cohorts: las dos cosas que el usuario quiere comparar. Si no hay dos " +
-    "valores claros, devuelve cohorts: null.\n" +
-    "- filters: restricciones adicionales mencionadas en la consulta " +
-    "(curso fijado, tipo de registro fijado, etc.). NO incluyas en filters " +
-    "la propia dimensión de comparación. Si no hay restricciones extra, " +
-    "devuelve filters: [].\n" +
-    "- Las columnas válidas son: " + dimensiones.join(", ") + ".\n" +
-    "- métrica refleja qué le interesa al usuario: leads, contacts, cr o auto.\n\n" +
-    "Devuelve EXCLUSIVAMENTE el JSON.";
+  if (!prompts.insights_parser) return null;
   try {
     var reply = await callModel(
       [{ role: "user", content: query }],
-      { systemOverride: promptSys, maxTokens: 400 }
+      prompts.insights_parser,
+      { maxTokens: 400 }
     );
     var j = extractJSON(reply);
     if (!j) return null;
@@ -1496,7 +1292,6 @@ function parseFiltersField(arr) {
   return out;
 }
 
-
 function updateInsightButton() {
   var btn = document.getElementById("insight-btn");
   var hint = document.getElementById("insight-hint");
@@ -1516,8 +1311,110 @@ function updateInsightButton() {
   }
 }
 
-function quickAsk(t) { sendMessage(t); }
 
+// ============================================================================
+//  Ejecución en Pyodide
+// ============================================================================
+
+async function runPython(code) {
+  if (!code) return { kind: "error", value: "Código vacío" };
+  var normalized = normalizeCode(code);
+  try { await pyodide.runPythonAsync("__reset_resultado__()"); } catch (e) {}
+  try {
+    await pyodide.runPythonAsync(normalized);
+  } catch (e) {
+    var msg = e && e.message ? e.message : String(e);
+    return { kind: "error", value: extractPyErrorMessage(msg), trace: msg };
+  }
+  try {
+    var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    var serMsg = e && e.message ? e.message : String(e);
+    var diagnostic = serMsg;
+    try {
+      var diag = await pyodide.runPythonAsync(
+        "(type(resultado).__name__ + ' => ' + repr(resultado)[:400]) if 'resultado' in globals() else 'resultado no asignado'"
+      );
+      diagnostic = "Tipo de resultado: " + String(diag) + "\n\n" + serMsg;
+    } catch (e2) {}
+    return { kind: "error", value: "No se pudo serializar el resultado", trace: diagnostic };
+  }
+}
+
+function extractPyErrorMessage(traceback) {
+  if (!traceback) return "Error desconocido";
+  var lines = traceback.split("\n").filter(function (l) { return l.trim(); });
+  for (var i = lines.length - 1; i >= 0; i--) {
+    var line = lines[i];
+    if (/^[A-Z]\w*Error:/.test(line) || /^[A-Z]\w*Warning:/.test(line)) return line;
+  }
+  return lines[lines.length - 1] || "Error en la ejecución";
+}
+
+
+// ============================================================================
+//  Parseo de respuestas del modelo
+// ============================================================================
+
+function extractJSON(reply) {
+  if (!reply) return null;
+  var m = reply.match(/```(?:json)?\s*\n?([\s\S]*?)```/i);
+  var candidate = m ? m[1].trim() : reply.trim();
+  var startObj = candidate.indexOf("{");
+  var startArr = candidate.indexOf("[");
+  var start;
+  if (startObj >= 0 && startArr >= 0) start = Math.min(startObj, startArr);
+  else start = Math.max(startObj, startArr);
+  if (start < 0) return null;
+  var endObj = candidate.lastIndexOf("}");
+  var endArr = candidate.lastIndexOf("]");
+  var end = Math.max(endObj, endArr);
+  if (end < start) return null;
+  var sliced = candidate.substring(start, end + 1)
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/,\s*([\]}])/g, "$1");
+  try { return JSON.parse(sliced); } catch (e) { return null; }
+}
+
+function extractPythonCode(reply) {
+  if (!reply) return null;
+  var m = reply.match(/```(?:python|py)?\s*\n([\s\S]*?)```/i);
+  if (m) return normalizeCode(m[1]);
+  var t = reply.trim();
+  if (/(?:^|\n)\s*resultado\s*=/.test(t)) return normalizeCode(t);
+  return null;
+}
+
+function normalizeCode(code) {
+  code = code.replace(/^\uFEFF/, "")
+             .replace(/\r\n/g, "\n")
+             .replace(/\r/g, "\n");
+  code = stripCommonLeadingWhitespace(code);
+  return code.trim();
+}
+
+function stripCommonLeadingWhitespace(code) {
+  var lines = code.split("\n");
+  var minLead = Infinity;
+  for (var i = 0; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    var lead = lines[i].match(/^[ \t]*/)[0].length;
+    if (lead < minLead) minLead = lead;
+    if (minLead === 0) break;
+  }
+  if (minLead === Infinity || minLead === 0) return code;
+  for (var j = 0; j < lines.length; j++) {
+    if (lines[j].length >= minLead) lines[j] = lines[j].substring(minLead);
+  }
+  return lines.join("\n");
+}
+
+
+// ============================================================================
+//  Render del chat
+// ============================================================================
 
 function appendMsg(role, text) {
   var box = document.getElementById("messages");
@@ -1535,23 +1432,52 @@ function appendMsg(role, text) {
   scrollToBottom();
 }
 
-function appendAssistantText(text) { appendMsg("assistant", text); }
-
-function appendResult(result, code, isInsight) {
+function appendAssistantText(text, route) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg assistant";
-  var inner = (result.kind === "error" || result.kind === "error_friendly")
-    ? renderError(result)
-    : '<div class="result-box' + (isInsight ? ' insight' : '') + '">' + renderResult(result) + '</div>';
-  inner += renderCodeToggle(code, isInsight);
+  var badge = route
+    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
+    : '';
   d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + (isInsight ? ' · análisis de variaciones' : '') + '</div>'
+    + '<div class="msg-role">Asistente' + badge + '</div>'
+    + '<div class="msg-text">' + marked.parse(text || "") + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+function routeLabel(route) {
+  if (route === "modelo")  return "modelo de datos";
+  if (route === "datos")   return "consulta";
+  if (route === "saludo")  return "saludo";
+  if (route === "insight") return "análisis de variaciones";
+  return route;
+}
+
+function appendResult(result, code, route) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var boxCls = (route === "insight") ? "result-box insight" : "result-box";
+  var inner = (result.kind === "error" || result.kind === "error_friendly")
+    ? renderError(result)
+    : '<div class="' + boxCls + '">' + renderResult(result) + '</div>';
+  inner += renderCodeToggle(code, route === "insight");
+  var badge = route
+    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
+    : '';
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente' + badge + '</div>'
     + '<div class="msg-text">' + inner + '</div>'
     + '</div>';
   box.appendChild(d);
   attachCodeToggle(d);
+  if (result.kind === "plotly" && result.__plotElId) {
+    renderPlotlyInto(result.__plotElId, result.value);
+  }
   scrollToBottom();
 }
 
@@ -1566,24 +1492,29 @@ function attachCodeToggle(container) {
 }
 
 function renderResult(r) {
-  if (r.kind === "number") return renderNumber(r);
-  if (r.kind === "text") return '<div class="text-result">' + marked.parse(r.value) + '</div>';
-  if (r.kind === "dict") return renderDict(r);
-  if (r.kind === "image") return '<img src="data:image/png;base64,' + r.value + '" alt="gráfico">';
+  if (r.kind === "number")    return renderNumber(r);
+  if (r.kind === "text")      return '<div class="text-result">' + marked.parse(r.value) + '</div>';
+  if (r.kind === "dict")      return renderDict(r);
   if (r.kind === "dataframe") return renderDataFrame(JSON.parse(r.value), r.shape);
-  if (r.kind === "none") return '<div class="text-result"><em>El script no asignó nada a la variable <code>resultado</code>.</em></div>';
+  if (r.kind === "plotly") {
+    var id = "plot_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
+    r.__plotElId = id;
+    return '<div class="plot-container" id="' + id + '"></div>';
+  }
+  if (r.kind === "none") return '<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>';
   return '<div class="text-result">' + esc(JSON.stringify(r)) + '</div>';
 }
 
 function renderNumber(r) {
   var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
-    ? r.value.toFixed(2)
+    ? r.value.toFixed(4).replace(/\.?0+$/, "")
     : new Intl.NumberFormat("es-ES").format(r.value);
   return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
 }
 
 function renderDict(r) {
-  var obj = JSON.parse(r.value);
+  var obj;
+  try { obj = JSON.parse(r.value); } catch (e) { return '<div class="text-result">' + esc(r.value) + '</div>'; }
   var rows = '';
   for (var k in obj) {
     var v = obj[k];
@@ -1603,9 +1534,7 @@ function renderDataFrame(df, shape) {
   var maxRows = Math.min(rows.length, 100);
   for (var r = 0; r < maxRows; r++) {
     html += '<tr>';
-    for (var c = 0; c < rows[r].length; c++) {
-      html += renderCell(rows[r][c]);
-    }
+    for (var c = 0; c < rows[r].length; c++) html += renderCell(rows[r][c]);
     html += '</tr>';
   }
   html += '</tbody></table>';
@@ -1619,115 +1548,68 @@ function renderCell(val) {
   var isNum = typeof val === "number";
   var display;
   if (val === null || val === undefined) display = "—";
-  else if (isNum) display = Number.isInteger(val) ? new Intl.NumberFormat("es-ES").format(val) : val.toFixed(4).replace(/\.?0+$/, "");
+  else if (isNum) display = Number.isInteger(val)
+    ? new Intl.NumberFormat("es-ES").format(val)
+    : val.toFixed(4).replace(/\.?0+$/, "");
   else display = String(val);
   return '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+}
+
+function renderPlotlyInto(elId, jsonStr) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  if (typeof Plotly === "undefined") {
+    el.innerHTML = '<div class="error-box">Plotly no está cargado en la página.</div>';
+    return;
+  }
+  try {
+    var spec = JSON.parse(jsonStr);
+    var data    = spec.data    || [];
+    var layout  = spec.layout  || {};
+    var config  = spec.config  || { displaylogo: false, responsive: true };
+    if (!config.responsive) config.responsive = true;
+    Plotly.newPlot(el, data, layout, config);
+  } catch (e) {
+    el.innerHTML = '<div class="error-box">Error renderizando el gráfico: ' + esc(e.message || String(e)) + '</div>';
+  }
 }
 
 function renderError(r) {
   var techParts = [];
   var summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
-  if (summary) techParts.push('<div class="err-summary">' + esc(summary) + '</div>');
+  if (summary) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(summary) + '</div>');
   if (r.trace) techParts.push('<pre>' + esc(r.trace) + '</pre>');
   if (r.firstError) {
-    techParts.push('<div class="err-section-label">Primer intento (falló, se reintentó):</div>');
-    if (r.firstError.value) techParts.push('<div class="err-summary">' + esc(r.firstError.value) + '</div>');
+    techParts.push('<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>');
+    if (r.firstError.value) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(r.firstError.value) + '</div>');
     if (r.firstError.trace) techParts.push('<pre>' + esc(r.firstError.trace) + '</pre>');
-    if (r.firstError.code) {
-      techParts.push('<div class="err-section-label">Código del primer intento:</div>');
-      techParts.push('<pre>' + esc(r.firstError.code) + '</pre>');
-    }
+    if (r.firstError.code)  techParts.push('<pre>' + esc(r.firstError.code) + '</pre>');
   }
   var techHtml = techParts.join("");
   var details = techHtml
     ? '<details class="err-details"><summary>ver detalles técnicos del error</summary>' + techHtml + '</details>'
     : "";
   if (r.kind === "error_friendly") {
-    return '<div class="error-box error-friendly">'
-      + '<strong>No he podido responder.</strong> ' + esc(r.value)
-      + details + '</div>';
+    return '<div class="error-box">' +
+      '<strong>No he podido responder.</strong> ' + esc(r.value) +
+      details + '</div>';
   }
-  return '<div class="error-box">'
-    + '<strong>Error al ejecutar el código:</strong> ' + esc(r.value)
-    + details + '</div>';
+  return '<div class="error-box">' +
+    '<strong>Error al ejecutar el código:</strong> ' + esc(r.value) +
+    details + '</div>';
 }
 
 function renderCodeToggle(code, isInsight) {
   if (!code) return '';
   var label = isInsight ? "ver script de análisis" : "ver código ejecutado";
-  return '<span class="code-toggle"><span class="arrow">▶</span> ' + label + '</span>'
-    + '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
+  return '<span class="code-toggle"><span class="arrow">▶</span> ' + label + '</span>' +
+    '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
 }
 
-function appendTyping(label) {
-  var box = document.getElementById("messages");
-  var id = "t" + Date.now() + "_" + Math.floor(Math.random() * 1000);
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  d.id = id;
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente</div>'
-    + '<div class="typing-dots"><span></span><span></span><span></span>'
-    + (label ? '<span class="typing-label">' + esc(label) + '</span>' : '')
-    + '</div>'
-    + '</div>';
-  box.appendChild(d);
-  scrollToBottom();
-  return id;
-}
 
-function removeTyping(id) {
-  var e = document.getElementById(id);
-  if (e) e.remove();
-}
-
-function clearStaleTypings() {
-  var nodes = document.querySelectorAll(".typing-dots");
-  for (var i = 0; i < nodes.length; i++) {
-    var msg = nodes[i].closest(".msg");
-    if (msg) msg.remove();
-  }
-}
-
-function showDevAlert(htmlMsg) {
-  console.warn("[DEV ALERT]", htmlMsg.replace(/<[^>]+>/g, ""));
-  var box = document.getElementById("messages");
-  if (!box) return;
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  d.innerHTML =
-    '<div class="msg-avatar" style="background:#f5a623;">!</div>' +
-    '<div class="msg-body">' +
-    '<div class="msg-role" style="color:#b05a00;">Error de carga — revisa la consola del navegador (F12)</div>' +
-    '<div class="msg-text"><div class="error-box dev-alert">' + htmlMsg + '</div></div>' +
-    '</div>';
-  box.appendChild(d);
-  scrollToBottom();
-}
-
-function appendDevBanner(htmlMsg) {
-  console.warn("[DEV BANNER]", htmlMsg.replace(/<[^>]+>/g, ""));
-  var box = document.getElementById("messages");
-  if (!box) return;
-  var d = document.createElement("div");
-  d.className = "dev-banner";
-  d.innerHTML = htmlMsg;
-  box.insertBefore(d, box.firstChild);
-}
-
-function appendError(msg) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente</div>'
-    + '<div class="msg-text"><div class="error-box">' + esc(msg) + '</div></div>'
-    + '</div>';
-  box.appendChild(d);
-  scrollToBottom();
-}
+// ============================================================================
+//  Clarify UI
+// ============================================================================
 
 function appendClarify(payload, step, total) {
   var box = document.getElementById("messages");
@@ -1750,9 +1632,16 @@ function buildClarifyBoxHtml(payload, step, total) {
     optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
                 '">' + esc(opciones[i]) + '</button>';
   }
+  // Campo "Ninguna de estas" SIEMPRE presente: cubre los casos en los que
+  // ninguna de las opciones generadas por el LLM le encaja al usuario.
+  // Si el LLM ya marcó `permitirOtro: true`, este input absorbe esa función:
+  // no duplicamos UI con dos cajas de texto distintas.
+  var otherLabel = (payload.permitirOtro !== false)
+      ? "Otro... (escribe tu respuesta)"
+      : "Ninguna de estas: escribe tu respuesta";
   optsHtml +=
     '<div class="clarify-other-wrap">' +
-    '<input type="text" class="clarify-other-input" placeholder="Otro... (escribe tu respuesta)">' +
+    '<input type="text" class="clarify-other-input" placeholder="' + esc(otherLabel) + '">' +
     '<button class="clarify-other-btn">Enviar</button>' +
     '</div>';
   optsHtml += '</div>';
@@ -1789,11 +1678,59 @@ function attachClarifyListeners(container, payload) {
   }
 }
 
+
+// ============================================================================
+//  Typing dots y notificaciones
+// ============================================================================
+
+function appendTyping(label) {
+  var box = document.getElementById("messages");
+  var id = "t" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.id = id;
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="typing-dots"><span></span><span></span><span></span>'
+    + (label ? '<span class="typing-label">' + esc(label) + '</span>' : '')
+    + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+  return id;
+}
+
+function removeTyping(id) {
+  var e = document.getElementById(id);
+  if (e) e.remove();
+}
+
+function clearStaleTypings() {
+  var nodes = document.querySelectorAll(".typing-dots");
+  for (var i = 0; i < nodes.length; i++) {
+    var msg = nodes[i].closest(".msg");
+    if (msg) msg.remove();
+  }
+}
+
+function appendError(msg) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="msg-text"><div class="error-box">' + esc(msg) + '</div></div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
 function appendRetryNotice(text) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
   d.className = "msg assistant";
-  d.id = "retry-notice-" + Date.now();
   d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
     + '<div class="retry-notice">' + esc(text) + '</div>'
@@ -1802,6 +1739,36 @@ function appendRetryNotice(text) {
   scrollToBottom();
 }
 
+function showDevAlert(htmlMsg) {
+  console.warn("[DEV ALERT]", htmlMsg.replace(/<[^>]+>/g, ""));
+  var box = document.getElementById("messages");
+  if (!box) return;
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.innerHTML =
+    '<div class="msg-avatar" style="background:#f5a623;">!</div>' +
+    '<div class="msg-body">' +
+    '<div class="msg-role" style="color:#b05a00;">Error de carga</div>' +
+    '<div class="msg-text"><div class="error-box">' + htmlMsg + '</div></div>' +
+    '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+function appendDevBanner(htmlMsg) {
+  console.warn("[DEV BANNER]", htmlMsg.replace(/<[^>]+>/g, ""));
+  var box = document.getElementById("messages");
+  if (!box) return;
+  var d = document.createElement("div");
+  d.className = "dev-banner";
+  d.innerHTML = htmlMsg;
+  box.insertBefore(d, box.firstChild);
+}
+
+
+// ============================================================================
+//  Utilidades UI
+// ============================================================================
 
 function scrollToBottom() {
   var box = document.getElementById("messages");
@@ -1832,6 +1799,8 @@ function autoResize(el) {
   el.style.height = "auto";
   el.style.height = Math.min(el.scrollHeight, 120) + "px";
 }
+
+function quickAsk(t) { sendMessage(t); }
 
 document.getElementById("api-key-input").addEventListener("keydown", function (e) {
   if (e.key === "Enter") initChat();
