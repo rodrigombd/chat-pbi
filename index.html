@@ -436,18 +436,8 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
   </div>
 
-  <!--
-    [Generar conclusiones desactivado por decisión de producto: vamos a centrarnos
-     primero en pulir el flujo de consultas básicas. El script `insights_script.py`
-     queda mantenido en el repo pero NO se carga ni se ejecuta. Para reactivar:
-     1) Descomenta este bloque <div id="actions-bar"> ... </div>.
-     2) Descomenta la entrada `insights_parser` en PROMPT_FILES.
-     3) Descomenta `await loadInsightsScript();` en initChat().
-     4) Descomenta el step "step-insights" en el panel de progreso.
-     5) Descomenta las funciones generateInsights / setInsightsContext /
-        maybeReparseAndRerun / parseQueryForInsights / updateInsightButton y la
-        llamada a updateInsightButton dentro de setBusy(false).]
 
+  <!--
   <div id="actions-bar">
     <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Explica a qu&eacute; se debe la variaci&oacute;n entre los dos elementos de la consulta">
       &#128202; Generar conclusiones
@@ -728,9 +718,7 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
-// [Generar conclusiones desactivado] Función conservada como comentario para
-// reactivar fácilmente. Para reactivar: descomenta + descomenta también la
-// llamada en initChat() + descomenta `var insightsScript` y `step-insights`.
+// [Generar conclusiones desactivado]
 /*
 async function loadInsightsScript() {
   setStep("step-insights", "active");
@@ -1307,8 +1295,6 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
 
   setStatus("generando conclusión...", "busy");
   try {
-    // buildConclusionPayload devuelve el texto YA pseudonimizado y, junto a él,
-    // el mapa alias→valor real para poder revertir la respuesta del LLM.
     var built = buildConclusionPayload(userQuery, execResult);
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
@@ -1319,8 +1305,6 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     if (!text) {
       replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
     } else {
-      // Revertimos los alias (Ciudad A → Madrid) para que el usuario vea la
-      // conclusión con los nombres reales. El LLM solo trabajó con alias.
       var deAnon = deanonymizeText(text, built.aliasMap);
       replaceConclusionPlaceholder(loadingEl, deAnon, null);
     }
@@ -1358,14 +1342,6 @@ function appendConclusionError(resultEl, msg) {
   else textBody.appendChild(el);
 }
 
-// Construye el mensaje para el LLM de conclusiones. Devuelve un objeto con:
-//   - payload:  el texto a enviar (datos YA pseudonimizados),
-//   - aliasMap: { "Ciudad A": "Madrid", ... } para revertir la respuesta.
-// Todo resultado se reduce primero a una "tabla lógica" (columnas + filas):
-//   - dataframe → tal cual,
-//   - plotly    → se extrae de las traces,
-//   - dict      → se trata como tabla de 2 columnas (clave, valor),
-//   - escalar/texto → no hay categorías que pseudonimizar.
 function buildConclusionPayload(userQuery, r) {
   var aliasMap = {};
   var serialized = serializeResultForLLM(r, aliasMap);
@@ -1381,17 +1357,13 @@ function buildConclusionPayload(userQuery, r) {
   return { payload: payload, aliasMap: aliasMap };
 }
 
-// Punto de entrada de serialización. Rellena aliasMap por efecto lateral.
 function serializeResultForLLM(r, aliasMap) {
   if (!r) return "(sin resultado)";
 
   if (r.kind === "number") {
-    // Un número agregado no tiene categorías que ocultar.
     return "Valor numérico (real): " + String(r.value);
   }
   if (r.kind === "text") {
-    // Texto libre devuelto por el script (p. ej. "no hay datos para 2030").
-    // Lo pasamos tal cual: no es una tabla de categorías y suele ser un aviso.
     return "Texto devuelto por el script: " + String(r.value);
   }
   if (r.kind === "dict") {
@@ -1403,8 +1375,6 @@ function serializeResultForLLM(r, aliasMap) {
     return tableToAnonymizedText(dfTable.table, aliasMap, dfTable.shapeNote);
   }
   if (r.kind === "plotly") {
-    // Preferimos el DataFrame explícito que el LLM adjunta en "__data__"
-    // (más fiable). Si no viene, lo reconstruimos desde las traces del spec.
     var plotTable;
     if (r.data_df) {
       var dfWrap = tableFromDataFrame({ value: r.data_df, shape: null });
@@ -1422,13 +1392,6 @@ function serializeResultForLLM(r, aliasMap) {
 }
 
 
-// ---------------------------------------------------------------------------
-//  Normalización de cada tipo a una "tabla lógica" { columns:[], rows:[[]] }
-// ---------------------------------------------------------------------------
-
-// dataframe (formato to_json orient="split") → tabla lógica + nota de shape.
-// Aquí también se ELIMINAN por completo las columnas con datos personales
-// directos (correo, nombre, apellidos): esos no se pseudonimizan, se quitan.
 function tableFromDataFrame(r) {
   var parsed;
   try { parsed = JSON.parse(r.value); }
@@ -1437,7 +1400,6 @@ function tableFromDataFrame(r) {
   var cols = Array.isArray(parsed.columns) ? parsed.columns.slice() : [];
   var data = Array.isArray(parsed.data) ? parsed.data : [];
 
-  // Columnas con PII directa → se eliminan (no se pseudonimizan).
   var dropIdx = {};
   for (var i = 0; i < cols.length; i++) {
     if (isSensitiveColumn(cols[i])) dropIdx[i] = true;
@@ -1473,7 +1435,6 @@ function tableFromDataFrame(r) {
   return { table: { columns: keepCols, rows: rows }, shapeNote: shapeNote };
 }
 
-// dict de KPIs → tabla de dos columnas (KPI, Valor).
 function tableFromDict(maybeJsonString) {
   var obj;
   try {
@@ -1490,11 +1451,6 @@ function tableFromDict(maybeJsonString) {
   return { columns: ["KPI", "Valor"], rows: rows };
 }
 
-// spec Plotly → tabla lógica reconstruida desde las traces.
-// Cada trace aporta una serie. Soportamos:
-//   - cartesianos (bar/scatter/line): pares (x, y) → columnas [Categoría/Eje X, <serie>].
-//   - tarta (pie): pares (label, value).
-// Si hay varias traces con las mismas X, las alineamos en columnas distintas.
 function tableFromPlotlySpec(jsonStr) {
   var spec;
   try { spec = JSON.parse(jsonStr); }
@@ -1502,8 +1458,6 @@ function tableFromPlotlySpec(jsonStr) {
   var traces = Array.isArray(spec.data) ? spec.data : [];
   if (traces.length === 0) return { columns: [], rows: [] };
 
-  // Construimos un índice por categoría X (o label) → { serieName: value }.
-  // Mantenemos el orden de aparición de las categorías.
   var catOrder = [];
   var catSeen = {};
   var seriesNames = [];
@@ -1519,7 +1473,6 @@ function tableFromPlotlySpec(jsonStr) {
       keys = tr.labels || [];
       vals = tr.values || [];
     } else {
-      // Para barras horizontales (orientation "h") las categorías están en Y.
       var horizontal = (tr.orientation === "h");
       keys = horizontal ? (tr.y || []) : (tr.x || []);
       vals = horizontal ? (tr.x || []) : (tr.y || []);
@@ -1533,9 +1486,6 @@ function tableFromPlotlySpec(jsonStr) {
     }
   }
 
-  // Nombre de la primera columna: intentamos usar el título del eje donde
-  // están las categorías. Si CUALQUIER trace es horizontal, las categorías
-  // están en el eje Y; si no, en el X. Vale para 1 o varias series.
   var axisTitle = "Categoría";
   try {
     var layout = spec.layout || {};
@@ -1572,21 +1522,10 @@ function tableFromPlotlySpec(jsonStr) {
 // ---------------------------------------------------------------------------
 //  Pseudonimización reversible + render a texto
 // ---------------------------------------------------------------------------
-
-// Convierte una tabla lógica a texto tipo Markdown, sustituyendo CADA valor
-// de texto (categoría) por un alias estable y reversible. Los números se dejan
-// intactos. Rellena aliasMap (alias → valor real) por efecto lateral.
-//
-// El alias se genera por columna: la 1ª ciudad distinta de la columna "Ciudad"
-// será "Ciudad A", la 2ª "Ciudad B", etc. Un mismo valor real recibe SIEMPRE
-// el mismo alias dentro de la consulta (consistencia), aunque aparezca en
-// varias filas o columnas con el mismo nombre.
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
   var columns = table.columns || [];
   var rows = table.rows || [];
 
-  // Estado del aliasador: por cada "prefijo de columna" llevamos un contador
-  // y un sub-mapa valorReal → alias, para reutilizar alias.
   var anonState = { counters: {}, valueToAlias: {} };
 
   var outRows = [];
@@ -1611,23 +1550,16 @@ function tableToAnonymizedText(table, aliasMap, shapeNote) {
   return lines.join("\n");
 }
 
-// Decide si una celda es número (se deja), marca temporal (se deja) o
-// texto categórico (se pseudonimiza).
 function anonymizeCell(val, colName, anonState, aliasMap) {
   if (val === null || val === undefined) return "—";
   if (typeof val === "number") return formatNumberForLLM(val);
 
-  // Valores numéricos que vienen como string ("4200", "14.2%") → respetar.
   var asStr = String(val).trim();
   if (asStr === "") return "—";
   if (isNumericLike(asStr)) return asStr;
 
-  // Marcas temporales (columnas mes/fecha/año): NO se pseudonimizan. Un mes
-  // como "jul-25" es una referencia de tiempo, no un dato identificativo, y
-  // ocultarlo haría ilegible cualquier serie temporal.
   if (isTemporalColumn(colName)) return asStr;
 
-  // A partir de aquí es una categoría textual → alias reversible.
   return aliasFor(asStr, colName, anonState, aliasMap);
 }
 
@@ -1639,11 +1571,7 @@ function isTemporalColumn(colName) {
   return false;
 }
 
-// Genera (o reutiliza) un alias para un valor real dado, basado en el nombre
-// de su columna. "Madrid" en columna "Ciudades de interés" → "Ciudad A".
 function aliasFor(realValue, colName, anonState, aliasMap) {
-  // Si este valor real YA tiene alias (en cualquier columna del mismo grupo),
-  // lo reutilizamos para mantener consistencia.
   if (Object.prototype.hasOwnProperty.call(anonState.valueToAlias, realValue)) {
     return anonState.valueToAlias[realValue];
   }
@@ -1652,17 +1580,10 @@ function aliasFor(realValue, colName, anonState, aliasMap) {
   var idx = anonState.counters[prefix]++;
   var alias = prefix + " " + indexToLetters(idx);
   anonState.valueToAlias[realValue] = alias;
-  aliasMap[alias] = realValue; // para revertir en la respuesta del LLM
+  aliasMap[alias] = realValue;
   return alias;
 }
 
-// Deriva un prefijo legible a partir del nombre de columna.
-//   "Ciudades de interés"        → "Ciudad"
-//   "Residencias_interes_corregido" → "Residencia"
-//   "Origen_Agrupado"            → "Origen"
-//   "Fuente_Agrupada"            → "Fuente"
-//   "Curso_corregido"            → "Curso"
-//   cualquier otra              → "Categoría"
 function aliasPrefixForColumn(colName) {
   var s = String(colName).toLowerCase();
   if (s.indexOf("ciudad") >= 0)     return "Ciudad";
@@ -1678,7 +1599,6 @@ function aliasPrefixForColumn(colName) {
   return "Categoría";
 }
 
-// 0→A, 1→B, ... 25→Z, 26→AA, 27→AB, ... (base-26 estilo Excel).
 function indexToLetters(n) {
   var s = "";
   n = n + 1; // 1-based
@@ -1690,9 +1610,6 @@ function indexToLetters(n) {
   return s;
 }
 
-// Revierte los alias en la respuesta del LLM: "Ciudad A" → "Madrid".
-// Ordenamos los alias por longitud descendente para evitar que "Ciudad A"
-// se solape mal con "Ciudad AA" (reemplazaríamos el prefijo y dejaríamos "A").
 function deanonymizeText(text, aliasMap) {
   if (!text || !aliasMap) return text;
   var aliases = Object.keys(aliasMap);
@@ -1701,8 +1618,6 @@ function deanonymizeText(text, aliasMap) {
   for (var i = 0; i < aliases.length; i++) {
     var alias = aliases[i];
     var real = aliasMap[alias];
-    // Reemplazo global, respetando límites de palabra a izquierda/derecha
-    // para no romper texto que contenga el alias por casualidad.
     var pattern = new RegExp("(^|[^\\wÀ-ÿ])(" + escapeRegExp(alias) + ")(?![\\wÀ-ÿ])", "g");
     out = out.replace(pattern, function (m, pre) { return pre + real; });
   }
@@ -1713,9 +1628,7 @@ function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ¿Una cadena representa "solo un número" (entero, decimal, %, miles)?
 function isNumericLike(s) {
-  // Acepta: 4200, 4.200, 4,200, 14.2, 14,2, 14.2%, -3, 1.234,56 ...
   return /^-?[\d.\s,]+%?$/.test(s) && /\d/.test(s);
 }
 
@@ -1724,8 +1637,6 @@ function formatNumberForLLM(val) {
   return (Math.round(val * 10000) / 10000).toString();
 }
 
-// Columnas con PII DIRECTA (correo, nombre, apellidos): no se pseudonimizan,
-// se eliminan por completo antes de enviar nada al LLM.
 function isSensitiveColumn(colName) {
   if (colName === null || colName === undefined) return false;
   var s = String(colName).trim().toLowerCase();
@@ -1742,11 +1653,7 @@ function isSensitiveColumn(colName) {
 
 // ============================================================================
 //  Generar conclusiones (insights_script.py + parser LLM fallback)
-//  [DESACTIVADO] Todo este bloque está comentado por decisión de producto:
-//  primero pulimos el flujo básico antes de reactivar las conclusiones.
-//  Para reactivar: borra esta línea, las marcas /* y */ que envuelven el
-//  bloque, y revierte las otras marcas "[Generar conclusiones desactivado]"
-//  repartidas por el archivo.
+//  [DESACTIVADO]
 // ============================================================================
 /*
 async function generateInsights() {
