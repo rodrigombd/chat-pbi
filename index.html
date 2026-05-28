@@ -335,6 +335,60 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   font-size: 12px; color: var(--text3); font-style: italic;
   padding: 4px 0; margin-bottom: 4px;
 }
+
+/* ---- Conclusions toggle ---- */
+#conclusions-bar {
+  padding: 0 18px 8px; display: flex; gap: 10px; align-items: center;
+  font-size: 13px; color: var(--text2);
+}
+.toggle-switch {
+  position: relative; display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+}
+.toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.toggle-track {
+  width: 34px; height: 18px; background: var(--border2); border-radius: 10px;
+  position: relative; transition: background 0.15s; flex-shrink: 0;
+}
+.toggle-track::after {
+  content: ""; position: absolute; left: 2px; top: 2px;
+  width: 14px; height: 14px; background: #fff; border-radius: 50%;
+  transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+.toggle-switch input:checked + .toggle-track { background: var(--insight); }
+.toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+.toggle-label-text { font-weight: 600; color: var(--text2); }
+.toggle-hint { font-size: 12px; color: var(--text3); }
+
+/* ---- Conclusion block inside result ---- */
+.conclusion-block {
+  margin-top: 12px; padding: 12px 14px;
+  background: var(--insight-lt); border: 1px solid #c5d8f9;
+  border-left: 3px solid var(--insight); border-radius: var(--radius-sm);
+  font-size: 14px; color: var(--text); line-height: 1.65;
+}
+.conclusion-label {
+  font-size: 11px; font-weight: 700; color: var(--insight-dk);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px;
+  display: flex; align-items: center; gap: 5px;
+}
+.conclusion-block p { margin-bottom: 6px; }
+.conclusion-block p:last-child { margin-bottom: 0; }
+.conclusion-block strong { color: var(--text); font-weight: 700; }
+.conclusion-block ul { margin: 4px 0 4px 20px; }
+.conclusion-block li { margin-bottom: 2px; }
+.conclusion-loading {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--insight-lt); border: 1px solid #c5d8f9;
+  border-left: 3px solid var(--insight); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--insight-dk); display: flex; align-items: center; gap: 8px;
+}
+.conclusion-error {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 13px; color: var(--text3);
+  font-style: italic;
+}
 </style>
 </head>
 <body>
@@ -357,9 +411,11 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <div class="boot-progress" id="boot-progress">
       <div class="step" id="step-prompts"><span class="dot"></span><span>Cargando archivos de contexto</span></div>
       <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
-      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy, scikit-learn</span></div>
+      <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy</span></div>
       <div class="step" id="step-csv"><span class="dot"></span><span>Cargando datos principales</span></div>
+      <!-- [Generar conclusiones desactivado] paso de carga del script de análisis:
       <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de an&aacute;lisis</span></div>
+      -->
     </div>
   </div>
 </div>
@@ -368,7 +424,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   <div id="messages">
     <div class="welcome-area" id="welcome">
       <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
-      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y produce un gr&aacute;fico interactivo. Tras cada consulta puedes pulsar <strong>Generar conclusiones</strong> para entender el porqu&eacute; de una variaci&oacute;n.</p>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y produce un gr&aacute;fico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente a&ntilde;ada una lectura breve del resultado tras cada consulta.</p>
     </div>
   </div>
 
@@ -380,11 +436,33 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
   </div>
 
+  <!--
+    [Generar conclusiones desactivado por decisión de producto: vamos a centrarnos
+     primero en pulir el flujo de consultas básicas. El script `insights_script.py`
+     queda mantenido en el repo pero NO se carga ni se ejecuta. Para reactivar:
+     1) Descomenta este bloque <div id="actions-bar"> ... </div>.
+     2) Descomenta la entrada `insights_parser` en PROMPT_FILES.
+     3) Descomenta `await loadInsightsScript();` en initChat().
+     4) Descomenta el step "step-insights" en el panel de progreso.
+     5) Descomenta las funciones generateInsights / setInsightsContext /
+        maybeReparseAndRerun / parseQueryForInsights / updateInsightButton y la
+        llamada a updateInsightButton dentro de setBusy(false).]
+
   <div id="actions-bar">
     <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Explica a qu&eacute; se debe la variaci&oacute;n entre los dos elementos de la consulta">
       &#128202; Generar conclusiones
     </button>
     <span class="action-hint" id="insight-hint">Haz una consulta comparativa para activar el an&aacute;lisis.</span>
+  </div>
+  -->
+
+  <div id="conclusions-bar">
+    <label class="toggle-switch" title="Si est&aacute; activo, tras cada consulta de datos el asistente generar&aacute; una conclusi&oacute;n breve del resultado.">
+      <input type="checkbox" id="conclusions-toggle">
+      <span class="toggle-track"></span>
+      <span class="toggle-label-text">Conclusiones</span>
+    </label>
+    <span class="toggle-hint">a&ntilde;ade una lectura breve del resultado tras cada consulta de datos</span>
   </div>
 
   <div id="input-area">
@@ -415,28 +493,34 @@ var API_URL     = "https://api.anthropic.com/v1/messages";
 var API_VERSION = "2023-06-01";
 var MAX_HISTORY = 12;
 
-// Archivos de contexto que se cargan desde la carpeta del proyecto.
-// Cada uno se usa en UN paso concreto del flujo (router, clarify, generación,
-// modelo de datos, parser de insights). Mantenerlos separados permite enviar
-// a la API SOLO el system prompt que toca → mínimo coste en tokens.
 var PROMPT_FILES = {
   router:          "context_router.txt",
   clarify:         "context_clarify.txt",
   modelo_datos:    "context_modelo_datos.txt",
   general:         "context_general.txt",
-  insights_parser: "context_insights_parser.txt"
+  conclusiones:    "context_conclusiones.txt"
+  // , insights_parser: "context_insights_parser.txt"
 };
 
-// Tablas disponibles -> fichero CSV correspondiente.
-// Solo trabajamos con la tabla de hechos `leads_contacts`. Las antiguas tablas
-// de dimensiones (catálogos de ciudades, residencias, etc.) ya no se cargan:
-// no aportan información que no esté en la tabla de hechos y, al no existir
-// los ficheros, generaban errores 404 al pulsar "Generar conclusiones".
 var CSV_TABLES = {
   "leads_contacts":             "Leads_Contacts.csv"
 };
 var PRIMARY_CSV          = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
+
+// Conclusiones: columnas con datos PERSONALES DIRECTOS. Estas NO se
+// pseudonimizan (no tendría sentido un alias para un correo): se ELIMINAN
+// por completo antes de enviar nada al LLM. El resto de categorías textuales
+// (ciudades, residencias, canales...) sí se pseudonimizan de forma reversible.
+var SENSITIVE_COLUMNS = [
+  "Correo electrónico", "Correo electronico", "correo electrónico", "correo electronico",
+  "Email", "email", "E-mail", "e-mail",
+  "Nombre", "nombre",
+  "Apellidos", "apellidos",
+  "Nombre completo", "nombre completo"
+];
+
+var CONCLUSION_MAX_ROWS = 40;
 
 marked.use({ breaks: true, gfm: true });
 
@@ -446,15 +530,15 @@ marked.use({ breaks: true, gfm: true });
 // ============================================================================
 
 var apiKey         = "";
-var prompts        = {};                 // contenido de los .txt
-var insightsScript = "";                 // contenido de insights_script.py
+var prompts        = {};
+// var insightsScript = "";              // contenido de insights_script.py
 var pyodide        = null;
 var loadedCsvs     = new Set();
 var busy           = false;
-var chatHistory    = [];                 // historial general (solo modo "datos")
-var pendingClarify = null;               // pipeline en curso de clarify
-var lastUserQuery  = null;               // consulta original del usuario (para insights)
-var lastTurn       = null;               // info del último turno datos completado
+var chatHistory    = [];
+var pendingClarify = null;
+var lastUserQuery  = null;
+var lastTurn       = null;
 
 
 // ============================================================================
@@ -476,7 +560,7 @@ async function initChat() {
     await loadPyodidePackages();
     await installRuntimeHelpers();
     var csvOk = await loadPrimaryCsv();
-    await loadInsightsScript();
+    // await loadInsightsScript();
     apiKey = key;
     revealChatPanel();
     if (!csvOk) {
@@ -498,12 +582,13 @@ async function initChat() {
         "Asegúrate de que están en la misma carpeta que <code>index.html</code>."
       );
     }
-    if (!insightsScript) {
-      appendDevBanner(
-        "⚠️ <strong>No se cargó <code>insights_script.py</code>.</strong> " +
-        "El botón \"Generar conclusiones\" no estará disponible."
-      );
-    }
+    // [Generar conclusiones desactivado].
+    // if (!insightsScript) {
+    //   appendDevBanner(
+    //     "⚠️ <strong>No se cargó <code>insights_script.py</code>.</strong> " +
+    //     "El botón \"Generar conclusiones\" no estará disponible."
+    //   );
+    // }
   } catch (e) {
     console.error(e);
     alert("Error inicializando: " + e.message);
@@ -544,8 +629,10 @@ async function initPyodide() {
 
 async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
-  // scikit-learn lo necesita insights_script.py (RandomForest + permutation importance)
-  await pyodide.loadPackage(["pandas", "numpy", "scikit-learn"]);
+  // [Generar conclusiones desactivado] Sin scikit-learn: solo lo usaba
+  // insights_script.py (RandomForest + permutation importance). Para
+  // reactivar, vuelve a incluirlo en el array: ["pandas", "numpy", "scikit-learn"]
+  await pyodide.loadPackage(["pandas", "numpy"]);
   await pyodide.runPythonAsync(
     "import pandas as pd\n" +
     "import numpy as np\n" +
@@ -554,10 +641,6 @@ async function loadPyodidePackages() {
   setStep("step-pkgs", "done");
 }
 
-// Helpers persistentes en el namespace global de Pyodide.
-//   __parse_fechas_es__(df, cols) — parsea fechas en formato "dd de mes de yyyy"
-//   __reset_resultado__()         — limpia la variable de turno anterior
-//   __serialize_resultado__()     — empaqueta `resultado` como JSON
 async function installRuntimeHelpers() {
   var helpers =
     "import re as _re\n" +
@@ -614,8 +697,11 @@ async function installRuntimeHelpers() {
     "    _r = globals()['resultado']\n" +
     "    # Plotly: dict con clave __plotly__\n" +
     "    if isinstance(_r, dict) and _r.get('__plotly__') is True:\n" +
-    "        spec = {k: v for k, v in _r.items() if k != '__plotly__'}\n" +
-    "        return _j.dumps({'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)\n" +
+    "        spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}\n" +
+    "        _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}\n" +
+    "        if isinstance(_r.get('__data__'), _pd.DataFrame):\n" +
+    "            _payload['data_df'] = _r['__data__'].to_json(orient='split', date_format='iso', force_ascii=False)\n" +
+    "        return _j.dumps(_payload, ensure_ascii=False)\n" +
     "    if isinstance(_r, _pd.DataFrame):\n" +
     "        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)\n" +
     "    if isinstance(_r, _pd.Series):\n" +
@@ -642,6 +728,10 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
+// [Generar conclusiones desactivado] Función conservada como comentario para
+// reactivar fácilmente. Para reactivar: descomenta + descomenta también la
+// llamada en initChat() + descomenta `var insightsScript` y `step-insights`.
+/*
 async function loadInsightsScript() {
   setStep("step-insights", "active");
   try {
@@ -656,6 +746,7 @@ async function loadInsightsScript() {
   }
   setStep("step-insights", insightsScript ? "done" : "error");
 }
+*/
 
 function revealChatPanel() {
   document.getElementById("setup-panel").style.display = "none";
@@ -706,6 +797,7 @@ async function loadCsv(varName) {
       "import traceback as _tb\n" +
       "try:\n" +
       "    " + varName + " = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)\n" +
+      "    " + varName + " = " + varName + ".drop_duplicates()\n" +
       (isPrimary
         ? "    " + varName + " = __parse_fechas_es__(" + varName + ", " + JSON.stringify(PRIMARY_DATE_COLUMNS) + ")\n"
         : "") +
@@ -753,12 +845,37 @@ async function ensureTablesLoaded(pythonCode) {
 
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
+  
+  var apiMessages = messages.map(function(msg) {
+    return { role: msg.role, content: msg.content };
+  });
+
+  if (apiMessages.length > 0) {
+    var lastMsg = apiMessages[apiMessages.length - 1];
+    if (typeof lastMsg.content === "string") {
+      lastMsg.content = [
+        {
+          "type": "text",
+          "text": lastMsg.content,
+          "cache_control": {"type": "ephemeral"}
+        }
+      ];
+    }
+  }
+
   var body = {
     model: opts.model || MODEL_ID,
     max_tokens: opts.maxTokens || 1500,
-    system: systemPrompt,
-    messages: messages
+    system: [
+      {
+        "type": "text",
+        "text": systemPrompt,
+        "cache_control": {"type": "ephemeral"}
+      }
+    ],
+    messages: apiMessages
   };
+
   var r = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -769,24 +886,31 @@ async function callModel(messages, systemPrompt, opts) {
     },
     body: JSON.stringify(body)
   });
+
   if (!r.ok) {
     var errData = await r.json().catch(function () { return {}; });
     throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
   }
+  
   var d = await r.json();
   return (d.content && d.content[0] && d.content[0].text) || "";
 }
 
-
 // ============================================================================
 //  Pipeline principal SECUENCIAL
 //
-//   router  →  saludo  ──────────────────────────────────────────────────►
-//          \─►  modelo  → respuesta texto ────────────────────────────────►
+//   router  →  saludo  ────────────────────────────────────────────────────────►
+//          \─►  modelo  → respuesta texto ──────────────────────────────────────►
 //          \─►  datos   → clarify  → (slots?) → ejecutar python  →  result
+//                                                                      │
+//                                                             (¿Toggle Activo?)
+//                                                                      ▼
+//                                                            context_conclusiones
+//                                                                      │
+//                                                                      ▼
+//                                                                  conclusión
 //
-//  Cada paso usa SU PROPIO system prompt (context_*.txt) para minimizar
-//  tokens en cada llamada a la API.
+//  Cada paso usa SU PROPIO system prompt (context_*.txt) para minimizar tokens en cada llamada a la API.
 // ============================================================================
 
 async function sendMessage(text) {
@@ -826,7 +950,7 @@ async function sendMessage(text) {
       };
       lastUserQuery = userText;
       askNextSlot();
-      return;   // setBusy(false) lo hará finalizeClarify cuando termine
+      return;
     }
 
     // ----- Paso 3: ir directo a generación si no hay slots -----
@@ -856,8 +980,9 @@ function hideWelcomeAndQuicks() {
 function setBusy(b) {
   busy = b;
   document.getElementById("send-btn").disabled = b;
-  if (b) document.getElementById("insight-btn").disabled = true;
-  else updateInsightButton();
+  // [Generar conclusiones desactivado]
+  // if (b) document.getElementById("insight-btn").disabled = true;
+  // else updateInsightButton();
 }
 
 function fallbackGreeting() {
@@ -1060,7 +1185,7 @@ async function answerDataQuery(userText, answeredSlots) {
     execResult = await retryWithModelFix(code, execResult);
   }
 
-  appendResult(execResult, execResult.__codeUsed || code, "datos");
+  var resultEl = appendResult(execResult, execResult.__codeUsed || code, "datos");
   setExecutionStatus(execResult);
 
   lastTurn = {
@@ -1068,6 +1193,10 @@ async function answerDataQuery(userText, answeredSlots) {
     enrichedQuery: enriched,
     answeredSlots: answeredSlots.slice()
   };
+
+  if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
+    await appendConclusionTo(resultEl, userText, execResult);
+  }
 }
 
 function buildEnrichedQuery(userText, answeredSlots) {
@@ -1140,10 +1269,486 @@ function friendlyError(execError, code, firstError) {
 }
 
 
+
+function conclusionsEnabled() {
+  var t = document.getElementById("conclusions-toggle");
+  return !!(t && t.checked);
+}
+
+// Solo descartamos conclusión si el resultado es un error o está vacío.
+// El resto de tipos (escalar, texto, dict, dataframe Y gráfico plotly) son
+// elegibles: para los gráficos extraemos los datos subyacentes de las traces
+// (ver dataFrameFromPlotlySpec) y razonamos sobre ellos igual que con una tabla.
+function isResultEligibleForConclusion(r) {
+  if (!r) return false;
+  if (r.kind === "error" || r.kind === "error_friendly") return false;
+  if (r.kind === "none") return false;
+  return true;
+}
+
+async function appendConclusionTo(resultEl, userQuery, execResult) {
+  if (!resultEl) return;
+  if (!prompts.conclusiones) {
+    appendConclusionError(resultEl, "El archivo context_conclusiones.txt no está cargado.");
+    return;
+  }
+  var textBody = resultEl.querySelector(".msg-text");
+  if (!textBody) return;
+
+  var loadingEl = document.createElement("div");
+  loadingEl.className = "conclusion-loading";
+  loadingEl.innerHTML =
+    '<div class="typing-dots"><span></span><span></span><span></span></div>' +
+    '<span>generando conclusión...</span>';
+  var codeToggle = textBody.querySelector(".code-toggle");
+  if (codeToggle) textBody.insertBefore(loadingEl, codeToggle);
+  else textBody.appendChild(loadingEl);
+  scrollToBottom();
+
+  setStatus("generando conclusión...", "busy");
+  try {
+    // buildConclusionPayload devuelve el texto YA pseudonimizado y, junto a él,
+    // el mapa alias→valor real para poder revertir la respuesta del LLM.
+    var built = buildConclusionPayload(userQuery, execResult);
+    var reply = await callModel(
+      [{ role: "user", content: built.payload }],
+      prompts.conclusiones,
+      { maxTokens: 500 }
+    );
+    var text = (reply || "").trim();
+    if (!text) {
+      replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
+    } else {
+      // Revertimos los alias (Ciudad A → Madrid) para que el usuario vea la
+      // conclusión con los nombres reales. El LLM solo trabajó con alias.
+      var deAnon = deanonymizeText(text, built.aliasMap);
+      replaceConclusionPlaceholder(loadingEl, deAnon, null);
+    }
+    setStatus("listo", "ok");
+  } catch (e) {
+    replaceConclusionPlaceholder(loadingEl, null, "No se pudo generar la conclusión: " + (e.message || String(e)));
+    setStatus("error generando conclusión", "error");
+  }
+}
+
+function replaceConclusionPlaceholder(loadingEl, text, errorMsg) {
+  if (!loadingEl || !loadingEl.parentNode) return;
+  var newEl = document.createElement("div");
+  if (text) {
+    newEl.className = "conclusion-block";
+    newEl.innerHTML =
+      '<div class="conclusion-label">conclusi&oacute;n</div>' +
+      marked.parse(text);
+  } else {
+    newEl.className = "conclusion-error";
+    newEl.textContent = errorMsg || "No se pudo generar la conclusión.";
+  }
+  loadingEl.parentNode.replaceChild(newEl, loadingEl);
+  scrollToBottom();
+}
+
+function appendConclusionError(resultEl, msg) {
+  var textBody = resultEl.querySelector(".msg-text");
+  if (!textBody) return;
+  var el = document.createElement("div");
+  el.className = "conclusion-error";
+  el.textContent = msg;
+  var codeToggle = textBody.querySelector(".code-toggle");
+  if (codeToggle) textBody.insertBefore(el, codeToggle);
+  else textBody.appendChild(el);
+}
+
+// Construye el mensaje para el LLM de conclusiones. Devuelve un objeto con:
+//   - payload:  el texto a enviar (datos YA pseudonimizados),
+//   - aliasMap: { "Ciudad A": "Madrid", ... } para revertir la respuesta.
+// Todo resultado se reduce primero a una "tabla lógica" (columnas + filas):
+//   - dataframe → tal cual,
+//   - plotly    → se extrae de las traces,
+//   - dict      → se trata como tabla de 2 columnas (clave, valor),
+//   - escalar/texto → no hay categorías que pseudonimizar.
+function buildConclusionPayload(userQuery, r) {
+  var aliasMap = {};
+  var serialized = serializeResultForLLM(r, aliasMap);
+  var payload =
+    "PREGUNTA ORIGINAL DEL USUARIO:\n" +
+    userQuery + "\n\n" +
+    "RESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto " +
+    "se han sustituido por alias genéricos tipo \"Ciudad A\", \"Residencia B\", " +
+    "etc.; los números son reales):\n" +
+    serialized + "\n\n" +
+    "Redacta la conclusión refiriéndote a las categorías por su alias EXACTO " +
+    "(p. ej. \"Ciudad A\"). NO inventes nombres reales. Sigue las reglas del system prompt.";
+  return { payload: payload, aliasMap: aliasMap };
+}
+
+// Punto de entrada de serialización. Rellena aliasMap por efecto lateral.
+function serializeResultForLLM(r, aliasMap) {
+  if (!r) return "(sin resultado)";
+
+  if (r.kind === "number") {
+    // Un número agregado no tiene categorías que ocultar.
+    return "Valor numérico (real): " + String(r.value);
+  }
+  if (r.kind === "text") {
+    // Texto libre devuelto por el script (p. ej. "no hay datos para 2030").
+    // Lo pasamos tal cual: no es una tabla de categorías y suele ser un aviso.
+    return "Texto devuelto por el script: " + String(r.value);
+  }
+  if (r.kind === "dict") {
+    var dictTable = tableFromDict(r.value);
+    return tableToAnonymizedText(dictTable, aliasMap, null);
+  }
+  if (r.kind === "dataframe") {
+    var dfTable = tableFromDataFrame(r);
+    return tableToAnonymizedText(dfTable.table, aliasMap, dfTable.shapeNote);
+  }
+  if (r.kind === "plotly") {
+    // Preferimos el DataFrame explícito que el LLM adjunta en "__data__"
+    // (más fiable). Si no viene, lo reconstruimos desde las traces del spec.
+    var plotTable;
+    if (r.data_df) {
+      var dfWrap = tableFromDataFrame({ value: r.data_df, shape: null });
+      plotTable = dfWrap.table;
+    } else {
+      plotTable = tableFromPlotlySpec(r.value);
+    }
+    if (!plotTable || plotTable.columns.length === 0) {
+      return "El resultado es un gráfico, pero no se pudieron extraer datos tabulares de sus series.";
+    }
+    return "Datos subyacentes del gráfico:\n" +
+           tableToAnonymizedText(plotTable, aliasMap, null);
+  }
+  return "Resultado no estructurado: " + JSON.stringify(r);
+}
+
+
+// ---------------------------------------------------------------------------
+//  Normalización de cada tipo a una "tabla lógica" { columns:[], rows:[[]] }
+// ---------------------------------------------------------------------------
+
+// dataframe (formato to_json orient="split") → tabla lógica + nota de shape.
+// Aquí también se ELIMINAN por completo las columnas con datos personales
+// directos (correo, nombre, apellidos): esos no se pseudonimizan, se quitan.
+function tableFromDataFrame(r) {
+  var parsed;
+  try { parsed = JSON.parse(r.value); }
+  catch (e) { return { table: { columns: ["error"], rows: [["DataFrame no parseable"]] }, shapeNote: null }; }
+
+  var cols = Array.isArray(parsed.columns) ? parsed.columns.slice() : [];
+  var data = Array.isArray(parsed.data) ? parsed.data : [];
+
+  // Columnas con PII directa → se eliminan (no se pseudonimizan).
+  var dropIdx = {};
+  for (var i = 0; i < cols.length; i++) {
+    if (isSensitiveColumn(cols[i])) dropIdx[i] = true;
+  }
+  var keepCols = [];
+  for (var c = 0; c < cols.length; c++) {
+    if (!dropIdx[c]) keepCols.push(String(cols[c]));
+  }
+
+  var totalRows = data.length;
+  var maxRows = Math.min(totalRows, CONCLUSION_MAX_ROWS);
+  var rows = [];
+  for (var rIdx = 0; rIdx < maxRows; rIdx++) {
+    var row = data[rIdx] || [];
+    var keepRow = [];
+    for (var k = 0; k < row.length; k++) {
+      if (!dropIdx[k]) keepRow.push(row[k]);
+    }
+    rows.push(keepRow);
+  }
+
+  var shapeNote = null;
+  var sensibleEliminadas = Object.keys(dropIdx).length;
+  var parts = [];
+  var origShape = (r.shape && r.shape.length === 2)
+    ? (r.shape[0] + " filas × " + r.shape[1] + " columnas (original)")
+    : (totalRows + " filas × " + cols.length + " columnas");
+  parts.push("Shape: " + origShape);
+  if (sensibleEliminadas > 0) parts.push("columnas con datos personales eliminadas: " + sensibleEliminadas);
+  if (totalRows > maxRows) parts.push("mostrando las primeras " + maxRows + " de " + totalRows + " filas");
+  shapeNote = parts.join(" | ");
+
+  return { table: { columns: keepCols, rows: rows }, shapeNote: shapeNote };
+}
+
+// dict de KPIs → tabla de dos columnas (KPI, Valor).
+function tableFromDict(maybeJsonString) {
+  var obj;
+  try {
+    obj = (typeof maybeJsonString === "string") ? JSON.parse(maybeJsonString) : maybeJsonString;
+  } catch (e) {
+    return { columns: ["valor"], rows: [[String(maybeJsonString)]] };
+  }
+  var rows = [];
+  for (var k in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, k)) {
+      rows.push([k, obj[k]]);
+    }
+  }
+  return { columns: ["KPI", "Valor"], rows: rows };
+}
+
+// spec Plotly → tabla lógica reconstruida desde las traces.
+// Cada trace aporta una serie. Soportamos:
+//   - cartesianos (bar/scatter/line): pares (x, y) → columnas [Categoría/Eje X, <serie>].
+//   - tarta (pie): pares (label, value).
+// Si hay varias traces con las mismas X, las alineamos en columnas distintas.
+function tableFromPlotlySpec(jsonStr) {
+  var spec;
+  try { spec = JSON.parse(jsonStr); }
+  catch (e) { return { columns: [], rows: [] }; }
+  var traces = Array.isArray(spec.data) ? spec.data : [];
+  if (traces.length === 0) return { columns: [], rows: [] };
+
+  // Construimos un índice por categoría X (o label) → { serieName: value }.
+  // Mantenemos el orden de aparición de las categorías.
+  var catOrder = [];
+  var catSeen = {};
+  var seriesNames = [];
+  var grid = {}; // cat -> { serie -> value }
+
+  for (var t = 0; t < traces.length; t++) {
+    var tr = traces[t] || {};
+    var serieName = tr.name || ("Serie " + (t + 1));
+    if (seriesNames.indexOf(serieName) < 0) seriesNames.push(serieName);
+
+    var keys, vals;
+    if (tr.type === "pie" || tr.labels) {
+      keys = tr.labels || [];
+      vals = tr.values || [];
+    } else {
+      // Para barras horizontales (orientation "h") las categorías están en Y.
+      var horizontal = (tr.orientation === "h");
+      keys = horizontal ? (tr.y || []) : (tr.x || []);
+      vals = horizontal ? (tr.x || []) : (tr.y || []);
+    }
+    var n = Math.min(keys.length, vals.length);
+    for (var i = 0; i < n; i++) {
+      var cat = String(keys[i]);
+      if (!catSeen[cat]) { catSeen[cat] = true; catOrder.push(cat); }
+      if (!grid[cat]) grid[cat] = {};
+      grid[cat][serieName] = vals[i];
+    }
+  }
+
+  // Nombre de la primera columna: intentamos usar el título del eje donde
+  // están las categorías. Si CUALQUIER trace es horizontal, las categorías
+  // están en el eje Y; si no, en el X. Vale para 1 o varias series.
+  var axisTitle = "Categoría";
+  try {
+    var layout = spec.layout || {};
+    var anyHorizontal = false;
+    var anyPie = false;
+    for (var ti = 0; ti < traces.length; ti++) {
+      if (traces[ti] && traces[ti].orientation === "h") anyHorizontal = true;
+      if (traces[ti] && (traces[ti].type === "pie" || traces[ti].labels)) anyPie = true;
+    }
+    if (!anyPie) {
+      var ax = anyHorizontal ? layout.yaxis : layout.xaxis;
+      if (ax && ax.title) {
+        axisTitle = (typeof ax.title === "string") ? ax.title : (ax.title.text || axisTitle);
+      }
+    }
+  } catch (e) {}
+
+  var columns = [axisTitle].concat(seriesNames);
+  var rows = [];
+  var limit = Math.min(catOrder.length, CONCLUSION_MAX_ROWS);
+  for (var c = 0; c < limit; c++) {
+    var category = catOrder[c];
+    var rowArr = [category];
+    for (var s = 0; s < seriesNames.length; s++) {
+      var v = grid[category][seriesNames[s]];
+      rowArr.push(v === undefined ? null : v);
+    }
+    rows.push(rowArr);
+  }
+  return { columns: columns, rows: rows };
+}
+
+
+// ---------------------------------------------------------------------------
+//  Pseudonimización reversible + render a texto
+// ---------------------------------------------------------------------------
+
+// Convierte una tabla lógica a texto tipo Markdown, sustituyendo CADA valor
+// de texto (categoría) por un alias estable y reversible. Los números se dejan
+// intactos. Rellena aliasMap (alias → valor real) por efecto lateral.
+//
+// El alias se genera por columna: la 1ª ciudad distinta de la columna "Ciudad"
+// será "Ciudad A", la 2ª "Ciudad B", etc. Un mismo valor real recibe SIEMPRE
+// el mismo alias dentro de la consulta (consistencia), aunque aparezca en
+// varias filas o columnas con el mismo nombre.
+function tableToAnonymizedText(table, aliasMap, shapeNote) {
+  var columns = table.columns || [];
+  var rows = table.rows || [];
+
+  // Estado del aliasador: por cada "prefijo de columna" llevamos un contador
+  // y un sub-mapa valorReal → alias, para reutilizar alias.
+  var anonState = { counters: {}, valueToAlias: {} };
+
+  var outRows = [];
+  for (var r = 0; r < rows.length; r++) {
+    var row = rows[r] || [];
+    var outRow = [];
+    for (var c = 0; c < row.length; c++) {
+      var colName = columns[c] !== undefined ? String(columns[c]) : ("col_" + c);
+      outRow.push(anonymizeCell(row[c], colName, anonState, aliasMap));
+    }
+    outRows.push(outRow);
+  }
+
+  var lines = [];
+  if (shapeNote) lines.push(shapeNote);
+  if (shapeNote) lines.push("");
+  lines.push(columns.map(function (x) { return String(x); }).join(" | "));
+  lines.push(columns.map(function () { return "---"; }).join(" | "));
+  for (var i = 0; i < outRows.length; i++) {
+    lines.push(outRows[i].join(" | "));
+  }
+  return lines.join("\n");
+}
+
+// Decide si una celda es número (se deja), marca temporal (se deja) o
+// texto categórico (se pseudonimiza).
+function anonymizeCell(val, colName, anonState, aliasMap) {
+  if (val === null || val === undefined) return "—";
+  if (typeof val === "number") return formatNumberForLLM(val);
+
+  // Valores numéricos que vienen como string ("4200", "14.2%") → respetar.
+  var asStr = String(val).trim();
+  if (asStr === "") return "—";
+  if (isNumericLike(asStr)) return asStr;
+
+  // Marcas temporales (columnas mes/fecha/año): NO se pseudonimizan. Un mes
+  // como "jul-25" es una referencia de tiempo, no un dato identificativo, y
+  // ocultarlo haría ilegible cualquier serie temporal.
+  if (isTemporalColumn(colName)) return asStr;
+
+  // A partir de aquí es una categoría textual → alias reversible.
+  return aliasFor(asStr, colName, anonState, aliasMap);
+}
+
+function isTemporalColumn(colName) {
+  var s = String(colName).toLowerCase();
+  if (s.indexOf("mes") >= 0)   return true;
+  if (s.indexOf("fecha") >= 0) return true;
+  if (s.indexOf("año") >= 0 || s.indexOf("anio") >= 0 || s.indexOf("year") >= 0) return true;
+  return false;
+}
+
+// Genera (o reutiliza) un alias para un valor real dado, basado en el nombre
+// de su columna. "Madrid" en columna "Ciudades de interés" → "Ciudad A".
+function aliasFor(realValue, colName, anonState, aliasMap) {
+  // Si este valor real YA tiene alias (en cualquier columna del mismo grupo),
+  // lo reutilizamos para mantener consistencia.
+  if (Object.prototype.hasOwnProperty.call(anonState.valueToAlias, realValue)) {
+    return anonState.valueToAlias[realValue];
+  }
+  var prefix = aliasPrefixForColumn(colName);
+  if (!anonState.counters[prefix]) anonState.counters[prefix] = 0;
+  var idx = anonState.counters[prefix]++;
+  var alias = prefix + " " + indexToLetters(idx);
+  anonState.valueToAlias[realValue] = alias;
+  aliasMap[alias] = realValue; // para revertir en la respuesta del LLM
+  return alias;
+}
+
+// Deriva un prefijo legible a partir del nombre de columna.
+//   "Ciudades de interés"        → "Ciudad"
+//   "Residencias_interes_corregido" → "Residencia"
+//   "Origen_Agrupado"            → "Origen"
+//   "Fuente_Agrupada"            → "Fuente"
+//   "Curso_corregido"            → "Curso"
+//   cualquier otra              → "Categoría"
+function aliasPrefixForColumn(colName) {
+  var s = String(colName).toLowerCase();
+  if (s.indexOf("ciudad") >= 0)     return "Ciudad";
+  if (s.indexOf("residencia") >= 0) return "Residencia";
+  if (s.indexOf("curso") >= 0)      return "Curso";
+  if (s.indexOf("origen") >= 0)     return "Origen";
+  if (s.indexOf("fuente") >= 0)     return "Fuente";
+  if (s.indexOf("campaña") >= 0 || s.indexOf("campana") >= 0) return "Campaña";
+  if (s.indexOf("tipo") >= 0)       return "Tipo";
+  if (s.indexOf("particular") >= 0 || s.indexOf("grupo") >= 0 || s.indexOf("segmento") >= 0) return "Segmento";
+  if (s.indexOf("mes") >= 0)        return "Mes";
+  if (s.indexOf("kpi") >= 0 || s.indexOf("métrica") >= 0 || s.indexOf("metrica") >= 0) return "Métrica";
+  return "Categoría";
+}
+
+// 0→A, 1→B, ... 25→Z, 26→AA, 27→AB, ... (base-26 estilo Excel).
+function indexToLetters(n) {
+  var s = "";
+  n = n + 1; // 1-based
+  while (n > 0) {
+    var rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// Revierte los alias en la respuesta del LLM: "Ciudad A" → "Madrid".
+// Ordenamos los alias por longitud descendente para evitar que "Ciudad A"
+// se solape mal con "Ciudad AA" (reemplazaríamos el prefijo y dejaríamos "A").
+function deanonymizeText(text, aliasMap) {
+  if (!text || !aliasMap) return text;
+  var aliases = Object.keys(aliasMap);
+  aliases.sort(function (a, b) { return b.length - a.length; });
+  var out = text;
+  for (var i = 0; i < aliases.length; i++) {
+    var alias = aliases[i];
+    var real = aliasMap[alias];
+    // Reemplazo global, respetando límites de palabra a izquierda/derecha
+    // para no romper texto que contenga el alias por casualidad.
+    var pattern = new RegExp("(^|[^\\wÀ-ÿ])(" + escapeRegExp(alias) + ")(?![\\wÀ-ÿ])", "g");
+    out = out.replace(pattern, function (m, pre) { return pre + real; });
+  }
+  return out;
+}
+
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ¿Una cadena representa "solo un número" (entero, decimal, %, miles)?
+function isNumericLike(s) {
+  // Acepta: 4200, 4.200, 4,200, 14.2, 14,2, 14.2%, -3, 1.234,56 ...
+  return /^-?[\d.\s,]+%?$/.test(s) && /\d/.test(s);
+}
+
+function formatNumberForLLM(val) {
+  if (Number.isInteger(val)) return String(val);
+  return (Math.round(val * 10000) / 10000).toString();
+}
+
+// Columnas con PII DIRECTA (correo, nombre, apellidos): no se pseudonimizan,
+// se eliminan por completo antes de enviar nada al LLM.
+function isSensitiveColumn(colName) {
+  if (colName === null || colName === undefined) return false;
+  var s = String(colName).trim().toLowerCase();
+  for (var i = 0; i < SENSITIVE_COLUMNS.length; i++) {
+    if (s === SENSITIVE_COLUMNS[i].toLowerCase()) return true;
+  }
+  if (s.indexOf("correo") >= 0) return true;
+  if (s.indexOf("email") >= 0 || s.indexOf("e-mail") >= 0) return true;
+  if (s.indexOf("nombre") >= 0) return true;
+  if (s.indexOf("apellido") >= 0) return true;
+  return false;
+}
+
+
 // ============================================================================
 //  Generar conclusiones (insights_script.py + parser LLM fallback)
+//  [DESACTIVADO] Todo este bloque está comentado por decisión de producto:
+//  primero pulimos el flujo básico antes de reactivar las conclusiones.
+//  Para reactivar: borra esta línea, las marcas /* y */ que envuelven el
+//  bloque, y revierte las otras marcas "[Generar conclusiones desactivado]"
+//  repartidas por el archivo.
 // ============================================================================
-
+/*
 async function generateInsights() {
   if ((!lastUserQuery && !lastTurn) || busy) return;
   if (!insightsScript) {
@@ -1310,6 +1915,8 @@ function updateInsightButton() {
     hint.textContent = "Procesando...";
   }
 }
+*/
+// [Fin del bloque Generar conclusiones desactivado]
 
 
 // ============================================================================
@@ -1479,6 +2086,7 @@ function appendResult(result, code, route) {
     renderPlotlyInto(result.__plotElId, result.value);
   }
   scrollToBottom();
+  return d;
 }
 
 function attachCodeToggle(container) {
@@ -1632,10 +2240,6 @@ function buildClarifyBoxHtml(payload, step, total) {
     optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
                 '">' + esc(opciones[i]) + '</button>';
   }
-  // Campo "Ninguna de estas" SIEMPRE presente: cubre los casos en los que
-  // ninguna de las opciones generadas por el LLM le encaja al usuario.
-  // Si el LLM ya marcó `permitirOtro: true`, este input absorbe esa función:
-  // no duplicamos UI con dos cajas de texto distintas.
   var otherLabel = (payload.permitirOtro !== false)
       ? "Otro... (escribe tu respuesta)"
       : "Ninguna de estas: escribe tu respuesta";

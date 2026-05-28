@@ -2,6 +2,11 @@ import re
 import numpy as np
 import pandas as pd
 
+# Identificador histórico. Se conserva por si se necesita en el futuro
+# (p. ej. métricas de "personas únicas"), pero el script cuenta por FILAS
+# (registros) para no infraestimar volúmenes cuando muchos correos vienen
+# como "ninguno" o vacíos, y para que una misma persona con varias solicitudes
+# (a distintas ciudades/residencias) cuente como varios registros.
 ID_COL = "Correo electrónico"
 COURSE_COL = "Curso"
 
@@ -203,16 +208,26 @@ def fmt_num(n):
         return str(n)
 
 
-def fmt_pct(p, dec=2):
+def fmt_pct(p, dec=1):
+    """Variación porcentual SIGNADA (p es una fracción tipo 0.12 → '+12,0 %')."""
     if p is None or (isinstance(p, float) and np.isnan(p)):
         return "—"
-    return f"{p*100:+.{dec}f}%"
+    return f"{p*100:+.{dec}f} %".replace(".", ",")
 
 
-def fmt_pct_abs(p, dec=2):
+def fmt_pct_abs(p, dec=1):
+    """Porcentaje absoluto (p es una fracción tipo 0.12 → '12,0 %')."""
     if p is None or (isinstance(p, float) and np.isnan(p)):
         return "—"
-    return f"{p*100:.{dec}f}%"
+    return f"{p*100:.{dec}f} %".replace(".", ",")
+
+
+def fmt_pp(v, dec=2):
+    """Variación en puntos porcentuales (v ya está en unidades de puntos)."""
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return "—"
+    signo = "+" if v >= 0 else "−"
+    return f"{signo}{abs(v):.{dec}f} pp".replace(".", ",")
 
 
 def var_pct(nuevo, viejo):
@@ -378,11 +393,16 @@ def detectar_metrica(texto):
 
 
 def kpis_cohorte(df_cohorte):
-    leads = int(df_cohorte[df_cohorte["Tipo de registro"] == "Leads"][ID_COL].nunique())
-    contacts = int(df_cohorte[
+    # Conteo por FILAS (registros), no por correos únicos.
+    # Motivo: muchos registros llegan con correo "ninguno" o vacío y agruparlos
+    # por correo colapsa volúmenes legítimos. Además, una misma persona puede
+    # generar varias solicitudes (distintas ciudades/residencias) y cada una
+    # debe contar como un registro independiente.
+    leads = int(len(df_cohorte[df_cohorte["Tipo de registro"] == "Leads"]))
+    contacts = int(len(df_cohorte[
         (df_cohorte["Tipo de registro"] == "Contacts") &
         (df_cohorte["Particular o Grupo"] == "Particular")
-    ][ID_COL].nunique())
+    ]))
     denom = leads + contacts
     cr = contacts / denom if denom > 0 else 0.0
     return {"leads": leads, "contacts": contacts, "cr": cr, "total": denom}
@@ -545,11 +565,12 @@ def breakdown_dimension(df_a, df_b, dim, min_total=MIN_RECORDS_FOR_BREAKDOWN):
     def _agg(df):
         d = df.copy()
         d[dim] = d[dim].fillna("Sin info").astype(str)
+        # Conteo por FILAS (registros), no por correos únicos.
         leads = (d[d["Tipo de registro"] == "Leads"]
-                 .groupby(dim)[ID_COL].nunique())
+                 .groupby(dim).size())
         contacts = (d[(d["Tipo de registro"] == "Contacts") &
                       (d["Particular o Grupo"] == "Particular")]
-                    .groupby(dim)[ID_COL].nunique())
+                    .groupby(dim).size())
         return leads, contacts
 
     leads_a, contacts_a = _agg(df_a)
@@ -613,7 +634,6 @@ def render_tabla_breakdown(bd, label_a, label_b, ordenar_por="Delta_Leads", max_
         valor = r[dim_col] if pd.notna(r[dim_col]) else "Sin info"
         dl = int(r["Delta_Leads"]); s_dl = "+" if dl >= 0 else ""
         dc = int(r["Delta_Contacts"]); s_dc = "+" if dc >= 0 else ""
-        dcr = r["Delta_CR_pp"]; s_dcr = "+" if dcr >= 0 else ""
         lineas.append(
             f"| **{valor}** | "
             f"{fmt_num(r['Leads_A'])} → {fmt_num(r['Leads_B'])} | "
@@ -621,7 +641,7 @@ def render_tabla_breakdown(bd, label_a, label_b, ordenar_por="Delta_Leads", max_
             f"{fmt_num(r['Contacts_A'])} → {fmt_num(r['Contacts_B'])} | "
             f"**{s_dc}{fmt_num(dc)}** | "
             f"{fmt_pct_abs(r['CR_A'])} → {fmt_pct_abs(r['CR_B'])} | "
-            f"{s_dcr}{dcr:.2f} |"
+            f"{fmt_pp(r['Delta_CR_pp'])} |"
         )
     return "\n".join(lineas)
 
@@ -643,8 +663,7 @@ def describir_cambio_metrica(metrica, kpi_a, kpi_b):
         v_a, v_b = kpi_a["cr"], kpi_b["cr"]
         delta_pp = (v_b - v_a) * 100
         signo = "subido" if delta_pp > 0 else ("bajado" if delta_pp < 0 else "mantenido")
-        s = "+" if delta_pp >= 0 else ""
-        return f"La **conversión** ha {signo} de **{fmt_pct_abs(v_a)}** a **{fmt_pct_abs(v_b)}** ({s}{delta_pp:.2f} puntos)."
+        return f"La **conversión** ha {signo} de **{fmt_pct_abs(v_a)}** a **{fmt_pct_abs(v_b)}** ({fmt_pp(delta_pp)})."
     return ""
 
 df_base = aplicar_filtros_extra(leads_contacts, extra_filters)
@@ -923,7 +942,7 @@ else:
         s_cr = "+" if d_cr_pp >= 0 else ""
         md.append(
             f"| **Conversión** | {fmt_pct_abs(kpis_a['cr'])} | {fmt_pct_abs(kpis_b['cr'])} | "
-            f"{s_cr}{d_cr_pp:.2f} pp ({fmt_pct(var_pct(kpis_b['cr'], kpis_a['cr']))}) |"
+            f"{fmt_pp(d_cr_pp)} ({fmt_pct(var_pct(kpis_b['cr'], kpis_a['cr']))}) |"
         )
         md.append("")
 
