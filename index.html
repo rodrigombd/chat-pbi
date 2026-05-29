@@ -498,10 +498,6 @@ var CSV_TABLES = {
 var PRIMARY_CSV          = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 
-// Conclusiones: columnas con datos PERSONALES DIRECTOS. Estas NO se
-// pseudonimizan (no tendría sentido un alias para un correo): se ELIMINAN
-// por completo antes de enviar nada al LLM. El resto de categorías textuales
-// (ciudades, residencias, canales...) sí se pseudonimizan de forma reversible.
 var SENSITIVE_COLUMNS = [
   "Correo electrónico", "Correo electronico", "correo electrónico", "correo electronico",
   "Email", "email", "E-mail", "e-mail",
@@ -619,9 +615,7 @@ async function initPyodide() {
 
 async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
-  // [Generar conclusiones desactivado] Sin scikit-learn: solo lo usaba
-  // insights_script.py (RandomForest + permutation importance). Para
-  // reactivar, vuelve a incluirlo en el array: ["pandas", "numpy", "scikit-learn"]
+  // [Generar conclusiones desactivado] Sin scikit-learn.
   await pyodide.loadPackage(["pandas", "numpy"]);
   await pyodide.runPythonAsync(
     "import pandas as pd\n" +
@@ -1263,10 +1257,6 @@ function conclusionsEnabled() {
   return !!(t && t.checked);
 }
 
-// Solo descartamos conclusión si el resultado es un error o está vacío.
-// El resto de tipos (escalar, texto, dict, dataframe Y gráfico plotly) son
-// elegibles: para los gráficos extraemos los datos subyacentes de las traces
-// (ver dataFrameFromPlotlySpec) y razonamos sobre ellos igual que con una tabla.
 function isResultEligibleForConclusion(r) {
   if (!r) return false;
   if (r.kind === "error" || r.kind === "error_friendly") return false;
@@ -1461,7 +1451,7 @@ function tableFromPlotlySpec(jsonStr) {
   var catOrder = [];
   var catSeen = {};
   var seriesNames = [];
-  var grid = {}; // cat -> { serie -> value }
+  var grid = {};
 
   for (var t = 0; t < traces.length; t++) {
     var tr = traces[t] || {};
