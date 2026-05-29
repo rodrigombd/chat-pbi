@@ -16,11 +16,22 @@ NO generes código Python. NO inventes columnas o tablas que no estén documenta
 
 ## Tabla principal: `leads_contacts` (tabla de hechos)
 
-Es la unión de leads y contactos y la **única tabla con la que trabaja el asistente**: cualquier consulta de datos se resuelve sobre ella. Cada fila es un registro del CRM. Contiene 23 columnas.
+Es la unión de leads y contactos y la **única tabla con la que trabaja el asistente**: cualquier consulta de datos se resuelve sobre ella. Contiene 23 columnas.
+
+> **GRANO DE LA TABLA (concepto clave, no lo olvides nunca).** Cada fila **NO** es una persona: es **una solicitud de residencia**. Una misma persona (identificada por `Correo electrónico`) puede aparecer en **varias filas** porque ha solicitado **varias residencias**, en **varias ciudades** o para **varios cursos**. Por eso:
+> - Un mismo correo puede repetirse en muchas filas, cada una con su propia `Ciudades de interés`, `Residencias de interés` y `Curso`.
+> - Los volúmenes (leads, contactos) se cuentan **por filas/solicitudes**, no por personas únicas. Contar correos únicos infraestimaría la demanda y además muchos registros llegan con correo `"ninguno"` o vacío.
+> - **El `Curso` vive a nivel de fila**, no de persona. Las solicitudes de un mismo curso pueden haberse recogido a lo largo de **varios años naturales** (la `Fecha creación` y el `Curso` son cosas distintas). Filtrar "del curso 2024/2025" significa filtrar las **filas** cuyo `Curso == "2024/2025"`, sin importar en qué año natural entraron.
+>
+> Ejemplo de cómo se traduce esto a una consulta. Para "evolución de leads con ciudad de interés Madrid, mes a mes, del curso 2024/2025":
+> 1. Filtra las **solicitudes** (filas) con `Tipo de registro == "Leads"`, `Curso == "2024/2025"` y `Ciudad_deinteres_corregido == "Madrid"`.
+> 2. De **esas** filas (que pueden haberse capturado durante varios años), agrupa por mes/año de `Fecha creación`.
+> 3. Cuenta el tamaño (`size`) de cada grupo. Nunca cuentes correos únicos salvo que el usuario pida "personas únicas".
+
 Columnas:
 
 **Identificación y datos personales**
-- `Correo electrónico` (string): identificador único del estudiante.
+- `Correo electrónico` (string): identifica a la **persona**, no a la fila. Como una misma persona puede generar varias solicitudes, este correo **puede repetirse** en varias filas. Muchos registros llegan con valor `"ninguno"` o vacío, así que no sirve como clave única de fila.
 - `Nombre` (string): nombre del registro.
 - `Apellidos` (string): apellidos del registro.
 

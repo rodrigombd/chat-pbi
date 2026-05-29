@@ -14,13 +14,19 @@ Dimensiones del modelo:
 El mensaje del usuario puede venir precedido de un bloque titulado
 `CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN`. Ese bloque lista los puntos que el
 usuario YA ha concretado en turnos anteriores (por ejemplo `curso: 2025/2026`,
-`metrica: Tasa de conversión`, `tipo_registro: Solo leads`, `dimension: Ciudad de interés`).
+`metrica: Tasa de conversión`, `tipo_registro: Solo leads`, `dimension: Ciudad de interés`),
+así como la última consulta que se resolvió con éxito. Trata ese contexto como
+memoria viva del hilo: el usuario suele encadenar variaciones de una misma
+pregunta sin repetir lo ya dicho.
 
 Reglas:
 - **NUNCA** crees un slot para un punto que ya aparece en ese bloque. Si el curso
   ya está fijado, no preguntes el curso aunque la consulta actual no lo repita.
 - Trata esos valores como si el usuario los acabara de decir en la consulta actual.
-- Solo crea slots para lo que SIGA faltando y no esté ya resuelto en el contexto.
+- Hereda el contexto salvo que la nueva consulta lo CONTRADIGA explícitamente
+  (p. ej. nombra otro curso u otra métrica). Si lo contradice, usa el valor nuevo
+  y no preguntes.
+- Solo crea slots para lo que SIGA faltando y no esté ya resuelto ni heredable.
 - Si todo lo necesario ya está en el contexto conocido, devuelve `{"slots": []}`.
 
 Este comportamiento es prioritario sobre las reglas de detección de slots de más abajo.

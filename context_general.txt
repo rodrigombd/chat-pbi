@@ -26,7 +26,9 @@ Si la pregunta no se puede responder con los datos disponibles, asigna a `result
 El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 
 1. **NO uses `pd.read_csv` ni ningún acceso a ficheros/red.** Los DataFrames YA ESTÁN cargados como variables globales (ver sección DATAFRAMES).
-2. **NO uses `print()`.** Solo asigna a `resultado`.
+2. **NO uses `print()`.** Solo asigna a `resultado`. NUNCA conviertas una tabla a texto: prohibido `resultado = str(df)`, `df.to_string()`, `df.to_markdown()` o `repr(df)`. Para cualquier tabla, ranking o agrupación asigna el `DataFrame` o `Series` directamente (`resultado = df`), nunca su representación en texto. El front lo renderiza como tabla alineada; un string se mostraría como un bloque ilegible.
+
+2b. **Cada celda de un DataFrame debe ser un valor escalar** (número, texto corto, fecha). NUNCA pongas listas, tuplas, dicts, `Series` ni otros DataFrames dentro de una celda: rompen el renderizado de la tabla. Si necesitas asociar varios valores a una fila, crea una columna por valor o explota (`explode`) la lista en varias filas antes de asignar a `resultado`. Tampoco uses `.agg(list)` ni `.apply(lambda x: list(x))` salvo que después conviertas el resultado a texto con `", ".join(...)`.
 3. **Indentación:** usa SIEMPRE 4 espacios. No mezcles tabs y espacios.
 4. **División por cero**: usa siempre condicional o `np.where`:
    ```
@@ -34,7 +36,9 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
    ```
 5. **Conteo de registros**: para contar registros usa `len(df)` (o equivalente) sobre el DataFrame filtrado. **NUNCA** uses `["Correo electrónico"].nunique()` por defecto: muchos registros llegan con el correo `"ninguno"` o vacío y agruparlos por correo distorsiona los volúmenes. Una misma persona también puede generar varias solicitudes legítimas (a distintas ciudades o residencias) y cada solicitud debe contar como un registro. Usa `nunique()` **solo** si el usuario pide explícitamente "personas únicas", "usuarios únicos" o "correos únicos".
 6. **NaN en filtros de string**: si filtras con `.str.contains` sobre una columna que puede tener NaN, añade primero `.fillna("")` o `.astype(str)`.
-7. **Fechas**: la columna `Fecha creación` ya está parseada como datetime. Para filtrar por año: `df["Fecha creación"].dt.year == 2025`. NO uses `pd.to_datetime` otra vez.
+7. **Fechas**: la columna `Fecha creación` ya está parseada como datetime. Para filtrar por año natural: `df["Fecha creación"].dt.year == 2025`. NO uses `pd.to_datetime` otra vez.
+
+7b. **Grano = solicitud, no persona (CONCEPTO CLAVE)**: cada fila es **una solicitud de residencia**, no un usuario. Una misma persona puede tener varias filas (varias ciudades/residencias/cursos). El `Curso` vive **a nivel de fila**: filtrar "del curso 2024/2025" = filtrar las **filas** con `Curso == "2024/2025"`, da igual en qué año natural entraron (un curso se recopila a lo largo de varios años). Para una evolución mensual de un curso: primero filtra por `Curso == "<curso>"` (y demás filtros como ciudad), y SOLO DESPUÉS agrupa esas filas por mes/año de `Fecha creación` y haz `size()`. NUNCA mezcles el filtro de curso con `dt.year` ni cuentes correos únicos para una evolución.
 8. **Después de un `groupby(...).agg(...)`** llama a `.reset_index()` para conservar la columna de agrupación.
 9. **Nombres de columnas con tildes y espacios**: úsalos EXACTAMENTE como aparecen abajo. `"Correo electrónico"` lleva tilde. `"Tipo de registro"` tiene espacios.
 10. **Imports permitidos**: solo `pandas as pd`, `numpy as np`. NO `seaborn`. NO `plotly`. NO `matplotlib`. Para gráficos construye el dict Plotly a mano (sección GRÁFICOS).

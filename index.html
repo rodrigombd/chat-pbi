@@ -7,6 +7,9 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -40,8 +43,16 @@ header {
   display: flex; align-items: center; gap: 14px; flex-shrink: 0;
 }
 .header-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.new-chat-btn {
+  font-size: 12px; color: #fff; cursor: pointer;
+  background: var(--accent); border: 1px solid var(--accent-dk);
+  border-radius: 20px; padding: 4px 12px; font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+.new-chat-btn:hover { background: var(--accent-dk); border-color: var(--accent-dk); }
 .header-model {
-  margin-left: auto; font-size: 12px; color: var(--text3);
+  font-size: 12px; color: var(--text3);
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 20px; padding: 2px 10px;
 }
@@ -221,23 +232,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 }
 .quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: var(--accent-lt); }
 
-/* ---- Actions bar (Generar conclusiones) ---- */
-#actions-bar {
-  padding: 0 18px 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-}
-.action-btn {
-  background: var(--insight-lt); border: 1px solid #b8cdf7; border-radius: 20px;
-  color: var(--insight-dk); font-family: inherit;
-  font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer;
-  transition: all 0.12s; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.action-btn:hover:not(:disabled) {
-  background: var(--insight); color: #fff; border-color: var(--insight);
-}
-.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.action-hint { font-size: 12px; color: var(--text3); }
-
 /* ---- Input ---- */
 #input-area {
   padding: 10px 16px 12px; border-top: 1px solid var(--border); background: var(--bg);
@@ -395,7 +389,10 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
-  <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
+  <span class="header-right">
+    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversaci&oacute;n nueva y olvida el contexto anterior" style="display:none;">+ Nuevo chat</button>
+    <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
+  </span>
 </header>
 
 <div id="setup-panel">
@@ -413,9 +410,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
       <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy</span></div>
       <div class="step" id="step-csv"><span class="dot"></span><span>Cargando datos principales</span></div>
-      <!-- [Generar conclusiones desactivado] paso de carga del script de análisis:
-      <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de an&aacute;lisis</span></div>
-      -->
     </div>
   </div>
 </div>
@@ -435,26 +429,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <button class="quick-btn" onclick="quickAsk('Gr&aacute;fico de evoluci&oacute;n mensual de leads en 2025')">evoluci&oacute;n mensual</button>
     <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
   </div>
-
-  <!--
-    [Generar conclusiones desactivado por decisión de producto: vamos a centrarnos
-     primero en pulir el flujo de consultas básicas. El script `insights_script.py`
-     queda mantenido en el repo pero NO se carga ni se ejecuta. Para reactivar:
-     1) Descomenta este bloque <div id="actions-bar"> ... </div>.
-     2) Descomenta la entrada `insights_parser` en PROMPT_FILES.
-     3) Descomenta `await loadInsightsScript();` en initChat().
-     4) Descomenta el step "step-insights" en el panel de progreso.
-     5) Descomenta las funciones generateInsights / setInsightsContext /
-        maybeReparseAndRerun / parseQueryForInsights / updateInsightButton y la
-        llamada a updateInsightButton dentro de setBusy(false).]
-
-  <div id="actions-bar">
-    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Explica a qu&eacute; se debe la variaci&oacute;n entre los dos elementos de la consulta">
-      &#128202; Generar conclusiones
-    </button>
-    <span class="action-hint" id="insight-hint">Haz una consulta comparativa para activar el an&aacute;lisis.</span>
-  </div>
-  -->
 
   <div id="conclusions-bar">
     <label class="toggle-switch" title="Si est&aacute; activo, tras cada consulta de datos el asistente generar&aacute; una conclusi&oacute;n breve del resultado.">
@@ -487,12 +461,16 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 
 
-var MODEL_ID    = "gpt-4.1-mini";
+var MODEL_ID    = "gpt-4o";
 var MAX_HISTORY = 12;
 var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
 var STORAGE_CTX_KEY  = "resa_assistant_session_context";
+var STORAGE_TS_KEY   = "resa_assistant_session_ts";
+var SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+var CONFIRM_EVERY_TURNS = 4;
 var conversationId   = null;
 var lastResponseId   = null;
+var supportsCacheRetention = true;
 
 var PROMPT_FILES = {
   router:          "context_router.txt",
@@ -521,6 +499,26 @@ var CONCLUSION_MAX_ROWS = 40;
 
 marked.use({ breaks: true, gfm: true });
 
+function renderRich(text) {
+  var html = marked.parse(text || "");
+  var tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(tmp, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "$", right: "$", display: false }
+        ],
+        throwOnError: false
+      });
+    } catch (e) {}
+  }
+  return tmp.innerHTML;
+}
+
 
 // ============================================================================
 //  Estado
@@ -528,7 +526,6 @@ marked.use({ breaks: true, gfm: true });
 
 var apiKey         = "";
 var prompts        = {};
-// var insightsScript = "";
 var pyodide        = null;
 var loadedCsvs     = new Set();
 var busy           = false;
@@ -537,6 +534,8 @@ var pendingClarify = null;
 var lastUserQuery  = null;
 var lastTurn       = null;
 var sessionContext = {};
+var dataTurnCount  = 0;
+var awaitingThreadConfirm = false;
 
 
 // ============================================================================
@@ -558,7 +557,6 @@ async function initChat() {
     await loadPyodidePackages();
     await installRuntimeHelpers();
     var csvOk = await loadPrimaryCsv();
-    // await loadInsightsScript();
     apiKey = key;
     await ensureConversation();
     revealChatPanel();
@@ -581,13 +579,6 @@ async function initChat() {
         "Asegúrate de que están en la misma carpeta que <code>index.html</code>."
       );
     }
-    // [Generar conclusiones desactivado].
-    // if (!insightsScript) {
-    //   appendDevBanner(
-    //     "⚠️ <strong>No se cargó <code>insights_script.py</code>.</strong> " +
-    //     "El botón \"Generar conclusiones\" no estará disponible."
-    //   );
-    // }
   } catch (e) {
     console.error(e);
     alert("Error inicializando: " + e.message);
@@ -713,6 +704,18 @@ async function installRuntimeHelpers() {
     "    if isinstance(_r, (float, _np.floating)):\n" +
     "        return _j.dumps({'kind':'number','value':float(_r)})\n" +
     "    if isinstance(_r, str):\n" +
+    "        _lines = [l for l in _r.split('\\n') if l.strip()]\n" +
+    "        _looks_tabular = len(_lines) >= 2 and (('|' in _r and _r.count('|') >= 2) or all(len(l.split()) >= 2 for l in _lines[:3]))\n" +
+    "        if _looks_tabular:\n" +
+    "            import io as _io\n" +
+    "            for _sep in (r'\\s*\\|\\s*', r'\\s{2,}', r'\\t'):\n" +
+    "                try:\n" +
+    "                    _df2 = _pd.read_csv(_io.StringIO(_r), sep=_sep, engine='python')\n" +
+    "                    _df2 = _df2.loc[:, ~_df2.columns.astype(str).str.match(r'^Unnamed')]\n" +
+    "                    if _df2.shape[1] >= 2 and _df2.shape[0] >= 1:\n" +
+    "                        return _j.dumps({'kind':'dataframe','value':_df2.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df2.shape)}, ensure_ascii=False)\n" +
+    "                except Exception:\n" +
+    "                    pass\n" +
     "        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)\n" +
     "    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)\n";
   await pyodide.runPythonAsync(helpers);
@@ -725,29 +728,33 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
-/*
-async function loadInsightsScript() {
-  setStep("step-insights", "active");
-  try {
-    var r = await fetch("insights_script.py?v=" + Date.now());
-    if (r.ok) {
-      insightsScript = await r.text();
-    } else {
-      console.warn("insights_script.py no disponible (HTTP " + r.status + ")");
-    }
-  } catch (e) {
-    console.warn("Error cargando insights_script.py:", e);
-  }
-  setStep("step-insights", insightsScript ? "done" : "error");
-}
-*/
 
 function revealChatPanel() {
   var hm = document.getElementById("header-model");
   if (hm) hm.textContent = "openai · pyodide · plotly";
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("chat-panel").style.display = "flex";
+  var nc = document.getElementById("new-chat-btn");
+  if (nc) nc.style.display = "";
   setStatus("conectado · listo", "ok");
+  document.getElementById("user-input").focus();
+}
+
+async function startNewChat() {
+  if (busy) return;
+  clearLocalSession();
+  pendingClarify = null;
+  var box = document.getElementById("messages");
+  box.innerHTML =
+    '<div class="welcome-area" id="welcome">' +
+    '<h3>&iquest;En qu&eacute; puedo ayudarte?</h3>' +
+    '<p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, ' +
+    'si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y ' +
+    'produce un gr&aacute;fico interactivo.</p></div>';
+  var quicks = document.getElementById("quick-questions");
+  if (quicks) quicks.style.display = "";
+  setStatus("nuevo chat · listo", "ok");
+  await createConversation();
   document.getElementById("user-input").focus();
 }
 
@@ -838,23 +845,10 @@ async function ensureTablesLoaded(pythonCode) {
 // ============================================================================
 //  API del modelo
 // ============================================================================
-
-// Interfaz única de llamada al modelo (OpenAI Responses API). El resto del
-// código solo recibe texto plano y no conoce los detalles de la API.
-//
-//   messages      → array [{role, content}] (estilo chat). El último es el
-//                   mensaje nuevo del usuario.
-//   systemPrompt  → instrucciones de sistema del paso (context_*.txt).
-//   opts          → { maxTokens, model, threaded }
-//                   threaded:true  → la llamada pertenece al hilo persistente
-//                                    del usuario: se adjunta a la Conversation
-//                                    y se encadena por id.
-//                   threaded:false → llamada aislada y efímera (router,
-//                                    clarify, modelo, conclusiones).
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
   var cfg      = {
-    model:            "gpt-4.1-mini",
+    model:            "gpt-4o",
     responsesUrl:     "https://api.openai.com/v1/responses",
     conversationsUrl: "https://api.openai.com/v1/conversations"
   };
@@ -876,8 +870,17 @@ async function callModel(messages, systemPrompt, opts) {
     instructions: systemPrompt,
     input:input,
     max_output_tokens: opts.maxTokens || 1500,
-    store: threaded
+    store: threaded,
+    truncation: "auto"
   };
+
+  if (supportsCacheRetention) {
+    body.prompt_cache_retention = "24h";
+  }
+
+  if (typeof opts.temperature === "number") {
+    body.temperature = opts.temperature;
+  }
 
   if (threaded) {
     if (conversationId) {
@@ -898,7 +901,26 @@ async function callModel(messages, systemPrompt, opts) {
 
   if (!r.ok) {
     var errData = await r.json().catch(function () { return {}; });
-    throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
+    var errMsg = (errData.error && errData.error.message) || ("HTTP " + r.status);
+    var param = errData.error && errData.error.param;
+    if (param && Object.prototype.hasOwnProperty.call(body, param)) {
+      if (param === "prompt_cache_retention") supportsCacheRetention = false;
+      delete body[param];
+      r = await fetch(cfg.responsesUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": "Bearer " + apiKey
+        },
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) {
+        var e2 = await r.json().catch(function () { return {}; });
+        throw new Error((e2.error && e2.error.message) || ("HTTP " + r.status));
+      }
+    } else {
+      throw new Error(errMsg);
+    }
   }
 
   var d = await r.json();
@@ -946,16 +968,48 @@ async function ensureConversation() {
   if (conversationId) return conversationId;
 
   var stored = null;
-  try { stored = localStorage.getItem(STORAGE_CONV_KEY); } catch (e) {}
-  if (stored) {
+  var storedTs = 0;
+  try {
+    stored = localStorage.getItem(STORAGE_CONV_KEY);
+    storedTs = parseInt(localStorage.getItem(STORAGE_TS_KEY) || "0", 10) || 0;
+  } catch (e) {}
+
+  var fresh = stored && (Date.now() - storedTs) < SESSION_MAX_AGE_MS;
+  if (fresh) {
     conversationId = stored;
     try {
       var rawCtx = localStorage.getItem(STORAGE_CTX_KEY);
       if (rawCtx) sessionContext = JSON.parse(rawCtx) || {};
     } catch (e) { sessionContext = {}; }
+    touchSession();
     return conversationId;
   }
 
+  clearLocalSession();
+  return await createConversation();
+}
+
+function touchSession() {
+  try { localStorage.setItem(STORAGE_TS_KEY, String(Date.now())); } catch (e) {}
+}
+
+function clearLocalSession() {
+  conversationId = null;
+  lastResponseId = null;
+  sessionContext = {};
+  chatHistory = [];
+  lastTurn = null;
+  lastUserQuery = null;
+  dataTurnCount = 0;
+  awaitingThreadConfirm = false;
+  try {
+    localStorage.removeItem(STORAGE_CONV_KEY);
+    localStorage.removeItem(STORAGE_CTX_KEY);
+    localStorage.removeItem(STORAGE_TS_KEY);
+  } catch (e) {}
+}
+
+async function createConversation() {
   try {
     var r = await fetch("https://api.openai.com/v1/conversations", {
       method: "POST",
@@ -963,15 +1017,14 @@ async function ensureConversation() {
         "Content-Type":  "application/json",
         "Authorization": "Bearer " + apiKey
       },
-      body: JSON.stringify({
-        metadata: { app: "resa-analytics-assistant" }
-      })
+      body: JSON.stringify({ metadata: { app: "resa-analytics-assistant" } })
     });
     if (r.ok) {
       var d = await r.json();
       if (d && d.id) {
         conversationId = d.id;
         try { localStorage.setItem(STORAGE_CONV_KEY, conversationId); } catch (e) {}
+        touchSession();
       }
     } else {
       console.warn("[conversations] no se pudo crear la conversación: HTTP " + r.status);
@@ -1009,6 +1062,12 @@ async function sendMessage(text) {
   resetInput(input);
   hideWelcomeAndQuicks();
   appendMsg("user", userText);
+
+  if (awaitingThreadConfirm) {
+    await handleThreadConfirm(userText);
+    return;
+  }
+
   pendingClarify = null;
   setBusy(true);
 
@@ -1026,23 +1085,14 @@ async function sendMessage(text) {
       return;
     }
 
-    // ----- Paso 2: clarify (solo para tipo "datos") -----
-    var plan = await planSlots(userText);
-    if (plan && plan.slots && plan.slots.length > 0) {
-      pendingClarify = {
-        userQuery: userText,
-        missing: plan.slots.slice(),
-        answered: [],
-        total: plan.slots.length
-      };
-      lastUserQuery = userText;
-      askNextSlot();
+    // ----- Paso 1b: reconfirmación periódica del hilo -----
+    if (shouldConfirmThread()) {
+      askThreadConfirm(userText);
       return;
     }
 
-    // ----- Paso 3: ir directo a generación si no hay slots -----
-    lastUserQuery = userText;
-    await answerDataQuery(userText, []);
+    // ----- Paso 2: clarify + generación -----
+    await runDataPipeline(userText);
   } catch (e) {
     clearStaleTypings();
     appendError("Error en la consulta: " + (e.message || String(e)));
@@ -1067,9 +1117,6 @@ function hideWelcomeAndQuicks() {
 function setBusy(b) {
   busy = b;
   document.getElementById("send-btn").disabled = b;
-  // [Generar conclusiones desactivado]
-  // if (b) document.getElementById("insight-btn").disabled = true;
-  // else updateInsightButton();
 }
 
 function fallbackGreeting() {
@@ -1089,7 +1136,7 @@ async function routeMessage(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.router,
-      { maxTokens: 300 }
+      { maxTokens: 300, temperature: 0.2 }
     );
     removeTyping(tid);
     var j = extractJSON(reply);
@@ -1119,7 +1166,7 @@ async function answerModelQuery(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.modelo_datos,
-      { maxTokens: 1200 }
+      { maxTokens: 1200, temperature: 0.5 }
     );
     removeTyping(tid);
     appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
@@ -1143,6 +1190,28 @@ function rememberAnsweredSlots(answeredSlots) {
   try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
 }
 
+function rememberQueryParams(queryText) {
+  if (!queryText) return;
+  var t = String(queryText);
+
+  var mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
+  if (mCurso) {
+    sessionContext.curso = mCurso[1] + "/" + mCurso[2];
+  } else if (/\bhist[oó]ric|\btodos los cursos\b/i.test(t)) {
+    sessionContext.curso = "Histórico (todos los cursos)";
+  }
+
+  if (/\bconversi[oó]n\b|\btasa de conversi[oó]n\b|\bCR\b/i.test(t)) {
+    sessionContext.metrica = "Tasa de conversión";
+  } else if (/\bcontactos?\b|\bfirmas?\b|\breservas?\b/i.test(t) && !/\bleads?\b/i.test(t)) {
+    sessionContext.metrica = "Volumen de contactos";
+  } else if (/\bleads?\b/i.test(t) && !/\bcontactos?\b/i.test(t)) {
+    sessionContext.metrica = "Volumen de leads";
+  }
+
+  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
+}
+
 function buildSessionContextText() {
   var keys = Object.keys(sessionContext);
   if (keys.length === 0) return "";
@@ -1159,42 +1228,25 @@ async function planSlots(text) {
   setStatus("planificando...", "busy");
   try {
     var userContent = "";
-    if (typeof lastTurn !== 'undefined' && lastTurn) {
-      userContent += "Contexto de la última consulta exitosa\n" +
-                     "El usuario solicitó recientemente: \"" + lastTurn.userQuery + "\"\n";
-      
-      if (lastTurn.answeredSlots && lastTurn.answeredSlots.length > 0) {
-        userContent += "Detalles adicionales que se aclararon:\n";
-        for (var i = 0; i < lastTurn.answeredSlots.length; i++) {
-          userContent += " - " + lastTurn.answeredSlots[i].pregunta + " → " + lastTurn.answeredSlots[i].answer + "\n";
-        }
-      }
-      userContent;
-    }
     var ctx = buildSessionContextText();
     if (ctx) {
-      userContent += "Aclaraciones de ese turno:\n" + ctx + "\n\n";
+      userContent += "CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN:\n" + ctx + "\n";
     }
-
-    userContent += "Nueva consulta del usuario:\n" + 
-                   "\"" + text + "\"\n\n" +
-                   "INSTRUCCIÓN PARA EL ANALISTA: Evalúa si la nueva consulta es una continuación o variación de la anterior. " +
-                   "Si elementos como el curso, la métrica o la dimensión ya quedaron claros en el contexto anterior " +
-                   "y el usuario no los está cambiando explícitamente, ASUME que se mantienen. " +
-                   "NO generes slots para datos que puedas heredar del contexto anterior. Solo pregunta si hay una ambigüedad crítica imposible de resolver.";
+    if (lastTurn && lastTurn.userQuery) {
+      userContent += "Última consulta resuelta: \"" + lastTurn.userQuery + "\"\n";
+    }
+    userContent += "\nCONSULTA ACTUAL DEL USUARIO:\n" + text;
 
     var reply = await callModel(
       [{ role: "user", content: userContent }],
       prompts.clarify,
-      { maxTokens: 600, threaded: false }
+      { maxTokens: 600, threaded: false, temperature: 0.5 }
     );
-    
+
     removeTyping(tid);
     var j = extractJSON(reply);
     if (!j || !Array.isArray(j.slots)) return { slots: [] };
-    
-    var filtered = dropKnownSlots(j.slots);
-    return { slots: sanitizeSlots(filtered) };
+    return { slots: sanitizeSlots(dropKnownSlots(j.slots)) };
   } catch (e) {
     removeTyping(tid);
     return { slots: [] };
@@ -1294,6 +1346,94 @@ async function finalizeClarify() {
 }
 
 
+// ----- Reconfirmación periódica del hilo de conversación -----
+
+function shouldConfirmThread() {
+  return dataTurnCount > 0 &&
+         dataTurnCount % CONFIRM_EVERY_TURNS === 0 &&
+         Object.keys(sessionContext).length > 0;
+}
+
+var CONTEXT_LABELS = {
+  curso: "el curso",
+  metrica: "la métrica",
+  tipo_registro: "el tipo de registro",
+  dimension: "la dimensión"
+};
+
+function summarizeThreadContext() {
+  var keys = Object.keys(sessionContext);
+  var parts = [];
+  for (var i = 0; i < keys.length; i++) {
+    var label = CONTEXT_LABELS[keys[i]] || keys[i];
+    parts.push(label + " «" + sessionContext[keys[i]] + "»");
+  }
+  if (parts.length === 1) return parts[0];
+  return parts.slice(0, -1).join(", ") + " y " + parts[parts.length - 1];
+}
+
+function askThreadConfirm(pendingQuery) {
+  awaitingThreadConfirm = true;
+  window.__pendingThreadQuery = pendingQuery;
+  var resumen = summarizeThreadContext();
+  appendThreadConfirm(
+    "¿Seguimos con " + resumen + "?",
+    "Llevamos varias consultas con este contexto. Confírmame si lo mantenemos o si cambia algo."
+  );
+  setStatus("esperando confirmación...", "busy");
+}
+
+async function handleThreadConfirm(userText) {
+  awaitingThreadConfirm = false;
+  markThreadConfirmAnswered(userText);
+  var query = window.__pendingThreadQuery;
+  window.__pendingThreadQuery = null;
+  var norm = userText.trim().toLowerCase();
+  var esSi = /^(s[íi]|si|vale|ok|correcto|sigue|seguimos|exacto|eso es)\b/.test(norm);
+  var esNo = /^(no|cambia|cambiar|otra|nuevo|empez)/.test(norm);
+
+  setBusy(true);
+  try {
+    if (esSi) {
+      dataTurnCount++;
+      await runDataPipeline(query);
+    } else if (esNo) {
+      sessionContext = {};
+      try { localStorage.removeItem(STORAGE_CTX_KEY); } catch (e) {}
+      dataTurnCount++;
+      await runDataPipeline(query);
+    } else {
+      sessionContext = {};
+      try { localStorage.removeItem(STORAGE_CTX_KEY); } catch (e) {}
+      dataTurnCount = 0;
+      await runDataPipeline(userText);
+    }
+  } catch (e) {
+    appendError("Error en la consulta: " + (e.message || String(e)));
+    setStatus("error", "error");
+  } finally {
+    if (!pendingClarify) setBusy(false);
+  }
+}
+
+async function runDataPipeline(userText) {
+  var plan = await planSlots(userText);
+  if (plan && plan.slots && plan.slots.length > 0) {
+    pendingClarify = {
+      userQuery: userText,
+      missing: plan.slots.slice(),
+      answered: [],
+      total: plan.slots.length
+    };
+    lastUserQuery = userText;
+    askNextSlot();
+    return;
+  }
+  lastUserQuery = userText;
+  await answerDataQuery(userText, []);
+}
+
+
 // ----- Paso 3: generación de código y ejecución (usa context_general.txt) -----
 
 async function answerDataQuery(userText, answeredSlots) {
@@ -1305,7 +1445,7 @@ async function answerDataQuery(userText, answeredSlots) {
   setStatus("llamando a la API...", "busy");
   var reply;
   try {
-    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800, threaded: true });
+    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.7 });
   } catch (e) {
     removeTyping(tid);
     appendError("Error de API: " + e.message);
@@ -1340,7 +1480,12 @@ async function answerDataQuery(userText, answeredSlots) {
     enrichedQuery: enriched,
     answeredSlots: answeredSlots.slice()
   };
+  if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
+    rememberQueryParams(enriched);
+  }
   rememberAnsweredSlots(answeredSlots);
+  dataTurnCount++;
+  touchSession();
 
   if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
     await appendConclusionTo(resultEl, userText, execResult);
@@ -1383,7 +1528,7 @@ async function retryWithModelFix(originalCode, firstError) {
       "final. NO escribas explicaciones."
   });
   try {
-    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true });
+    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.7 });
     var code = extractPythonCode(reply);
     if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
     if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
@@ -1451,7 +1596,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { maxTokens: 500 }
+      { maxTokens: 500, temperature: 1 }
     );
     var text = (reply || "").trim();
     if (!text) {
@@ -1474,7 +1619,7 @@ function replaceConclusionPlaceholder(loadingEl, text, errorMsg) {
     newEl.className = "conclusion-block";
     newEl.innerHTML =
       '<div class="conclusion-label">conclusi&oacute;n</div>' +
-      marked.parse(text);
+      renderRich(text);
   } else {
     newEl.className = "conclusion-error";
     newEl.textContent = errorMsg || "No se pudo generar la conclusión.";
@@ -1513,10 +1658,22 @@ function serializeResultForLLM(r, aliasMap) {
   if (!r) return "(sin resultado)";
 
   if (r.kind === "number") {
-    return "Valor numérico (real): " + String(r.value);
+    // Damos pistas de naturaleza de la cifra (porcentaje vs conteo) para que la
+    // conclusión la contextualice bien en lugar de soltar el número a secas.
+    var num = r.value;
+    var hint = "";
+    if (typeof num === "number" && num > 0 && num < 1) {
+      hint = " (es una fracción entre 0 y 1; probablemente una tasa/proporción: "
+           + (Math.round(num * 1000) / 10) + " %)";
+    } else if (typeof num === "number" && Number.isInteger(num)) {
+      hint = " (conteo entero de registros/solicitudes)";
+    }
+    return "Valor numérico (real): " + String(num) + hint
+         + "\nNOTA: esta es la única cifra del resultado; contextualiza su magnitud "
+         + "respecto a la pregunta, sin inventar comparaciones que no estén en los datos.";
   }
   if (r.kind === "text") {
-    return "Texto devuelto por el script: " + String(r.value);
+    return "Texto devuelto por el script (es lo que ve el usuario):\n" + String(r.value);
   }
   if (r.kind === "dict") {
     var dictTable = tableFromDict(r.value);
@@ -1528,16 +1685,21 @@ function serializeResultForLLM(r, aliasMap) {
   }
   if (r.kind === "plotly") {
     var plotTable;
+    var fuente;
     if (r.data_df) {
       var dfWrap = tableFromDataFrame({ value: r.data_df, shape: null });
       plotTable = dfWrap.table;
+      fuente = "Estos son los datos EXACTOS que sostienen el gráfico que ve el usuario.";
     } else {
       plotTable = tableFromPlotlySpec(r.value);
+      fuente = "Estos datos se han reconstruido a partir de las series del gráfico "
+             + "(el script no adjuntó la tabla original), pueden estar incompletos: "
+             + "razona solo sobre lo que aparece.";
     }
     if (!plotTable || plotTable.columns.length === 0) {
       return "El resultado es un gráfico, pero no se pudieron extraer datos tabulares de sus series.";
     }
-    return "Datos subyacentes del gráfico:\n" +
+    return "Datos subyacentes del gráfico (lo que el usuario ve representado). " + fuente + "\n" +
            tableToAnonymizedText(plotTable, aliasMap, null);
   }
   return "Resultado no estructurado: " + JSON.stringify(r);
@@ -1766,15 +1928,26 @@ function indexToLetters(n) {
 function deanonymizeText(text, aliasMap) {
   if (!text || !aliasMap) return text;
   var aliases = Object.keys(aliasMap);
+  if (aliases.length === 0) return text;
+  
   aliases.sort(function (a, b) { return b.length - a.length; });
-  var out = text;
+
+  var lowerAliasMap = {};
   for (var i = 0; i < aliases.length; i++) {
-    var alias = aliases[i];
-    var real = aliasMap[alias];
-    var pattern = new RegExp("(^|[^\\wÀ-ÿ])(" + escapeRegExp(alias) + ")(?![\\wÀ-ÿ])", "g");
-    out = out.replace(pattern, function (m, pre) { return pre + real; });
+    lowerAliasMap[aliases[i].toLowerCase()] = aliasMap[aliases[i]];
   }
-  return out;
+
+  var alternation = aliases.map(escapeRegExp).join("|");
+  
+  var pattern = new RegExp(
+    "(^|[^0-9A-Za-zÀ-ÿ])(" + alternation + ")(?![0-9A-Za-zÀ-ÿ])",
+    "gi"
+  );
+  
+  return text.replace(pattern, function (m, pre, matchedAlias) {
+    var real = lowerAliasMap[matchedAlias.toLowerCase()];
+    return (real === undefined || real === null) ? m : (pre + real);
+  });
 }
 
 function escapeRegExp(s) {
@@ -1804,183 +1977,6 @@ function isSensitiveColumn(colName) {
 }
 
 
-// ============================================================================
-//  Generar conclusiones (insights_script.py + parser LLM fallback)
-//  [DESACTIVADO] Todo este bloque está comentado por decisión de producto:
-//  primero pulimos el flujo básico antes de reactivar las conclusiones.
-//  Para reactivar: borra esta línea, las marcas /* y */ que envuelven el
-//  bloque, y revierte las otras marcas "[Generar conclusiones desactivado]"
-//  repartidas por el archivo.
-// ============================================================================
-/*
-async function generateInsights() {
-  if ((!lastUserQuery && !lastTurn) || busy) return;
-  if (!insightsScript) {
-    appendError("El script de análisis (insights_script.py) no se ha cargado correctamente.");
-    return;
-  }
-
-  setBusy(true);
-  // El script de insights solo necesita `leads_contacts` (la tabla de hechos),
-  // que ya se carga en el arranque. Las antiguas tablas de dimensiones se
-  // eliminaron de `CSV_TABLES`: intentar cargarlas aquí fallaba con 404 porque
-  // los ficheros no están en el despliegue.
-
-  var queryForInsights = (lastTurn && lastTurn.enrichedQuery) || lastUserQuery;
-  appendMsg("user", "Generar conclusiones sobre: \"" + (lastUserQuery || queryForInsights) + "\"");
-
-  var tid = appendTyping("analizando variaciones...");
-  setStatus("calculando drivers...", "busy");
-
-  try {
-    var prelimFilters = deriveFiltersFromTurn(lastTurn);
-    setInsightsContext(queryForInsights, null, prelimFilters);
-    var execResult = await runPython(insightsScript);
-    execResult = await maybeReparseAndRerun(execResult, queryForInsights, prelimFilters, tid);
-    removeTyping(tid);
-    appendResult(execResult, insightsScript, "insight");
-    setStatus("análisis completado", "ok");
-  } catch (e) {
-    removeTyping(tid);
-    appendError("Error en el análisis: " + e.message);
-    setStatus("error", "error");
-  } finally {
-    setBusy(false);
-  }
-}
-
-function setInsightsContext(query, cohorts, filters) {
-  pyodide.globals.set("last_user_query", query);
-  pyodide.globals.set("llm_parsed_cohorts", cohorts);
-  pyodide.globals.set("llm_extra_filters", pyodide.toPy(filters || []));
-}
-
-// Si el script Python pide ayuda al LLM (devuelve "__NEEDS_LLM_PARSING__..."),
-// invocamos context_insights_parser.txt para que el LLM extraiga las cohortes
-// y los filtros, y volvemos a ejecutar el script con esos hints.
-async function maybeReparseAndRerun(execResult, query, prelimFilters, tid) {
-  if (execResult.kind !== "text" ||
-      typeof execResult.value !== "string" ||
-      !execResult.value.startsWith("__NEEDS_LLM_PARSING__")) {
-    return execResult;
-  }
-  removeTyping(tid);
-  var newTid = appendTyping("interpretando consulta...");
-  setStatus("interpretando consulta...", "busy");
-  var parsed = await parseQueryForInsights(query);
-  removeTyping(newTid);
-  if (!parsed) {
-    execResult.value = execResult.value.replace("__NEEDS_LLM_PARSING__\n", "");
-    return execResult;
-  }
-  var allFilters = mergeFilters(prelimFilters, parsed.filters || []);
-  setInsightsContext(query, parsed.cohorts, allFilters);
-  return await runPython(insightsScript);
-}
-
-function mergeFilters(base, extra) {
-  var merged = base.slice();
-  for (var i = 0; i < extra.length; i++) {
-    if (!filterByColumn(merged, extra[i].columna)) merged.push(extra[i]);
-  }
-  return merged;
-}
-
-function filterByColumn(list, columna) {
-  for (var i = 0; i < list.length; i++) {
-    if (list[i].columna === columna) return true;
-  }
-  return false;
-}
-
-function deriveFiltersFromTurn(turn) {
-  var out = [];
-  if (!turn || !turn.answeredSlots) return out;
-  for (var i = 0; i < turn.answeredSlots.length; i++) {
-    var f = deriveFilterFromSlot(turn.answeredSlots[i]);
-    if (f) out.push(f);
-  }
-  return out;
-}
-
-function deriveFilterFromSlot(slotAnswer) {
-  var ans = (slotAnswer.answer || "").trim();
-  var slot = (slotAnswer.slot || "").toLowerCase();
-  var preg = (slotAnswer.pregunta || "").toLowerCase();
-  if (slot.indexOf("curso") >= 0 || preg.indexOf("curso") >= 0) {
-    var m = ans.match(/(20\d{2})\s*\/\s*(20\d{2})/);
-    if (m) return { columna: "Curso", valor: m[1] + "/" + m[2] };
-    return null;
-  }
-  if (slot.indexOf("tipo") >= 0 || preg.indexOf("tipo de registro") >= 0) {
-    if (/solo leads/i.test(ans)) return { columna: "Tipo de registro", valor: "Leads" };
-    if (/solo contactos|solo contacts/i.test(ans)) return { columna: "Tipo de registro", valor: "Contacts" };
-    return null;
-  }
-  return null;
-}
-
-// Llamada al LLM con context_insights_parser.txt (system prompt corto, dedicado).
-async function parseQueryForInsights(query) {
-  if (!prompts.insights_parser) return null;
-  try {
-    var reply = await callModel(
-      [{ role: "user", content: query }],
-      prompts.insights_parser,
-      { maxTokens: 400 }
-    );
-    var j = extractJSON(reply);
-    if (!j) return null;
-    var cohorts = parseCohortsField(j.cohorts);
-    if (!cohorts) return null;
-    return { cohorts: cohorts, filters: parseFiltersField(j.filters) };
-  } catch (e) {
-    return null;
-  }
-}
-
-function parseCohortsField(c) {
-  if (!c || !c.dimension || !c.valor_a || !c.valor_b) return null;
-  return {
-    dimension: String(c.dimension),
-    valor_a: String(c.valor_a),
-    valor_b: String(c.valor_b),
-    metrica: c.metrica ? String(c.metrica) : "auto"
-  };
-}
-
-function parseFiltersField(arr) {
-  var out = [];
-  if (!Array.isArray(arr)) return out;
-  for (var i = 0; i < arr.length; i++) {
-    var f = arr[i];
-    if (f && f.columna && f.valor) {
-      out.push({ columna: String(f.columna), valor: String(f.valor) });
-    }
-  }
-  return out;
-}
-
-function updateInsightButton() {
-  var btn = document.getElementById("insight-btn");
-  var hint = document.getElementById("insight-hint");
-  if (lastUserQuery && !busy && insightsScript) {
-    btn.disabled = false;
-    var truncated = lastUserQuery.length > 60 ? lastUserQuery.substring(0, 60) + "…" : lastUserQuery;
-    hint.textContent = "Explicar variación de: \"" + truncated + "\"";
-  } else if (!insightsScript) {
-    btn.disabled = true;
-    hint.textContent = "Script de análisis no cargado.";
-  } else if (!lastUserQuery) {
-    btn.disabled = true;
-    hint.textContent = "Haz una consulta comparativa para activar el análisis.";
-  } else {
-    btn.disabled = true;
-    hint.textContent = "Procesando...";
-  }
-}
-*/
-// [Fin del bloque Generar conclusiones desactivado]
 
 
 // ============================================================================
@@ -2093,7 +2089,7 @@ function appendMsg(role, text) {
   d.className = "msg " + role;
   var av = role === "user" ? "U" : "A";
   var rl = role === "user" ? "Tú" : "Asistente";
-  var formattedText = role === "user" ? esc(text) : marked.parse(text);
+  var formattedText = role === "user" ? esc(text) : renderRich(text);
   d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
     + '<div class="msg-body">'
     + '<div class="msg-role">' + rl + '</div>'
@@ -2113,7 +2109,7 @@ function appendAssistantText(text, route) {
   d.innerHTML = '<div class="msg-avatar">A</div>'
     + '<div class="msg-body">'
     + '<div class="msg-role">Asistente' + badge + '</div>'
-    + '<div class="msg-text">' + marked.parse(text || "") + '</div>'
+    + '<div class="msg-text">' + renderRich(text) + '</div>'
     + '</div>';
   box.appendChild(d);
   scrollToBottom();
@@ -2165,7 +2161,7 @@ function attachCodeToggle(container) {
 
 function renderResult(r) {
   if (r.kind === "number")    return renderNumber(r);
-  if (r.kind === "text")      return '<div class="text-result">' + marked.parse(r.value) + '</div>';
+  if (r.kind === "text")      return '<div class="text-result">' + renderRich(r.value) + '</div>';
   if (r.kind === "dict")      return renderDict(r);
   if (r.kind === "dataframe") return renderDataFrame(JSON.parse(r.value), r.shape);
   if (r.kind === "plotly") {
@@ -2219,12 +2215,38 @@ function renderDataFrame(df, shape) {
 function renderCell(val) {
   var isNum = typeof val === "number";
   var display;
-  if (val === null || val === undefined) display = "—";
-  else if (isNum) display = Number.isInteger(val)
-    ? new Intl.NumberFormat("es-ES").format(val)
-    : val.toFixed(4).replace(/\.?0+$/, "");
-  else display = String(val);
+  if (val === null || val === undefined) {
+    display = "—";
+  } else if (isNum) {
+    display = Number.isInteger(val)
+      ? new Intl.NumberFormat("es-ES").format(val)
+      : val.toFixed(4).replace(/\.?0+$/, "");
+  } else if (Array.isArray(val)) {
+    display = val.map(formatCellScalar).join(", ");
+  } else if (typeof val === "object") {
+    var parts = [];
+    for (var k in val) {
+      if (Object.prototype.hasOwnProperty.call(val, k)) {
+        parts.push(k + ": " + formatCellScalar(val[k]));
+      }
+    }
+    display = parts.join(", ");
+  } else {
+    display = String(val);
+  }
   return '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+}
+
+function formatCellScalar(v) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "number") {
+    return Number.isInteger(v)
+      ? new Intl.NumberFormat("es-ES").format(v)
+      : v.toFixed(4).replace(/\.?0+$/, "");
+  }
+  if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
 }
 
 function renderPlotlyInto(elId, jsonStr) {
@@ -2295,6 +2317,63 @@ function appendClarify(payload, step, total) {
   box.appendChild(d);
   attachClarifyListeners(d, payload);
   scrollToBottom();
+}
+
+function appendThreadConfirm(pregunta, razon) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var payload = {
+    pregunta: pregunta,
+    razon: razon,
+    opciones: ["Sí, seguimos igual", "No, cambia algo"],
+    permitirOtro: true
+  };
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente · confirmación</div>'
+    + '<div class="msg-text">' + buildClarifyBoxHtml(payload, null, null) + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  attachThreadConfirmListeners(d);
+  scrollToBottom();
+}
+
+function attachThreadConfirmListeners(container) {
+  var btns = container.querySelectorAll(".clarify-option");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function (ev) {
+      sendMessage(ev.currentTarget.getAttribute("data-opt"));
+    });
+  }
+  var otherInput = container.querySelector(".clarify-other-input");
+  var otherBtn = container.querySelector(".clarify-other-btn");
+  if (otherInput && otherBtn) {
+    var submit = function () {
+      var v = otherInput.value.trim();
+      if (v) sendMessage(v);
+    };
+    otherBtn.addEventListener("click", submit);
+    otherInput.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); submit(); }
+    });
+  }
+}
+
+function markThreadConfirmAnswered(answerText) {
+  var boxes = document.querySelectorAll(".clarify-box:not(.answered)");
+  var lastBox = boxes.length ? boxes[boxes.length - 1] : null;
+  if (!lastBox) return;
+  lastBox.classList.add("answered");
+  var btns = lastBox.querySelectorAll(".clarify-option");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].disabled = true;
+    if (btns[i].textContent === answerText) btns[i].classList.add("selected");
+  }
+  var inp = lastBox.querySelector(".clarify-other-input");
+  if (inp) inp.disabled = true;
+  var ob = lastBox.querySelector(".clarify-other-btn");
+  if (ob) ob.disabled = true;
 }
 
 function buildClarifyBoxHtml(payload, step, total) {
