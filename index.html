@@ -395,7 +395,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
-  <span class="header-model" id="header-model">claude · pyodide · plotly</span>
+  <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
 </header>
 
 <div id="setup-panel">
@@ -436,8 +436,18 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
   </div>
 
-
   <!--
+    [Generar conclusiones desactivado por decisión de producto: vamos a centrarnos
+     primero en pulir el flujo de consultas básicas. El script `insights_script.py`
+     queda mantenido en el repo pero NO se carga ni se ejecuta. Para reactivar:
+     1) Descomenta este bloque <div id="actions-bar"> ... </div>.
+     2) Descomenta la entrada `insights_parser` en PROMPT_FILES.
+     3) Descomenta `await loadInsightsScript();` en initChat().
+     4) Descomenta el step "step-insights" en el panel de progreso.
+     5) Descomenta las funciones generateInsights / setInsightsContext /
+        maybeReparseAndRerun / parseQueryForInsights / updateInsightButton y la
+        llamada a updateInsightButton dentro de setBusy(false).]
+
   <div id="actions-bar">
     <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Explica a qu&eacute; se debe la variaci&oacute;n entre los dos elementos de la consulta">
       &#128202; Generar conclusiones
@@ -474,14 +484,15 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 </div>
 
 <script>
-// ============================================================================
-//  Configuración general
-// ============================================================================
 
-var MODEL_ID    = "claude-haiku-4-5-20251001";
-var API_URL     = "https://api.anthropic.com/v1/messages";
-var API_VERSION = "2023-06-01";
+
+
+var MODEL_ID    = "gpt-4.1-mini";
 var MAX_HISTORY = 12;
+var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
+var STORAGE_CTX_KEY  = "resa_assistant_session_context";
+var conversationId   = null;
+var lastResponseId   = null;
 
 var PROMPT_FILES = {
   router:          "context_router.txt",
@@ -498,10 +509,6 @@ var CSV_TABLES = {
 var PRIMARY_CSV          = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 
-// Conclusiones: columnas con datos PERSONALES DIRECTOS. Estas NO se
-// pseudonimizan (no tendría sentido un alias para un correo): se ELIMINAN
-// por completo antes de enviar nada al LLM. El resto de categorías textuales
-// (ciudades, residencias, canales...) sí se pseudonimizan de forma reversible.
 var SENSITIVE_COLUMNS = [
   "Correo electrónico", "Correo electronico", "correo electrónico", "correo electronico",
   "Email", "email", "E-mail", "e-mail",
@@ -521,7 +528,7 @@ marked.use({ breaks: true, gfm: true });
 
 var apiKey         = "";
 var prompts        = {};
-// var insightsScript = "";              // contenido de insights_script.py
+// var insightsScript = "";
 var pyodide        = null;
 var loadedCsvs     = new Set();
 var busy           = false;
@@ -529,6 +536,7 @@ var chatHistory    = [];
 var pendingClarify = null;
 var lastUserQuery  = null;
 var lastTurn       = null;
+var sessionContext = {};
 
 
 // ============================================================================
@@ -552,6 +560,7 @@ async function initChat() {
     var csvOk = await loadPrimaryCsv();
     // await loadInsightsScript();
     apiKey = key;
+    await ensureConversation();
     revealChatPanel();
     if (!csvOk) {
       appendDevBanner(
@@ -619,9 +628,7 @@ async function initPyodide() {
 
 async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
-  // [Generar conclusiones desactivado] Sin scikit-learn: solo lo usaba
-  // insights_script.py (RandomForest + permutation importance). Para
-  // reactivar, vuelve a incluirlo en el array: ["pandas", "numpy", "scikit-learn"]
+  // [Generar conclusiones desactivado] Sin scikit-learn.
   await pyodide.loadPackage(["pandas", "numpy"]);
   await pyodide.runPythonAsync(
     "import pandas as pd\n" +
@@ -718,7 +725,6 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
-// [Generar conclusiones desactivado]
 /*
 async function loadInsightsScript() {
   setStep("step-insights", "active");
@@ -737,6 +743,8 @@ async function loadInsightsScript() {
 */
 
 function revealChatPanel() {
+  var hm = document.getElementById("header-model");
+  if (hm) hm.textContent = "openai · pyodide · plotly";
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("chat-panel").style.display = "flex";
   setStatus("conectado · listo", "ok");
@@ -831,46 +839,59 @@ async function ensureTablesLoaded(pythonCode) {
 //  API del modelo
 // ============================================================================
 
+// Interfaz única de llamada al modelo (OpenAI Responses API). El resto del
+// código solo recibe texto plano y no conoce los detalles de la API.
+//
+//   messages      → array [{role, content}] (estilo chat). El último es el
+//                   mensaje nuevo del usuario.
+//   systemPrompt  → instrucciones de sistema del paso (context_*.txt).
+//   opts          → { maxTokens, model, threaded }
+//                   threaded:true  → la llamada pertenece al hilo persistente
+//                                    del usuario: se adjunta a la Conversation
+//                                    y se encadena por id.
+//                   threaded:false → llamada aislada y efímera (router,
+//                                    clarify, modelo, conclusiones).
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  
-  var apiMessages = messages.map(function(msg) {
-    return { role: msg.role, content: msg.content };
-  });
-
-  if (apiMessages.length > 0) {
-    var lastMsg = apiMessages[apiMessages.length - 1];
-    if (typeof lastMsg.content === "string") {
-      lastMsg.content = [
-        {
-          "type": "text",
-          "text": lastMsg.content,
-          "cache_control": {"type": "ephemeral"}
-        }
-      ];
-    }
+  var cfg      = {
+    model:            "gpt-4.1-mini",
+    responsesUrl:     "https://api.openai.com/v1/responses",
+    conversationsUrl: "https://api.openai.com/v1/conversations"
+  };
+  var threaded = opts.threaded === true;
+  var hasServerState = threaded && (conversationId || lastResponseId);
+  var input;
+  if (hasServerState) {
+    var last = messages[messages.length - 1];
+    input = [{ role: "user", content: toInputContent(last && last.content, "input_text") }];
+  } else {
+    input = messages.map(function (m) {
+      var type = (m.role === "assistant") ? "output_text" : "input_text";
+      return { role: m.role, content: toInputContent(m.content, type) };
+    });
   }
 
   var body = {
-    model: opts.model || MODEL_ID,
-    max_tokens: opts.maxTokens || 1500,
-    system: [
-      {
-        "type": "text",
-        "text": systemPrompt,
-        "cache_control": {"type": "ephemeral"}
-      }
-    ],
-    messages: apiMessages
+    model: opts.model || cfg.model,
+    instructions: systemPrompt,
+    input:input,
+    max_output_tokens: opts.maxTokens || 1500,
+    store: threaded
   };
 
-  var r = await fetch(API_URL, {
+  if (threaded) {
+    if (conversationId) {
+      body.conversation = conversationId;
+    } else if (lastResponseId) {
+      body.previous_response_id = lastResponseId;
+    }
+  }
+
+  var r = await fetch(cfg.responsesUrl, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": API_VERSION,
-      "anthropic-dangerous-direct-browser-access": "true"
+      "Content-Type":  "application/json",
+      "Authorization": "Bearer " + apiKey
     },
     body: JSON.stringify(body)
   });
@@ -879,10 +900,88 @@ async function callModel(messages, systemPrompt, opts) {
     var errData = await r.json().catch(function () { return {}; });
     throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
   }
-  
+
   var d = await r.json();
-  return (d.content && d.content[0] && d.content[0].text) || "";
+
+  if (threaded && d.id) lastResponseId = d.id;
+
+  return extractOpenAIText(d);
 }
+
+function toInputContent(content, blockType) {
+  if (typeof content === "string") {
+    return [{ type: blockType, text: content }];
+  }
+  if (Array.isArray(content)) {
+    return content.map(function (b) {
+      var text = (b && (b.text != null ? b.text : b.content)) || "";
+      return { type: blockType, text: String(text) };
+    });
+  }
+  return [{ type: blockType, text: String(content == null ? "" : content) }];
+}
+
+function extractOpenAIText(d) {
+  if (typeof d.output_text === "string" && d.output_text.length) {
+    return d.output_text;
+  }
+  var out = "";
+  if (Array.isArray(d.output)) {
+    for (var i = 0; i < d.output.length; i++) {
+      var item = d.output[i];
+      if (item && item.type === "message" && Array.isArray(item.content)) {
+        for (var j = 0; j < item.content.length; j++) {
+          var c = item.content[j];
+          if (c && (c.type === "output_text" || c.type === "text") && c.text) {
+            out += c.text;
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+async function ensureConversation() {
+  if (conversationId) return conversationId;
+
+  var stored = null;
+  try { stored = localStorage.getItem(STORAGE_CONV_KEY); } catch (e) {}
+  if (stored) {
+    conversationId = stored;
+    try {
+      var rawCtx = localStorage.getItem(STORAGE_CTX_KEY);
+      if (rawCtx) sessionContext = JSON.parse(rawCtx) || {};
+    } catch (e) { sessionContext = {}; }
+    return conversationId;
+  }
+
+  try {
+    var r = await fetch("https://api.openai.com/v1/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        metadata: { app: "resa-analytics-assistant" }
+      })
+    });
+    if (r.ok) {
+      var d = await r.json();
+      if (d && d.id) {
+        conversationId = d.id;
+        try { localStorage.setItem(STORAGE_CONV_KEY, conversationId); } catch (e) {}
+      }
+    } else {
+      console.warn("[conversations] no se pudo crear la conversación: HTTP " + r.status);
+    }
+  } catch (e) {
+    console.warn("[conversations] error creando la conversación:", e);
+  }
+  return conversationId;
+}
+
 
 // ============================================================================
 //  Pipeline principal SECUENCIAL
@@ -1034,25 +1133,84 @@ async function answerModelQuery(userText) {
 
 
 // ----- Paso 2b: planificación de clarify (usa context_clarify.txt) -----
+function rememberAnsweredSlots(answeredSlots) {
+  if (!answeredSlots) return;
+  for (var i = 0; i < answeredSlots.length; i++) {
+    var a = answeredSlots[i];
+    if (!a || !a.slot || !a.answer) continue;
+    sessionContext[a.slot] = String(a.answer);
+  }
+  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
+}
+
+function buildSessionContextText() {
+  var keys = Object.keys(sessionContext);
+  if (keys.length === 0) return "";
+  var lines = [];
+  for (var i = 0; i < keys.length; i++) {
+    lines.push("- " + keys[i] + ": " + sessionContext[keys[i]]);
+  }
+  return lines.join("\n");
+}
 
 async function planSlots(text) {
   if (!prompts.clarify) return { slots: [] };
   var tid = appendTyping("comprobando si necesito aclaraciones...");
   setStatus("planificando...", "busy");
   try {
+    var userContent = "";
+    if (typeof lastTurn !== 'undefined' && lastTurn) {
+      userContent += "Contexto de la última consulta exitosa\n" +
+                     "El usuario solicitó recientemente: \"" + lastTurn.userQuery + "\"\n";
+      
+      if (lastTurn.answeredSlots && lastTurn.answeredSlots.length > 0) {
+        userContent += "Detalles adicionales que se aclararon:\n";
+        for (var i = 0; i < lastTurn.answeredSlots.length; i++) {
+          userContent += " - " + lastTurn.answeredSlots[i].pregunta + " → " + lastTurn.answeredSlots[i].answer + "\n";
+        }
+      }
+      userContent;
+    }
+    var ctx = buildSessionContextText();
+    if (ctx) {
+      userContent += "Aclaraciones de ese turno:\n" + ctx + "\n\n";
+    }
+
+    userContent += "Nueva consulta del usuario:\n" + 
+                   "\"" + text + "\"\n\n" +
+                   "INSTRUCCIÓN PARA EL ANALISTA: Evalúa si la nueva consulta es una continuación o variación de la anterior. " +
+                   "Si elementos como el curso, la métrica o la dimensión ya quedaron claros en el contexto anterior " +
+                   "y el usuario no los está cambiando explícitamente, ASUME que se mantienen. " +
+                   "NO generes slots para datos que puedas heredar del contexto anterior. Solo pregunta si hay una ambigüedad crítica imposible de resolver.";
+
     var reply = await callModel(
-      [{ role: "user", content: text }],
+      [{ role: "user", content: userContent }],
       prompts.clarify,
-      { maxTokens: 600 }
+      { maxTokens: 600, threaded: false }
     );
+    
     removeTyping(tid);
     var j = extractJSON(reply);
     if (!j || !Array.isArray(j.slots)) return { slots: [] };
-    return { slots: sanitizeSlots(j.slots) };
+    
+    var filtered = dropKnownSlots(j.slots);
+    return { slots: sanitizeSlots(filtered) };
   } catch (e) {
     removeTyping(tid);
     return { slots: [] };
   }
+}
+
+function dropKnownSlots(slots) {
+  var out = [];
+  for (var i = 0; i < slots.length; i++) {
+    var s = slots[i];
+    if (s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)) {
+      continue;
+    }
+    out.push(s);
+  }
+  return out;
 }
 
 function sanitizeSlots(raw) {
@@ -1125,6 +1283,7 @@ async function finalizeClarify() {
   pendingClarify = null;
   setBusy(true);
   try {
+    rememberAnsweredSlots(pipe.answered);
     await answerDataQuery(pipe.userQuery, pipe.answered);
   } catch (e) {
     appendError("Error en la consulta: " + e.message);
@@ -1146,7 +1305,7 @@ async function answerDataQuery(userText, answeredSlots) {
   setStatus("llamando a la API...", "busy");
   var reply;
   try {
-    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800 });
+    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800, threaded: true });
   } catch (e) {
     removeTyping(tid);
     appendError("Error de API: " + e.message);
@@ -1181,6 +1340,7 @@ async function answerDataQuery(userText, answeredSlots) {
     enrichedQuery: enriched,
     answeredSlots: answeredSlots.slice()
   };
+  rememberAnsweredSlots(answeredSlots);
 
   if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
     await appendConclusionTo(resultEl, userText, execResult);
@@ -1208,10 +1368,6 @@ function setExecutionStatus(execResult) {
 }
 
 
-// ============================================================================
-//  Reintento ante fallo de ejecución
-// ============================================================================
-
 async function retryWithModelFix(originalCode, firstError) {
   appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
   var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
@@ -1227,7 +1383,7 @@ async function retryWithModelFix(originalCode, firstError) {
       "final. NO escribas explicaciones."
   });
   try {
-    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800 });
+    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true });
     var code = extractPythonCode(reply);
     if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
     if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
@@ -1263,10 +1419,6 @@ function conclusionsEnabled() {
   return !!(t && t.checked);
 }
 
-// Solo descartamos conclusión si el resultado es un error o está vacío.
-// El resto de tipos (escalar, texto, dict, dataframe Y gráfico plotly) son
-// elegibles: para los gráficos extraemos los datos subyacentes de las traces
-// (ver dataFrameFromPlotlySpec) y razonamos sobre ellos igual que con una tabla.
 function isResultEligibleForConclusion(r) {
   if (!r) return false;
   if (r.kind === "error" || r.kind === "error_friendly") return false;
@@ -1400,6 +1552,7 @@ function tableFromDataFrame(r) {
   var cols = Array.isArray(parsed.columns) ? parsed.columns.slice() : [];
   var data = Array.isArray(parsed.data) ? parsed.data : [];
 
+  // Columnas con PII directa → se eliminan (no se pseudonimizan).
   var dropIdx = {};
   for (var i = 0; i < cols.length; i++) {
     if (isSensitiveColumn(cols[i])) dropIdx[i] = true;
@@ -1461,7 +1614,7 @@ function tableFromPlotlySpec(jsonStr) {
   var catOrder = [];
   var catSeen = {};
   var seriesNames = [];
-  var grid = {}; // cat -> { serie -> value }
+  var grid = {};
 
   for (var t = 0; t < traces.length; t++) {
     var tr = traces[t] || {};
@@ -1653,7 +1806,11 @@ function isSensitiveColumn(colName) {
 
 // ============================================================================
 //  Generar conclusiones (insights_script.py + parser LLM fallback)
-//  [DESACTIVADO]
+//  [DESACTIVADO] Todo este bloque está comentado por decisión de producto:
+//  primero pulimos el flujo básico antes de reactivar las conclusiones.
+//  Para reactivar: borra esta línea, las marcas /* y */ que envuelven el
+//  bloque, y revierte las otras marcas "[Generar conclusiones desactivado]"
+//  repartidas por el archivo.
 // ============================================================================
 /*
 async function generateInsights() {

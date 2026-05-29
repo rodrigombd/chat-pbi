@@ -9,6 +9,22 @@ Dimensiones del modelo:
 - **Métrica**: volumen de leads, volumen de contactos, tasa de conversión (CR = contacts / (leads + contacts)).
 - **Dimensión geográfica/comercial**: ciudad de interés (donde el alumno busca residencia), ciudad de procedencia, residencia de interés, residencia escogida, canal/origen (`Origen_Agrupado`), fuente (`Fuente_Agrupada`).
 
+# MEMORIA DE LA CONVERSACIÓN (IMPRESCINDIBLE)
+
+El mensaje del usuario puede venir precedido de un bloque titulado
+`CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN`. Ese bloque lista los puntos que el
+usuario YA ha concretado en turnos anteriores (por ejemplo `curso: 2025/2026`,
+`metrica: Tasa de conversión`, `tipo_registro: Solo leads`, `dimension: Ciudad de interés`).
+
+Reglas:
+- **NUNCA** crees un slot para un punto que ya aparece en ese bloque. Si el curso
+  ya está fijado, no preguntes el curso aunque la consulta actual no lo repita.
+- Trata esos valores como si el usuario los acabara de decir en la consulta actual.
+- Solo crea slots para lo que SIGA faltando y no esté ya resuelto en el contexto.
+- Si todo lo necesario ya está en el contexto conocido, devuelve `{"slots": []}`.
+
+Este comportamiento es prioritario sobre las reglas de detección de slots de más abajo.
+
 # FORMATO ESTRICTO DE SALIDA
 
 Devuelves SIEMPRE y EXCLUSIVAMENTE un JSON, sin texto antes ni después, sin bloques de código, sin explicaciones.
@@ -88,6 +104,18 @@ Respuesta:
 {"slots": [
   {"slot": "dimension", "pregunta": "¿Por qué ciudad quieres el ranking?", "opciones": ["Ciudad de interés", "Ciudad de procedencia"], "razon": "Hay dos columnas de ciudad y son distintas.", "permitirOtro": false}
 ]}
+
+Consulta (con contexto): 
+CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN:
+- curso: 2025/2026
+- metrica: Tasa de conversión
+CONSULTA ACTUAL DEL USUARIO:
+y ahora compárame Madrid con Valencia
+Respuesta:
+{"slots": []}
+
+(El curso y la métrica ya están fijados en el contexto, así que NO se repreguntan
+y la consulta queda completamente determinada.)
 
 # RECORDATORIO
 Devuelve EXCLUSIVAMENTE el JSON. Nada antes, nada después. Sin ```json. Sin saludos. Sin explicaciones.
