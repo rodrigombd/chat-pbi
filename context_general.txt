@@ -58,7 +58,7 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 12, - **ERROR CRÍTICO CON PYODIDE:** NUNCA asignes un objeto `pd.Series` o `pd.Index` directamente a los atributos `"x"` o `"y"` del diccionario de Plotly. Pyodide no sabe serializarlos a JSON y el gráfico aparecerá en blanco. Siempre debes extraer los valores como una lista nativa de Python usando `.tolist()`.
   **MAL:** `"x": df["Ciudad"]`
   **BIEN:** `"x": df["Ciudad"].tolist()`
-  
+
 # ENTORNO DE EJECUCIÓN
 Pyodide en navegador. Disponibles: `pandas` (pd), `numpy` (np). NO hay red, NO hay ficheros, NO hay shell. Los DataFrames están en variables globales.
 
@@ -85,6 +85,14 @@ Una fila = un registro CRM. Columnas:
 - `Fuente de Posible Cliente` (str): alta cardinalidad.
 - `Origen_Agrupado` (str): valores: `"SEO & Directo"`, `"Paid Media"`, `"Ferias"`, `"Comisionistas"`, `"Eventos"`, `"Resa Housing"`, `"Otros"`.
 - `Fuente_Agrupada` (str): valores: `"Web Resa"`, `"Unitour"`, `"Directo"`, `"Chat"`, `"Uniscopio"`, `"Contacto Residencia"`, `"Hello"`, `"Facebook"`, `"Otros"`.
+
+**Relación Geográfica (REGLA CRÍTICA DE DIMENSIONES):**
+Una residencia física se encuentra en una ÚNICA ciudad. Como esta base de datos es una tabla plana y no hay un "Maestro de Residencias", para saber en qué ciudad está una residencia debes buscar la correspondencia estricta en la misma fila:
+- Para saber la ciudad de `Residencias_actual_corregido`, debes mirar ÚNICAMENTE la columna `Ciudad_actual_corregido`.
+- Para saber la ciudad de `Residencias_interes_corregido`, debes mirar ÚNICAMENTE la columna `Ciudad_deinteres_corregido`.
+
+NUNCA cruces una residencia actual con una ciudad de interés (o viceversa), ya que un estudiante puede vivir en una ciudad y solicitar traslado a otra distinta, lo que multiplicaría las residencias de forma errónea. 
+Si necesitas un catálogo de residencias y sus ciudades, genéralo haciendo un `drop_duplicates()` de las dos columnas de la misma familia (ej. `df[["Residencias_actual_corregido", "Ciudad_actual_corregido"]].drop_duplicates()`).
 
 NOTA: la única tabla disponible es `leads_contacts`. NO uses ninguna `tabla_*` ni `maestro_*` ni `glosario`: no están cargadas y `NameError`. Todo se resuelve sobre `leads_contacts`.
 
