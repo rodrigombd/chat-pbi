@@ -55,7 +55,10 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 9. **Nombres de columnas con tildes y espacios**: úsalos EXACTAMENTE como aparecen abajo. `"Correo electrónico"` lleva tilde. `"Tipo de registro"` tiene espacios.
 10. **Imports permitidos**: solo `pandas as pd`, `numpy as np`. NO `seaborn`. NO `plotly`. NO `matplotlib`. Para gráficos construye el dict Plotly a mano (sección GRÁFICOS).
 11. **Cuando agrupes por dimensión categórica** (ciudad, residencia, curso), usa preferentemente las columnas `_corregido` (`Ciudad_deinteres_corregido`, `Curso_corregido`, etc.) para evitar nulos.
-
+12, - **ERROR CRÍTICO CON PYODIDE:** NUNCA asignes un objeto `pd.Series` o `pd.Index` directamente a los atributos `"x"` o `"y"` del diccionario de Plotly. Pyodide no sabe serializarlos a JSON y el gráfico aparecerá en blanco. Siempre debes extraer los valores como una lista nativa de Python usando `.tolist()`.
+  **MAL:** `"x": df["Ciudad"]`
+  **BIEN:** `"x": df["Ciudad"].tolist()`
+  
 # ENTORNO DE EJECUCIÓN
 Pyodide en navegador. Disponibles: `pandas` (pd), `numpy` (np). NO hay red, NO hay ficheros, NO hay shell. Los DataFrames están en variables globales.
 

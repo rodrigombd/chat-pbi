@@ -673,6 +673,8 @@ async function installRuntimeHelpers() {
     "    if isinstance(o, (_np.integer,)): return int(o)\n" +
     "    if isinstance(o, (_np.floating,)): return float(o)\n" +
     "    if isinstance(o, _np.ndarray): return o.tolist()\n" +
+    "    if isinstance(o, _pd.Series): return o.tolist()\n" + // <-- NUEVO: Convierte Series a lista automáticamente
+    "    if isinstance(o, _pd.Index): return o.tolist()\n" +  // <-- NUEVO: Convierte Índices a lista automáticamente
     "    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()\n" +
     "    return str(o)\n" +
     "\n" +
@@ -683,7 +685,6 @@ async function installRuntimeHelpers() {
     "    if 'resultado' not in globals():\n" +
     "        return _j.dumps({'kind':'none','value':None})\n" +
     "    _r = globals()['resultado']\n" +
-    "    # Plotly: dict con clave __plotly__\n" +
     "    if isinstance(_r, dict) and _r.get('__plotly__') is True:\n" +
     "        spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}\n" +
     "        _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}\n" +
