@@ -495,7 +495,7 @@ var SENSITIVE_COLUMNS = [
   "Nombre completo", "nombre completo"
 ];
 
-var CONCLUSION_MAX_ROWS = 40;
+var CONCLUSION_MAX_ROWS = 300;
 
 marked.use({ breaks: true, gfm: true });
 
@@ -1445,7 +1445,7 @@ async function answerDataQuery(userText, answeredSlots) {
   setStatus("llamando a la API...", "busy");
   var reply;
   try {
-    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.7 });
+    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
   } catch (e) {
     removeTyping(tid);
     appendError("Error de API: " + e.message);
@@ -1528,7 +1528,7 @@ async function retryWithModelFix(originalCode, firstError) {
       "final. NO escribas explicaciones."
   });
   try {
-    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.7 });
+    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5});
     var code = extractPythonCode(reply);
     if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
     if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
@@ -1596,7 +1596,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { maxTokens: 500, temperature: 1 }
+      { maxTokens: 500, temperature: 0.6 }
     );
     var text = (reply || "").trim();
     if (!text) {

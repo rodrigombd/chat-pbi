@@ -38,7 +38,19 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 6. **NaN en filtros de string**: si filtras con `.str.contains` sobre una columna que puede tener NaN, añade primero `.fillna("")` o `.astype(str)`.
 7. **Fechas**: la columna `Fecha creación` ya está parseada como datetime. Para filtrar por año natural: `df["Fecha creación"].dt.year == 2025`. NO uses `pd.to_datetime` otra vez.
 
-7b. **Grano = solicitud, no persona (CONCEPTO CLAVE)**: cada fila es **una solicitud de residencia**, no un usuario. Una misma persona puede tener varias filas (varias ciudades/residencias/cursos). El `Curso` vive **a nivel de fila**: filtrar "del curso 2024/2025" = filtrar las **filas** con `Curso == "2024/2025"`, da igual en qué año natural entraron (un curso se recopila a lo largo de varios años). Para una evolución mensual de un curso: primero filtra por `Curso == "<curso>"` (y demás filtros como ciudad), y SOLO DESPUÉS agrupa esas filas por mes/año de `Fecha creación` y haz `size()`. NUNCA mezcles el filtro de curso con `dt.year` ni cuentes correos únicos para una evolución.
+7b. **Grano = solicitud, no persona (CONCEPTO CLAVE)**: cada fila es **una solicitud de residencia**, no un usuario. Una misma persona puede tener varias filas (varias ciudades/residencias/cursos). El `Curso` vive **a nivel de fila**: filtrar "del curso 2024/2025" = filtrar las **filas** con `Curso == "2024/2025"`, da igual en qué año natural entraron (un curso se recopila a lo largo de varios años).
+
+7c. **`Curso` ≠ `Fecha creación`: distingue el filtro del eje temporal (CONCEPTO CRÍTICO)**. Son dos cosas independientes y nunca hay que confundirlas:
+   - El **`Curso`** indica para qué curso académico se hizo la solicitud. Es un **filtro de segmento**, no una fecha.
+   - La **`Fecha creación`** indica **cuándo** (qué día/mes/año natural) el usuario hizo la solicitud. Es el **eje temporal** para ordenar y agrupar en el tiempo.
+
+   De aquí salen dos patrones distintos según lo que pida el usuario:
+
+   **(A) Evolución / serie temporal de un curso concreto** ("evolución de solicitudes del curso 2024/2025", "leads mes a mes del 2025/2026"): primero **filtra** por `Curso == "<curso>"` (más los demás filtros como ciudad o tipo), y SOLO DESPUÉS **ordena/agrupa por `Fecha creación`** (o por `Mes y año creación` reconstruido cronológicamente). El curso es el filtro; la fecha de creación es el eje. NUNCA uses `dt.year` para filtrar el curso.
+
+   **(B) Pregunta sobre el año natural en que ocurrió algo** ("¿en qué año se han hecho más solicitudes?", "¿qué año tuvo más leads?", "solicitudes por año"): aquí NO se filtra por `Curso` en ningún momento. Se mira **únicamente** `Fecha creación`: extrae el año natural con `dt.year`, agrupa por ese año, cuenta filas (`size()`), ordena de mayor a menor y quédate con el primero (o devuelve la tabla por años). El curso es IRRELEVANTE en este tipo de pregunta.
+
+   Regla mnemotécnica: si la pregunta es "para qué curso" → filtro `Curso`. Si la pregunta es "en qué año/mes natural ocurrió" → eje `Fecha creación`, sin tocar `Curso`. NUNCA mezcles el filtro de curso con `dt.year`, y nunca cuentes correos únicos para una evolución o un conteo por año.
 8. **Después de un `groupby(...).agg(...)`** llama a `.reset_index()` para conservar la columna de agrupación.
 9. **Nombres de columnas con tildes y espacios**: úsalos EXACTAMENTE como aparecen abajo. `"Correo electrónico"` lleva tilde. `"Tipo de registro"` tiene espacios.
 10. **Imports permitidos**: solo `pandas as pd`, `numpy as np`. NO `seaborn`. NO `plotly`. NO `matplotlib`. Para gráficos construye el dict Plotly a mano (sección GRÁFICOS).
@@ -188,40 +200,24 @@ resultado = {
 - **Composición/proporción** → barras apiladas al 100% (calcula las proporciones tú y pon ejes en `"tickformat": ".0%"`).
 - **TARTA** (`"type": "pie"`): PROHIBIDA salvo que el usuario la pida EXPLÍCITAMENTE con la palabra "tarta", "pie".
 
-## Eje temporal en evoluciones mensuales (REGLA OBLIGATORIA)
+## Eje temporal en evoluciones temporales (REGLA OBLIGATORIA)
 
-Cuando hagas un gráfico de evolución mensual, el orden del eje X depende del periodo:
+Cuando el usuario pida una evolución (mes a mes, por años, etc.), SIEMPRE debes mantener el orden cronológico estricto basándote en la fecha real en la que se hizo la solicitud (`Fecha creación`).
 
-- **Evolución histórica (varios años o sin filtro de año)**: NUNCA agrupes por la columna string `"Mes y año creación"` porque se ordenará alfabéticamente (ej. abr-23, ago-24). 
-  Agrupa SIEMPRE usando `Fecha creación.dt.to_period("M")` y llama a `.sort_index()` para garantizar el orden cronológico estricto.
-  Ejemplo:
+- **Para evoluciones mensuales (INCLUSO si el usuario filtra por un `Curso` específico):**
+  NUNCA agrupes por la columna string `"Mes y año creación"`.
+  NUNCA uses listas manuales de meses (ni de enero a diciembre, ni de septiembre a agosto).
+  Agrupa SIEMPRE usando `Fecha creación.dt.to_period("M")` y llama a `.sort_index()`.
+  
+  Ejemplo (Evolución de solicitudes mes a mes para el curso 2024/2025):
   ```python
-  df_clean = leads_contacts.dropna(subset=["Fecha creación"])
+  df_clean = leads_contacts[leads_contacts["Curso"] == "2024/2025"].dropna(subset=["Fecha creación"]).copy()
   serie = df_clean.groupby(df_clean["Fecha creación"].dt.to_period("M")).size().sort_index()
-  x_labels = serie.index.astype(str).tolist() # Genera formato cronológico "2023-01", "2023-02"...
+  x_labels = serie.index.astype(str).tolist() # Formato cronológico "2023-01", "2023-02"...
+  y_vals = [int(v) for v in serie.values]
 
-- **Año natural** (`"2025"`, `"en 2025"`, `"durante 2024"`): orden **enero → diciembre**.
-  `meses_anio = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]`
-  El orden numérico de los meses es `[1, 2, ..., 12]`.
-
-- **Curso académico** (`"2024/2025"`, `"curso 2025/2026"`): orden **septiembre → agosto** (el curso empieza en septiembre).
-  `meses_curso = ["Sep", "Oct", "Nov", "Dic", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago"]`
-  El orden numérico es `[9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8]`.
-
-Para cursos: filtra por `Curso == "<curso>"` (no por `Fecha creación.dt.year`) porque un curso abarca dos años naturales. Después agrupa por mes (`Fecha creación.dt.month`) y reindexa la serie con el orden de curso. Ejemplo:
-
-```python
-orden_meses_curso = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8]
-etiquetas_curso = ["Sep", "Oct", "Nov", "Dic", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago"]
-df = leads_contacts[
-    (leads_contacts["Tipo de registro"] == "Leads") &
-    (leads_contacts["Curso"] == "2025/2026")
-].copy()
-serie = (df.groupby(df["Fecha creación"].dt.month).size()
-         .reindex(orden_meses_curso, fill_value=0))
-x_labels = etiquetas_curso
-y_vals = [int(v) for v in serie.values]
-```
+- **Para evoluciones anuales (qué año tuvo más solicitudes):**
+  Agrupa simplemente por Fecha creación.dt.year. NO filtres por la columna Curso a menos que el usuario lo pida.
 
 ## Etiquetas y hover (obligatorios)
 
@@ -229,21 +225,16 @@ y_vals = [int(v) for v in serie.values]
 - En líneas añade `"hovertemplate"` claro: `"<b>%{x}</b><br>%{y:,.0f}<extra></extra>"`.
 - Para porcentajes, formatea con `:.1%` o pasa los valores ya como porcentaje y usa `:.1f` con sufijo `"%"`.
 
-## Ejemplo COMPLETO de gráfico de líneas (serie temporal — año natural)
+## Ejemplo COMPLETO de gráfico de líneas (serie temporal)
 
 ```python
 df = leads_contacts[
-    (leads_contacts["Tipo de registro"] == "Leads") &
-    (leads_contacts["Fecha creación"].dt.year == 2025)
-].copy()
-serie = (
-    df.groupby(df["Fecha creación"].dt.month)
-    .size()
-    .reindex(range(1, 13), fill_value=0)
-)
-meses_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
-            "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-x_labels = meses_es
+    (leads_contacts["Tipo de registro"] == "Leads")
+].dropna(subset=["Fecha creación"]).copy()
+
+serie = df.groupby(df["Fecha creación"].dt.to_period("M")).size().sort_index()
+
+x_labels = serie.index.astype(str).tolist()
 y_vals = [int(v) for v in serie.values]
 
 resultado = {
@@ -259,8 +250,8 @@ resultado = {
         "hovertemplate": "<b>%{x}</b><br>Leads: %{y:,.0f}<extra></extra>",
     }],
     "layout": {
-        "title": {"text": "Evolución mensual de Leads — 2025", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
-        "xaxis": {"title": "Mes", "gridcolor": "#eeeeee"},
+        "title": {"text": "Evolución histórica de Leads", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
+        "xaxis": {"title": "Mes de solicitud", "gridcolor": "#eeeeee"},
         "yaxis": {"title": "Leads", "gridcolor": "#eeeeee", "rangemode": "tozero"},
         "plot_bgcolor": "white",
         "paper_bgcolor": "white",
@@ -271,6 +262,7 @@ resultado = {
     },
     "config": {"displaylogo": False, "responsive": True,
                "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"]},
+    "__data__": serie.reset_index(name="Leads").rename(columns={"Fecha creación": "Mes"})
 }
 ```
 
@@ -415,6 +407,41 @@ variacion_pct = (l25 / l24 - 1) if l24 > 0 else None
 resultado = pd.DataFrame({
     "Curso": ["2024/2025", "2025/2026", "Variación %"],
     "Leads": [l24, l25, f"{variacion_pct:.1%}" if variacion_pct is not None else "--"]
+})
+```
+
+Pregunta: "¿En qué año se han hecho más solicitudes?"
+(Pregunta sobre AÑO NATURAL → se mira solo `Fecha creación`, NO se filtra por `Curso`. Cada fila es una solicitud.)
+```python
+df = leads_contacts.dropna(subset=["Fecha creación"])
+por_anio = df.groupby(df["Fecha creación"].dt.year).size().sort_values(ascending=False)
+anio_top = int(por_anio.index[0])
+total_top = int(por_anio.iloc[0])
+resultado = f"El año con más solicitudes es {anio_top}, con {total_top:,} solicitudes.".replace(",", ".")
+```
+
+Pregunta: "Solicitudes por año"
+(De nuevo, año natural sobre `Fecha creación`, sin filtrar curso.)
+```python
+df = leads_contacts.dropna(subset=["Fecha creación"])
+por_anio = (
+    df.groupby(df["Fecha creación"].dt.year)
+    .size()
+    .reset_index(name="Solicitudes")
+    .rename(columns={"Fecha creación": "Año"})
+    .sort_values("Año")
+)
+resultado = por_anio
+```
+
+Pregunta: "Evolución de solicitudes del curso 2024/2025"
+(Pregunta sobre un CURSO concreto → se FILTRA por `Curso` y se ORDENA por `Fecha creación` cronológicamente.)
+```python
+df = leads_contacts[leads_contacts["Curso"] == "2024/2025"].dropna(subset=["Fecha creación"]).copy()
+serie = df.groupby(df["Fecha creación"].dt.to_period("M")).size().sort_index()
+resultado = pd.DataFrame({
+    "Mes": serie.index.astype(str).tolist(),
+    "Solicitudes": [int(v) for v in serie.values]
 })
 ```
 

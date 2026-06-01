@@ -59,6 +59,8 @@ Si la consulta NO necesita aclaración, devuelves exactamente:
    `["2024/2025", "2025/2026", "2026/2027", "Histórico (todos los cursos)"]`
    y `permitirOtro: false`.
 
+   **EXCEPCIÓN IMPORTANTE — preguntas sobre el año natural.** NO crees el slot `"curso"` cuando la consulta gira en torno al **año o mes natural en que se hizo la solicitud** y no a un curso académico. El `Curso` y la `Fecha creación` son cosas distintas: hay preguntas que se responden mirando solo la fecha, sin filtrar por curso. Ejemplos en los que NO se pregunta el curso: "¿en qué año se han hecho más solicitudes?", "¿qué año tuvo más leads?", "solicitudes por año", "evolución histórica de solicitudes", "reparto por año natural". En estos casos el curso es irrelevante: devuelve `{"slots": []}` (salvo que falte otra pieza imprescindible, como la métrica o el tipo de registro).
+
 2. **Métrica ambigua**. Si la consulta es genérica ("¿cómo va Madrid?", "compara Madrid vs Valencia") y NO se entiende qué métrica le interesa (leads, contactos o conversión), añade slot `"metrica"` con opciones:
    `["Volumen de leads", "Volumen de contactos", "Tasa de conversión", "Las tres"]`
    y `permitirOtro: false`.
@@ -98,6 +100,14 @@ Respuesta:
 Consulta: "tasa de conversión del 2025/2026"
 Respuesta:
 {"slots": []}
+
+Consulta: "¿en qué año se han hecho más solicitudes?"
+Respuesta:
+{"slots": []}
+
+(Es una pregunta sobre el AÑO NATURAL de `Fecha creación`, no sobre un curso
+académico. El curso es irrelevante aquí, así que NO se pregunta y la consulta
+queda determinada.)
 
 Consulta: "evolución mensual de los usuarios en 2025"
 Respuesta:
