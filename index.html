@@ -390,7 +390,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
   <span class="header-right">
-    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversaci&oacute;n nueva y olvida el contexto anterior" style="display:none;">+ Nuevo chat</button>
+    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversaci&oacute;n nueva y olvida el contexto anterior" style="display:none;">+ Limpiar memoria</button>
     <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
   </span>
 </header>
@@ -674,7 +674,10 @@ async function installRuntimeHelpers() {
     "    if isinstance(o, (_np.floating,)): return float(o)\n" +
     "    if isinstance(o, _np.ndarray): return o.tolist()\n" +
     "    if isinstance(o, _pd.Series): return o.tolist()\n" +
-    "    if isinstance(o, _pd.Index): return o.tolist()\n" + 
+    "    if isinstance(o, _pd.Index):\n" +
+    "        if type(o).__name__ == 'PeriodIndex': return o.astype(str).tolist()\n" +
+    "        return o.tolist()\n" +
+    "    if type(o).__name__ == 'Period': return str(o)\n" +
     "    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()\n" +
     "    return str(o)\n" +
     "\n" +
@@ -741,9 +744,27 @@ function revealChatPanel() {
   document.getElementById("user-input").focus();
 }
 
+async function clearPyodideEnv() {
+  if (!pyodide) return;
+  
+  var pyCode = `
+_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__'}
+for k in list(globals().keys()):
+    if k not in _keep and not k.startswith('_'):
+        del globals()[k]
+  `;
+  
+  try {
+    await pyodide.runPythonAsync(pyCode);
+  } catch (e) {
+    console.warn("Error limpiando el entorno de Pyodide:", e);
+  }
+}
+
 async function startNewChat() {
   if (busy) return;
   clearLocalSession();
+  await clearPyodideEnv();
   pendingClarify = null;
   var box = document.getElementById("messages");
   box.innerHTML =

@@ -58,6 +58,7 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 12, - **ERROR CRÍTICO CON PYODIDE:** NUNCA asignes un objeto `pd.Series` o `pd.Index` directamente a los atributos `"x"` o `"y"` del diccionario de Plotly. Pyodide no sabe serializarlos a JSON y el gráfico aparecerá en blanco. Siempre debes extraer los valores como una lista nativa de Python usando `.tolist()`.
   **MAL:** `"x": df["Ciudad"]`
   **BIEN:** `"x": df["Ciudad"].tolist()`
+13. **ERROR DE SERIALIZACIÓN (OverflowError):** Si agrupas datos por periodos de tiempo usando `dt.to_period("M")`, el índice resultante será de tipo `PeriodIndex`. Si vas a incluir este índice o DataFrame en `resultado` (por ejemplo, en la clave `__data__` del dict Plotly), **DEBES convertir el índice a strings antes** llamando a `.index = df.index.astype(str)`. Si dejas objetos `Period` crudos, el serializador JSON fallará con un `Maximum recursion level reached`.
 
 # ENTORNO DE EJECUCIÓN
 Pyodide en navegador. Disponibles: `pandas` (pd), `numpy` (np). NO hay red, NO hay ficheros, NO hay shell. Los DataFrames están en variables globales.
