@@ -71,13 +71,16 @@ Columnas:
 - `Origen_Agrupado` (string): agrupación limpia del origen. Valores posibles: `"SEO & Directo"`, `"Paid Media"`, `"Ferias"`, `"Comisionistas"`, `"Eventos"`, `"Resa Housing"`, `"Otros"`.
 - `Fuente_Agrupada` (string): agrupación limpia de la fuente. Valores posibles: `"Web Resa"`, `"Unitour"`, `"Directo"`, `"Chat"`, `"Uniscopio"`, `"Contacto Residencia"`, `"Hello"`, `"Facebook"`, `"Otros"`.
 
-**Relación Geográfica (REGLA CRÍTICA DE DIMENSIONES):**
-Una residencia física se encuentra en una ÚNICA ciudad. Como esta base de datos es una tabla plana y no hay un "Maestro de Residencias", para saber en qué ciudad está una residencia debes buscar la correspondencia estricta en la misma fila:
-- Para saber la ciudad de `Residencias_actual_corregido`, debes mirar ÚNICAMENTE la columna `Ciudad_actual_corregido`.
-- Para saber la ciudad de `Residencias_interes_corregido`, debes mirar ÚNICAMENTE la columna `Ciudad_deinteres_corregido`.
+**GEOLOCALIZACIÓN DE RESIDENCIAS (REGLA ESTRICTA Y ABSOLUTA):**
+Para saber en qué ciudad se encuentra físicamente una residencia, es OBLIGATORIO extraer la relación usando ÚNICAMENTE la columna de su misma familia.
+- Para ubicar `Residencias_actual_corregido`, usa SOLO `Ciudad_actual_corregido`.
+- Para ubicar `Residencias_interes_corregido`, usa SOLO `Ciudad_deinteres_corregido`.
 
-NUNCA cruces una residencia actual con una ciudad de interés (o viceversa), ya que un estudiante puede vivir en una ciudad y solicitar traslado a otra distinta, lo que multiplicaría las residencias de forma errónea. 
-Si necesitas un catálogo de residencias y sus ciudades, genéralo haciendo un `drop_duplicates()` de las dos columnas de la misma familia (ej. `df[["Residencias_actual_corregido", "Ciudad_actual_corregido"]].drop_duplicates()`).
+Está TOTALMENTE PROHIBIDO usar `Ciudad_deinteres_corregido` para buscar la ubicación de una `Residencias_actual_corregido` (o viceversa). Si lo haces, generarás un error grave de duplicados (ej. situar Civitas en 10 ciudades distintas porque los residentes pidieron traslados).
+
+El código correcto para mapear ubicaciones reales debe ser SIEMPRE este:
+`maestro_ciudades = df[["Residencias_actual_corregido", "Ciudad_actual_corregido"]].dropna().drop_duplicates()`
+
 
 ## Otras tablas
 
