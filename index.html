@@ -383,6 +383,38 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   border-radius: var(--radius-sm); font-size: 13px; color: var(--text3);
   font-style: italic;
 }
+
+/* ---- Explicación de consulta (perfiles no-tech) ---- */
+.explain-details {
+  margin-top: 12px;
+  background: var(--accent-lt); border: 1px solid #c5e8b3;
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  font-size: 14px; color: var(--text); overflow: hidden;
+}
+.explain-details > summary {
+  cursor: pointer; user-select: none; list-style: none;
+  padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--accent-dk);
+  display: flex; align-items: center; gap: 7px;
+}
+.explain-details > summary::-webkit-details-marker { display: none; }
+.explain-details > summary::before {
+  content: "▶"; display: inline-block; font-size: 10px;
+  transition: transform 0.15s; color: var(--accent-dk);
+}
+.explain-details[open] > summary::before { transform: rotate(90deg); }
+.explain-body {
+  padding: 0 14px 12px; line-height: 1.65; color: var(--text);
+}
+.explain-body p { margin-bottom: 6px; }
+.explain-body p:last-child { margin-bottom: 0; }
+.explain-body ul { margin: 4px 0 4px 20px; }
+.explain-body li { margin-bottom: 3px; }
+.explain-loading {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--accent-lt); border: 1px solid #c5e8b3;
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--accent-dk); display: flex; align-items: center; gap: 8px;
+}
 </style>
 </head>
 <body>
@@ -477,7 +509,8 @@ var PROMPT_FILES = {
   clarify:         "context_clarify.txt",
   modelo_datos:    "context_modelo_datos.txt",
   general:         "context_general.txt",
-  conclusiones:    "context_conclusiones.txt"
+  conclusiones:    "context_conclusiones.txt",
+  explicacion:     "context_explicacion.txt"
   // , insights_parser: "context_insights_parser.txt"
 };
 
@@ -558,6 +591,9 @@ async function initChat() {
     await installRuntimeHelpers();
     var csvOk = await loadPrimaryCsv();
     apiKey = key;
+    if (csvOk) {
+      await injectColumnValuesIntoContext();
+    }
     await ensureConversation();
     revealChatPanel();
     if (!csvOk) {
@@ -730,6 +766,109 @@ async function loadPrimaryCsv() {
   var ok = await loadCsv(PRIMARY_CSV);
   setStep("step-csv", ok ? "done" : "error");
   return ok;
+}
+
+var MAX_UNIQUE_VALUES_PER_COLUMN = 60;
+
+async function injectColumnValuesIntoContext() {
+  if (!pyodide || !prompts.general) return;
+  if (prompts.general.indexOf("# VALORES REALES DE LAS COLUMNAS") >= 0) return;
+
+  try {
+    pyodide.globals.set("__sensitive_cols__", JSON.stringify(SENSITIVE_COLUMNS));
+    pyodide.globals.set("__max_uniques__", MAX_UNIQUE_VALUES_PER_COLUMN);
+    var pyCode =
+      "import json as _json\n" +
+      "from pandas.api.types import is_string_dtype as _pd_is_string_dtype\n" +
+      "def __collect_unique_values__():\n" +
+      "    _sensitive = set(s.strip().lower() for s in _json.loads(__sensitive_cols__))\n" +
+      "    _max = int(__max_uniques__)\n" +
+      "    _out = {}\n" +
+      "    for _col in leads_contacts.columns:\n" +
+      "        _name = str(_col)\n" +
+      "        _low = _name.strip().lower()\n" +
+      "        if _low in _sensitive:\n" +
+      "            continue\n" +
+      "        if ('correo' in _low) or ('email' in _low) or ('e-mail' in _low):\n" +
+      "            continue\n" +
+      "        if ('nombre' in _low) or ('apellido' in _low):\n" +
+      "            continue\n" +
+      "        _ser = leads_contacts[_col]\n" +
+      "        # Solo columnas de texto/categóricas; ignoramos numéricas y fechas.\n" +
+      "        _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)\n" +
+      "        if not _is_text:\n" +
+      "            continue\n" +
+      "        _vals = _ser.dropna().astype(str).str.strip()\n" +
+      "        _vals = _vals[_vals != '']\n" +
+      "        _uniques = sorted(_vals.unique().tolist())\n" +
+      "        if len(_uniques) == 0:\n" +
+      "            continue\n" +
+      "        if len(_uniques) > _max:\n" +
+      "            _out[_name] = {'alta_cardinalidad': True, 'n': len(_uniques)}\n" +
+      "        else:\n" +
+      "            _out[_name] = {'alta_cardinalidad': False, 'valores': _uniques}\n" +
+      "    return _json.dumps(_out, ensure_ascii=False)\n" +
+      "__collect_unique_values__()\n";
+    var jsonStr = await pyodide.runPythonAsync(pyCode);
+    var colsInfo = JSON.parse(jsonStr);
+    var section = buildColumnValuesSection(colsInfo);
+    if (section) {
+      prompts.general += "\n\n" + section;
+    }
+  } catch (e) {
+    console.warn("[valores únicos] no se pudieron extraer:", e);
+  }
+}
+
+function buildColumnValuesSection(colsInfo) {
+  var cols = Object.keys(colsInfo || {});
+  if (cols.length === 0) return "";
+
+  var lines = [];
+  lines.push("# VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)");
+  lines.push("");
+  lines.push(
+    "Estos son los valores EXACTOS que existen en cada columna categórica del " +
+    "DataFrame `leads_contacts`, tal y como están escritos en los datos " +
+    "(con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una " +
+    "categoría para filtrar, DEBES traducir lo que escriba al valor exacto de " +
+    "esta lista antes de filtrar.");
+  lines.push("");
+  lines.push(
+    "Reglas de filtrado por estos valores:");
+  lines.push(
+    "1. Filtra SIEMPRE usando uno de los valores literales de la lista de la " +
+    "columna correspondiente. No uses cadenas que no aparezcan aquí.");
+  lines.push(
+    "2. El texto del usuario puede venir sin tildes, en otra capitalización o " +
+    "con pequeñas variaciones (p. ej. \"alcala de henares\" o \"ALCALA DE " +
+    "HENARES\"). Identifica a qué valor real corresponde (\"Alcalá de " +
+    "Henares\") y filtra por ESE valor exacto. Si dudas entre varios, elige el " +
+    "más parecido ignorando tildes y mayúsculas/minúsculas.");
+  lines.push(
+    "3. Si el usuario menciona un valor que no se corresponde con ninguno de la " +
+    "lista de esa columna, asigna a `resultado` un string corto explicando que " +
+    "ese valor no existe en los datos y, si procede, sugiere los valores " +
+    "disponibles más parecidos.");
+  lines.push(
+    "4. Para columnas marcadas como de ALTA CARDINALIDAD no se lista el detalle: " +
+    "trátalas con `.str.contains(..., case=False, na=False)` en lugar de " +
+    "igualdad exacta.");
+  lines.push("");
+
+  for (var i = 0; i < cols.length; i++) {
+    var name = cols[i];
+    var info = colsInfo[name];
+    if (info.alta_cardinalidad) {
+      lines.push("- `" + name + "`: alta cardinalidad (" + info.n +
+                 " valores distintos), no se enumera; usa coincidencia parcial.");
+    } else {
+      var vals = info.valores.map(function (v) { return '"' + v + '"'; });
+      lines.push("- `" + name + "`: " + vals.join(", "));
+    }
+  }
+
+  return lines.join("\n");
 }
 
 
@@ -1400,9 +1539,29 @@ function askThreadConfirm(pendingQuery) {
   var resumen = summarizeThreadContext();
   appendThreadConfirm(
     "¿Seguimos con " + resumen + "?",
-    "Llevamos varias consultas con este contexto. Confírmame si lo mantenemos o si cambia algo."
+    "Llevamos varias consultas con este contexto. Pulsa «Sí» para mantenerlo, " +
+    "«No» para olvidar todo y empezar de cero, o escribe en la caja para añadir " +
+    "matices a esta consulta (se enviarán junto a tu pregunta)."
   );
   setStatus("esperando confirmación...", "busy");
+}
+
+async function wipeAllMemory() {
+  conversationId = null;
+  lastResponseId = null;
+  sessionContext = {};
+  chatHistory = [];
+  lastTurn = null;
+  lastUserQuery = null;
+  dataTurnCount = 0;
+  pendingClarify = null;
+  try {
+    localStorage.removeItem(STORAGE_CONV_KEY);
+    localStorage.removeItem(STORAGE_CTX_KEY);
+    localStorage.removeItem(STORAGE_TS_KEY);
+  } catch (e) {}
+  await clearPyodideEnv();
+  await createConversation();
 }
 
 async function handleThreadConfirm(userText) {
@@ -1420,15 +1579,13 @@ async function handleThreadConfirm(userText) {
       dataTurnCount++;
       await runDataPipeline(query);
     } else if (esNo) {
-      sessionContext = {};
-      try { localStorage.removeItem(STORAGE_CTX_KEY); } catch (e) {}
+      await wipeAllMemory();
       dataTurnCount++;
       await runDataPipeline(query);
     } else {
-      sessionContext = {};
-      try { localStorage.removeItem(STORAGE_CTX_KEY); } catch (e) {}
-      dataTurnCount = 0;
-      await runDataPipeline(userText);
+      var combinada = mergeExtraInfoIntoQuery(query, userText);
+      dataTurnCount++;
+      await runDataPipeline(combinada);
     }
   } catch (e) {
     appendError("Error en la consulta: " + (e.message || String(e)));
@@ -1436,6 +1593,16 @@ async function handleThreadConfirm(userText) {
   } finally {
     if (!pendingClarify) setBusy(false);
   }
+}
+
+function mergeExtraInfoIntoQuery(pendingQuery, extraInfo) {
+  var base = (pendingQuery || "").trim();
+  var extra = (extraInfo || "").trim();
+  if (!base) return extra;
+  if (!extra) return base;
+  return base +
+    "\n\nInformación adicional indicada por el usuario para esta consulta:\n" +
+    extra;
 }
 
 async function runDataPipeline(userText) {
@@ -1508,6 +1675,11 @@ async function answerDataQuery(userText, answeredSlots) {
   rememberAnsweredSlots(answeredSlots);
   dataTurnCount++;
   touchSession();
+
+  var codeForExplain = execResult.__codeUsed || code;
+  if (isResultEligibleForConclusion(execResult) && codeForExplain) {
+    await appendExplanationTo(resultEl, userText, codeForExplain);
+  }
 
   if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
     await appendConclusionTo(resultEl, userText, execResult);
@@ -1591,6 +1763,66 @@ function isResultEligibleForConclusion(r) {
   if (r.kind === "error" || r.kind === "error_friendly") return false;
   if (r.kind === "none") return false;
   return true;
+}
+
+async function appendExplanationTo(resultEl, userQuery, code) {
+  if (!resultEl || !code) return;
+  if (!prompts.explicacion) {
+    console.warn("[explicación] context_explicacion.txt no está cargado.");
+    return;
+  }
+  var textBody = resultEl.querySelector(".msg-text");
+  if (!textBody) return;
+
+  var loadingEl = document.createElement("div");
+  loadingEl.className = "explain-loading";
+  loadingEl.innerHTML =
+    '<div class="typing-dots"><span></span><span></span><span></span></div>' +
+    '<span>preparando explicaci&oacute;n...</span>';
+  var codeToggle = textBody.querySelector(".code-toggle");
+  if (codeToggle) textBody.insertBefore(loadingEl, codeToggle);
+  else textBody.appendChild(loadingEl);
+  scrollToBottom();
+
+  setStatus("generando explicación...", "busy");
+  try {
+    var payload =
+      "PREGUNTA ORIGINAL DEL USUARIO:\n" + userQuery + "\n\n" +
+      "CÓDIGO QUE SE HA EJECUTADO:\n```python\n" + code + "\n```\n\n" +
+      "Explica en lenguaje sencillo y de negocio qué hace este código, siguiendo " +
+      "las reglas del system prompt.";
+    var reply = await callModel(
+      [{ role: "user", content: payload }],
+      prompts.explicacion,
+      { maxTokens: 500, temperature: 0.3 }
+    );
+    var text = (reply || "").trim();
+    if (!text) {
+      removeExplanationPlaceholder(loadingEl);
+    } else {
+      replaceExplanationPlaceholder(loadingEl, text);
+    }
+    setStatus("listo", "ok");
+  } catch (e) {
+    console.warn("[explicación] error:", e);
+    removeExplanationPlaceholder(loadingEl);
+    setStatus("listo", "ok");
+  }
+}
+
+function replaceExplanationPlaceholder(loadingEl, text) {
+  if (!loadingEl || !loadingEl.parentNode) return;
+  var details = document.createElement("details");
+  details.className = "explain-details";
+  details.innerHTML =
+    '<summary>Explicaci&oacute;n de código ejecutado</summary>' +
+    '<div class="explain-body">' + renderRich(text) + '</div>';
+  loadingEl.parentNode.replaceChild(details, loadingEl);
+  scrollToBottom();
+}
+
+function removeExplanationPlaceholder(loadingEl) {
+  if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
 }
 
 async function appendConclusionTo(resultEl, userQuery, execResult) {
