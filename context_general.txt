@@ -463,7 +463,112 @@ resultado = pd.DataFrame({
 })
 ```
 
+# MAPAS GEOGRÁFICOS INTERACTIVOS (PLOTLY MAPBOX)
+
+Cuando el usuario pida un **mapa**, **mapa de calor geográfico**, **dónde se concentran**, **por zonas/ciudades en el mapa** o similar, genera un gráfico geográfico de Plotly con la misma estructura `"__plotly__": True`. El front ya tiene Plotly cargado y renderiza mapas sin necesidad de token (usa el estilo `"open-street-map"`).
+
+## Coordenadas disponibles (NO las inventes)
+Tienes en el entorno una función global y un diccionario para ubicar ciudades españolas:
+- `coords_ciudad("Madrid")` → devuelve la tupla `(lat, lon)` o `None` si no se conoce. Es **tolerante a tildes y mayúsculas** (`coords_ciudad("alcala de henares")` funciona).
+- `CIUDADES_ES_COORDS` → dict `{"Madrid": (40.4168, -3.7038), ...}`.
+
+REGLA: para situar una ciudad en el mapa usa SIEMPRE `coords_ciudad(...)`. NUNCA escribas coordenadas a mano. Si una ciudad devuelve `None`, EXCLÚYELA del mapa (no la inventes). Al final de este documento hay una lista de las ciudades con coordenadas conocidas.
+
+## Qué tipo de mapa elegir
+Decide según la pregunta:
+- **Burbujas (`scattermapbox`)**: por defecto para volúmenes o tasas por ciudad. El tamaño del marcador codifica la magnitud y el color puede reforzarla. Es el más legible para comparar ciudades concretas.
+- **Mapa de calor de densidad (`densitymapbox`)**: cuando el usuario pida explícitamente "mapa de calor", "zonas calientes" o "densidad". Pondera cada ciudad por su métrica con la clave `z`.
+- Para volúmenes usa conteos de filas; para tasa de conversión usa la fórmula de CR ya definida, por ciudad.
+
+## Patrón general (calcula primero un DataFrame con lat/lon)
+Filtra y agrega por la columna de ciudad que corresponda a la pregunta (`Ciudad_deinteres_corregido` para ciudad de interés, `Ciudad_actual_corregido` para ciudad actual). Añade columnas `lat` y `lon` con `coords_ciudad`, elimina las ciudades sin coordenada, y adjunta el DataFrame en `"__data__"`.
+
+### Ejemplo A — Burbujas: volumen de leads por ciudad de interés
+```python
+df = (
+    leads_contacts[leads_contacts["Tipo de registro"] == "Leads"]
+    .groupby("Ciudad_deinteres_corregido")
+    .size()
+    .reset_index(name="Leads")
+    .rename(columns={"Ciudad_deinteres_corregido": "Ciudad"})
+)
+df["coord"] = df["Ciudad"].apply(coords_ciudad)
+df = df[df["coord"].notna()].copy()
+df["lat"] = df["coord"].apply(lambda c: c[0])
+df["lon"] = df["coord"].apply(lambda c: c[1])
+df = df.drop(columns=["coord"]).sort_values("Leads", ascending=False)
+
+# Tamaño de burbuja proporcional (escalado para que se vean todas)
+max_leads = df["Leads"].max()
+sizes = (df["Leads"] / max_leads * 45 + 8).tolist() if max_leads > 0 else [10] * len(df)
+
+resultado = {
+    "__plotly__": True,
+    "data": [{
+        "type": "scattermapbox",
+        "lat": df["lat"].tolist(),
+        "lon": df["lon"].tolist(),
+        "text": [f"{c}: {v:,.0f} leads".replace(",", ".") for c, v in zip(df["Ciudad"], df["Leads"])],
+        "hoverinfo": "text",
+        "mode": "markers",
+        "marker": {
+            "size": sizes,
+            "color": df["Leads"].tolist(),
+            "colorscale": [[0, "#e8f8e0"], [1, "#4a9e2e"]],
+            "showscale": True,
+            "colorbar": {"title": "Leads"},
+            "sizemode": "diameter",
+        },
+    }],
+    "layout": {
+        "title": {"text": "Leads por ciudad de interés", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
+        "mapbox": {"style": "open-street-map", "center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6},
+        "margin": {"l": 0, "r": 0, "t": 50, "b": 0},
+        "font": {"family": "Arial, Helvetica, sans-serif", "size": 12, "color": "#1a1a1a"},
+    },
+    "config": {"displaylogo": False, "responsive": True},
+    "__data__": df[["Ciudad", "Leads", "lat", "lon"]],
+}
+```
+
+### Ejemplo B — Mapa de calor de densidad ponderado
+Idéntico al cálculo anterior del DataFrame con `lat`/`lon`, pero el trace es:
+```python
+resultado = {
+    "__plotly__": True,
+    "data": [{
+        "type": "densitymapbox",
+        "lat": df["lat"].tolist(),
+        "lon": df["lon"].tolist(),
+        "z": df["Leads"].tolist(),
+        "radius": 35,
+        "colorscale": "YlOrRd",
+        "showscale": True,
+        "colorbar": {"title": "Leads"},
+        "text": df["Ciudad"].tolist(),
+        "hovertemplate": "%{text}: %{z:,.0f}<extra></extra>",
+    }],
+    "layout": {
+        "title": {"text": "Mapa de calor de leads por ciudad", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
+        "mapbox": {"style": "open-street-map", "center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6},
+        "margin": {"l": 0, "r": 0, "t": 50, "b": 0},
+    },
+    "config": {"displaylogo": False, "responsive": True},
+    "__data__": df[["Ciudad", "Leads", "lat", "lon"]],
+}
+```
+
+## Reglas obligatorias para mapas
+1. SIEMPRE `"mapbox": {"style": "open-street-map", ...}` en el layout (sin token).
+2. Centra en España: `"center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6` salvo que el usuario acote una zona.
+3. `"margin": {"l": 0, "r": 0, "t": 50, "b": 0}` para que el mapa ocupe el ancho.
+4. Pasa `lat`/`lon`/`z` como **listas nativas** con `.tolist()` (igual que el resto de gráficos: nunca Series crudas).
+5. Excluye ciudades sin coordenada (`coords_ciudad(...) is None`).
+6. Adjunta el DataFrame en `"__data__"` con columnas `Ciudad`, la métrica, `lat`, `lon`.
+7. Para tasa de conversión por ciudad, calcula la CR por ciudad con la fórmula oficial y usa esos valores como color/`z` (formatea como porcentaje en el hover).
+
 # RECORDATORIO FINAL
 Tu salida es SIEMPRE un único bloque ```python ... ``` con `resultado` al final, sin texto antes ni después, sin explicaciones, sin saludos.
 Para gráficos NO uses matplotlib: genera el dict Plotly con la clave `"__plotly__": True`.
+Para mapas geográficos usa traces `scattermapbox`/`densitymapbox` con `"mapbox": {"style": "open-street-map"}` y ubica las ciudades con `coords_ciudad(...)`, nunca con coordenadas inventadas.
 NUNCA preguntes al usuario.

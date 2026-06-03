@@ -31,7 +31,7 @@ Reglas para cada campo:
 
 - Si el mensaje contiene ambas cosas (un saludo y una consulta), prioriza la consulta: si el usuario dice "Hola, ¿cuántos leads hay?" devuelve `tipo: "datos"`.
 - "¿qué datos tienes?", "¿sobre qué puedo preguntarte?", "¿qué columnas hay?", "¿qué es el curso?" → `tipo: "modelo"`.
-- "¿cuántos leads hay?", "top 5 ciudades", "evolución mensual", "compara 2024/2025 vs 2025/2026", "haz un gráfico de..." → `tipo: "datos"`.
+- "¿cuántos leads hay?", "top 5 ciudades", "evolución mensual", "compara 2024/2025 vs 2025/2026", "haz un gráfico de...", "mapa de calor de...", "muéstrame en un mapa..." → `tipo: "datos"`.
 - "hola", "gracias", "ok", "asdfgh", "?", "" → `tipo: "saludo"`.
 - En caso de duda real entre `modelo` y `datos`, elige `datos`.
 - En caso de duda real entre `saludo` y `modelo`/`datos`, elige el que parezca consulta.

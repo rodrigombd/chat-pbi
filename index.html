@@ -460,6 +460,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
     <button class="quick-btn" onclick="quickAsk('&iquest;Cu&aacute;ntos leads hay en el curso 2025/2026?')">leads 2025/2026</button>
     <button class="quick-btn" onclick="quickAsk('Gr&aacute;fico de evoluci&oacute;n mensual de leads en 2025')">evoluci&oacute;n mensual</button>
     <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
+    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de inter&eacute;s en Espa&ntilde;a')">🗺️ mapa de calor</button>
   </div>
 
   <div id="conclusions-bar">
@@ -589,11 +590,13 @@ async function initChat() {
     await initPyodide();
     await loadPyodidePackages();
     await installRuntimeHelpers();
+    await installCityCoords();
     var csvOk = await loadPrimaryCsv();
     apiKey = key;
     if (csvOk) {
       await injectColumnValuesIntoContext();
     }
+    await injectCityListIntoContext();
     await ensureConversation();
     revealChatPanel();
     if (!csvOk) {
@@ -761,6 +764,122 @@ async function installRuntimeHelpers() {
   await pyodide.runPythonAsync(helpers);
 }
 
+async function installCityCoords() {
+  if (!pyodide) return;
+  var pyCoords =
+    "CIUDADES_ES_COORDS = {\n" +
+    "    \"A Coruña\": (43.3623, -8.4115),\n" +
+    "    \"Albacete\": (38.9943, -1.8585),\n" +
+    "    \"Alcalá de Henares\": (40.4818, -3.3643),\n" +
+    "    \"Alcorcón\": (40.3459, -3.8248),\n" +
+    "    \"Algeciras\": (36.1408, -5.4562),\n" +
+    "    \"Alicante\": (38.3452, -0.4810),\n" +
+    "    \"Almería\": (36.8340, -2.4637),\n" +
+    "    \"Ávila\": (40.6566, -4.6812),\n" +
+    "    \"Badajoz\": (38.8794, -6.9707),\n" +
+    "    \"Barcelona\": (41.3851, 2.1734),\n" +
+    "    \"Bilbao\": (43.2630, -2.9350),\n" +
+    "    \"Burgos\": (42.3439, -3.6969),\n" +
+    "    \"Cáceres\": (39.4753, -6.3724),\n" +
+    "    \"Cádiz\": (36.5271, -6.2886),\n" +
+    "    \"Cartagena\": (37.6257, -0.9966),\n" +
+    "    \"Castellón de la Plana\": (39.9864, -0.0513),\n" +
+    "    \"Ciudad Real\": (38.9848, -3.9274),\n" +
+    "    \"Córdoba\": (37.8882, -4.7794),\n" +
+    "    \"Cuenca\": (40.0704, -2.1374),\n" +
+    "    \"Donostia-San Sebastián\": (43.3183, -1.9812),\n" +
+    "    \"Elche\": (38.2699, -0.7126),\n" +
+    "    \"Ferrol\": (43.4840, -8.2360),\n" +
+    "    \"Getafe\": (40.3047, -3.7325),\n" +
+    "    \"Gijón\": (43.5322, -5.6611),\n" +
+    "    \"Girona\": (41.9794, 2.8214),\n" +
+    "    \"Granada\": (37.1773, -3.5986),\n" +
+    "    \"Guadalajara\": (40.6286, -3.1611),\n" +
+    "    \"Huelva\": (37.2614, -6.9447),\n" +
+    "    \"Huesca\": (42.1362, -0.4087),\n" +
+    "    \"Jaén\": (37.7796, -3.7849),\n" +
+    "    \"Jerez de la Frontera\": (36.6850, -6.1261),\n" +
+    "    \"La Laguna\": (28.4853, -16.3200),\n" +
+    "    \"Las Palmas de Gran Canaria\": (28.1235, -15.4366),\n" +
+    "    \"León\": (42.5987, -5.5671),\n" +
+    "    \"Lleida\": (41.6176, 0.6200),\n" +
+    "    \"Logroño\": (42.4627, -2.4450),\n" +
+    "    \"Lugo\": (43.0125, -7.5559),\n" +
+    "    \"Madrid\": (40.4168, -3.7038),\n" +
+    "    \"Málaga\": (36.7213, -4.4214),\n" +
+    "    \"Mataró\": (41.5381, 2.4445),\n" +
+    "    \"Mérida\": (38.9160, -6.3437),\n" +
+    "    \"Móstoles\": (40.3223, -3.8649),\n" +
+    "    \"Murcia\": (37.9922, -1.1307),\n" +
+    "    \"Ourense\": (42.3358, -7.8639),\n" +
+    "    \"Oviedo\": (43.3619, -5.8494),\n" +
+    "    \"Palencia\": (42.0096, -4.5288),\n" +
+    "    \"Palma\": (39.5696, 2.6502),\n" +
+    "    \"Palma de Mallorca\": (39.5696, 2.6502),\n" +
+    "    \"Pamplona\": (42.8125, -1.6458),\n" +
+    "    \"Pontevedra\": (42.4310, -8.6444),\n" +
+    "    \"Reus\": (41.1561, 1.1069),\n" +
+    "    \"Sabadell\": (41.5463, 2.1086),\n" +
+    "    \"Salamanca\": (40.9701, -5.6635),\n" +
+    "    \"San Sebastián\": (43.3183, -1.9812),\n" +
+    "    \"Santander\": (43.4623, -3.8099),\n" +
+    "    \"Santiago de Compostela\": (42.8782, -8.5448),\n" +
+    "    \"Segovia\": (40.9429, -4.1088),\n" +
+    "    \"Sevilla\": (37.3891, -5.9845),\n" +
+    "    \"Soria\": (41.7665, -2.4790),\n" +
+    "    \"Tarragona\": (41.1189, 1.2445),\n" +
+    "    \"Terrassa\": (41.5610, 2.0089),\n" +
+    "    \"Teruel\": (40.3456, -1.1065),\n" +
+    "    \"Toledo\": (39.8628, -4.0273),\n" +
+    "    \"Valencia\": (39.4699, -0.3763),\n" +
+    "    \"Valladolid\": (41.6523, -4.7245),\n" +
+    "    \"Vigo\": (42.2406, -8.7207),\n" +
+    "    \"Vitoria-Gasteiz\": (42.8467, -2.6716),\n" +
+    "    \"Zaragoza\": (41.6488, -0.8891),\n" +
+    "    \"Zamora\": (41.5033, -5.7446),\n" +
+    "}\n";
+  var helper =
+    "import unicodedata as _ud\n" +
+    "def _norm_ciudad(s):\n" +
+    "    if not isinstance(s, str):\n" +
+    "        return ''\n" +
+    "    s = s.strip().lower()\n" +
+    "    s = ''.join(c for c in _ud.normalize('NFD', s) if _ud.category(c) != 'Mn')\n" +
+    "    return s\n" +
+    "_COORDS_NORM = { _norm_ciudad(k): v for k, v in CIUDADES_ES_COORDS.items() }\n" +
+    "def coords_ciudad(nombre):\n" +
+    "    \"\"\"Devuelve (lat, lon) de una ciudad española o None si no se conoce.\n" +
+    "    Tolerante a tildes y mayúsculas.\"\"\"\n" +
+    "    if nombre in CIUDADES_ES_COORDS:\n" +
+    "        return CIUDADES_ES_COORDS[nombre]\n" +
+    "    return _COORDS_NORM.get(_norm_ciudad(nombre))\n";
+  try {
+    await pyodide.runPythonAsync(pyCoords + helper);
+  } catch (e) {
+    console.warn("[coords] no se pudieron cargar las coordenadas:", e);
+  }
+}
+
+async function injectCityListIntoContext() {
+  if (!pyodide || !prompts.general) return;
+  if (prompts.general.indexOf("# CIUDADES CON COORDENADAS") >= 0) return;
+  try {
+    var names = await pyodide.runPythonAsync(
+      "', '.join(sorted(CIUDADES_ES_COORDS.keys()))"
+    );
+    if (names && String(names).trim()) {
+      prompts.general +=
+        "\n\n# CIUDADES CON COORDENADAS (para mapas)\n" +
+        "Solo estas ciudades tienen coordenadas conocidas vía `coords_ciudad(...)`. " +
+        "Si una ciudad del resultado no está aquí, `coords_ciudad` devolverá `None` " +
+        "y debes excluirla del mapa:\n" + String(names);
+    }
+  } catch (e) {
+    console.warn("[coords] no se pudo inyectar la lista de ciudades:", e);
+  }
+}
+
+
 async function loadPrimaryCsv() {
   setStep("step-csv", "active");
   var ok = await loadCsv(PRIMARY_CSV);
@@ -887,7 +1006,7 @@ async function clearPyodideEnv() {
   if (!pyodide) return;
   
   var pyCode = `
-_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__'}
+_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
 for k in list(globals().keys()):
     if k not in _keep and not k.startswith('_'):
         del globals()[k]
@@ -1196,23 +1315,6 @@ async function createConversation() {
   return conversationId;
 }
 
-
-// ============================================================================
-//  Pipeline principal SECUENCIAL
-//
-//   router  →  saludo  ────────────────────────────────────────────────────────►
-//          \─►  modelo  → respuesta texto ──────────────────────────────────────►
-//          \─►  datos   → clarify  → (slots?) → ejecutar python  →  result
-//                                                                      │
-//                                                             (¿Toggle Activo?)
-//                                                                      ▼
-//                                                            context_conclusiones
-//                                                                      │
-//                                                                      ▼
-//                                                                  conclusión
-//
-//  Cada paso usa SU PROPIO system prompt (context_*.txt) para minimizar tokens en cada llamada a la API.
-// ============================================================================
 
 async function sendMessage(text) {
   if (busy) return;
@@ -1815,7 +1917,7 @@ function replaceExplanationPlaceholder(loadingEl, text) {
   var details = document.createElement("details");
   details.className = "explain-details";
   details.innerHTML =
-    '<summary>Explicaci&oacute;n de código ejecutado</summary>' +
+    '<summary>Explicaci&oacute;n de consulta</summary>' +
     '<div class="explain-body">' + renderRich(text) + '</div>';
   loadingEl.parentNode.replaceChild(details, loadingEl);
   scrollToBottom();
@@ -2516,6 +2618,19 @@ function renderPlotlyInto(elId, jsonStr) {
     var layout  = spec.layout  || {};
     var config  = spec.config  || { displaylogo: false, responsive: true };
     if (!config.responsive) config.responsive = true;
+    var isMap = false;
+    for (var ti = 0; ti < data.length; ti++) {
+      var tt = data[ti] && data[ti].type ? String(data[ti].type) : "";
+      if (tt.indexOf("mapbox") >= 0 || tt === "choropleth" || tt === "scattergeo" || tt === "densitymapbox") {
+        isMap = true; break;
+      }
+    }
+    if (isMap) {
+      el.style.minHeight = "520px";
+      if (layout.height == null) layout.height = 520;
+      if (!layout.mapbox) layout.mapbox = {};
+      if (!layout.mapbox.style) layout.mapbox.style = "open-street-map";
+    }
     Plotly.newPlot(el, data, layout, config);
   } catch (e) {
     el.innerHTML = '<div class="error-box">Error renderizando el gráfico: ' + esc(e.message || String(e)) + '</div>';
