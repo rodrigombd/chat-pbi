@@ -422,19 +422,19 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
   <span class="header-right">
-    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversaci&oacute;n nueva y olvida el contexto anterior" style="display:none;">+ Limpiar memoria</button>
+    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversación nueva y olvida el contexto anterior" style="display:none;">+ Limpiar memoria</button>
     <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
   </span>
 </header>
 
 <div id="setup-panel">
   <div class="setup-card">
-    <h2>Iniciar sesi&oacute;n</h2>
+    <h2>Iniciar sesión</h2>
     <p class="setup-sub">Introduce tu API key para conectar con el asistente.</p>
     <div class="field-group">
       <label>API Key</label>
       <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
-      <p class="hint">Solo se usa durante esta sesi&oacute;n. No se almacena en ning&uacute;n servidor.</p>
+      <p class="hint">Solo se usa durante esta sesión. No se almacena en ningún servidor.</p>
     </div>
     <button class="btn-primary" id="connect-btn" onclick="initChat()">Conectar &rarr;</button>
     <div class="boot-progress" id="boot-progress">
@@ -449,8 +449,8 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <div id="chat-panel">
   <div id="messages">
     <div class="welcome-area" id="welcome">
-      <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
-      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y produce un gr&aacute;fico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente a&ntilde;ada una lectura breve del resultado tras cada consulta.</p>
+      <h3>&iquest;En qué puedo ayudarte?</h3>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente añada una lectura breve del resultado tras cada consulta.</p>
     </div>
   </div>
 
@@ -1917,7 +1917,7 @@ function replaceExplanationPlaceholder(loadingEl, text) {
   var details = document.createElement("details");
   details.className = "explain-details";
   details.innerHTML =
-    '<summary>Explicaci&oacute;n de consulta</summary>' +
+    '<summary>Explicación de código ejecutado</summary>' +
     '<div class="explain-body">' + renderRich(text) + '</div>';
   loadingEl.parentNode.replaceChild(details, loadingEl);
   scrollToBottom();
@@ -1974,7 +1974,7 @@ function replaceConclusionPlaceholder(loadingEl, text, errorMsg) {
   if (text) {
     newEl.className = "conclusion-block";
     newEl.innerHTML =
-      '<div class="conclusion-label">conclusi&oacute;n</div>' +
+      '<div class="conclusion-label">conclusión</div>' +
       renderRich(text);
   } else {
     newEl.className = "conclusion-error";
