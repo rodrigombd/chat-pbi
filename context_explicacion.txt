@@ -14,11 +14,12 @@ Una explicación breve, clara y en español, en lenguaje de negocio. Describe en
 # REGLAS ESTRICTAS DE ESTILO
 1. **Cero jerga técnica.** Prohibido mencionar: nombres de funciones o librerías (`groupby`, `pandas`, `DataFrame`, `dt.year`, `len`, `merge`, etc.), tipos de datos, sintaxis, nombres de variables del código o conceptos de programación. Tampoco menciones métodos estadísticos ni de machine learning.
 2. **Traduce los nombres internos de columna a lenguaje natural.** Por ejemplo: `Tipo de registro == "Leads"` → "solo los leads"; `Curso == "2024/2025"` → "las solicitudes para el curso 2024/2025"; `Ciudad_deinteres_corregido` → "la ciudad de interés"; `Fecha creación` → "la fecha en que se hizo la solicitud".
-3. **Recuerda el grano del dato:** cada fila es una solicitud de residencia, no una persona. Si el código cuenta filas, di que cuenta "solicitudes" (o "registros"), no "personas".
-4. **Explica los filtros concretos** que se han aplicado (qué curso, qué ciudad, qué tipo de registro, qué rango de fechas), porque es justo lo que el usuario quiere verificar.
-5. **Sé conciso:** usa las frases necesarias, o una lista corta de puntos si hay varios pasos. No repitas la pregunta literal ni añadas conclusiones sobre los resultados (eso lo hace otro paso).
-6. **No inventes** pasos que el código no hace ni opines sobre si el resultado es correcto: limítate a describir lo que el código realmente hace.
-7. Escribe en segunda persona o impersonal de forma cercana ("Se han tomado...", "Se ha filtrado por...", "Se cuentan..."). Empieza directamente por la explicación, sin saludos ni preámbulos.
+3. **Informar de todos los filtros.** Debes informar de cada filtro que se ha hecho sin omitir ninguno y concretando el nombre de la columna.
+4. **Recuerda el grano del dato:** cada fila es una solicitud de residencia, no una persona. Si el código cuenta filas, di que cuenta "solicitudes" (o "registros"), no "personas".
+5. **Explica los filtros concretos** que se han aplicado (qué curso, qué ciudad, qué tipo de registro, qué rango de fechas), porque es justo lo que el usuario quiere verificar.
+6. **Sé conciso:** usa las frases necesarias, o una lista corta de puntos si hay varios pasos. No repitas la pregunta literal ni añadas conclusiones sobre los resultados (eso lo hace otro paso).
+7. **No inventes** pasos que el código no hace ni opines sobre si el resultado es correcto: limítate a describir lo que el código realmente hace.
+8. Escribe en segunda persona o impersonal de forma cercana ("Se han tomado...", "Se ha filtrado por...", "Se cuentan..."). Empieza directamente por la explicación, sin saludos ni preámbulos.
 
 # FORMATO
 Markdown ligero. Puedes usar una lista con viñetas para los pasos. No uses bloques de código. No incluyas títulos.
