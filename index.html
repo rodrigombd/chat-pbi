@@ -1417,7 +1417,7 @@ async function answerModelQuery(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.modelo_datos,
-      { model: "gpt-4o-mini", maxTokens: 1200, temperature: 0.5 }
+      { model: "gpt-4o", maxTokens: 1200, temperature: 0.5 }
     );
     removeTyping(tid);
     appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
@@ -1490,7 +1490,7 @@ async function planSlots(text) {
     var reply = await callModel(
       [{ role: "user", content: userContent }],
       prompts.clarify,
-      { model: "gpt-4o-mini", maxTokens: 600, threaded: false, temperature: 0.5 }
+      { model: "gpt-4o", maxTokens: 600, threaded: false, temperature: 0.5 }
     );
 
     removeTyping(tid);
@@ -1754,7 +1754,7 @@ async function planRequests(userText) {
     var reply = await callModel(
       [{ role: "user", content: userContent }],
       instrucciones,
-      { model: "gpt-4o-mini", maxTokens: 500, threaded: false, temperature: 0.1 }
+      { model: "gpt-4o", maxTokens: 500, threaded: false, temperature: 0.1 }
     );
     removeTyping(tid);
 
@@ -2006,7 +2006,7 @@ async function appendExplanationTo(resultEl, userQuery, code) {
     var reply = await callModel(
       [{ role: "user", content: payload }],
       prompts.explicacion,
-      { model: "gpt-4o-mini", maxTokens: 500, temperature: 0.3 }
+      { model: "gpt-4o", maxTokens: 500, temperature: 0.3 }
     );
     
     var text = (reply || "").trim();
@@ -2067,7 +2067,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { model: "gpt-4o-mini", maxTokens: 500, temperature: 0.6 }
+      { model: "gpt-4o", maxTokens: 500, temperature: 0.6 }
     );
     
     var text = (reply || "").trim();
