@@ -465,7 +465,7 @@ resultado = pd.DataFrame({
 
 # MAPAS GEOGRÁFICOS INTERACTIVOS (PLOTLY MAPBOX)
 
-Cuando el usuario pida un **mapa**, **mapa de calor geográfico**, **dónde se concentran**, **por zonas/ciudades en el mapa** o similar, genera un gráfico geográfico de Plotly con la misma estructura `"__plotly__": True`. El front ya tiene Plotly cargado y renderiza mapas sin necesidad de token (usa el estilo `"open-street-map"`).
+Cuando el usuario pida un **mapa**, **mapa de calor geográfico**, **dónde se concentran**, **por zonas/ciudades en el mapa** o similar, genera un gráfico geográfico de Plotly con la misma estructura `"__plotly__": True`. El front ya tiene Plotly cargado y renderiza mapas sin necesidad de token (usa un estilo limpio y corporativo `"carto-positron"`; el front además embellece el mapa automáticamente con halos en las burbujas y centrado en España).
 
 ## Coordenadas disponibles (NO las inventes)
 Tienes en el entorno una función global y un diccionario para ubicar ciudades españolas:
@@ -522,7 +522,7 @@ resultado = {
     }],
     "layout": {
         "title": {"text": "Leads por ciudad de interés", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
-        "mapbox": {"style": "open-street-map", "center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6},
+        "mapbox": {"style": "carto-positron", "center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6},
         "margin": {"l": 0, "r": 0, "t": 50, "b": 0},
         "font": {"family": "Arial, Helvetica, sans-serif", "size": 12, "color": "#1a1a1a"},
     },
@@ -550,7 +550,7 @@ resultado = {
     }],
     "layout": {
         "title": {"text": "Mapa de calor de leads por ciudad", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
-        "mapbox": {"style": "open-street-map", "center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6},
+        "mapbox": {"style": "carto-positron", "center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6},
         "margin": {"l": 0, "r": 0, "t": 50, "b": 0},
     },
     "config": {"displaylogo": False, "responsive": True},
@@ -559,7 +559,7 @@ resultado = {
 ```
 
 ## Reglas obligatorias para mapas
-1. SIEMPRE `"mapbox": {"style": "open-street-map", ...}` en el layout (sin token).
+1. SIEMPRE `"mapbox": {"style": "carto-positron", ...}` en el layout (sin token).
 2. Centra en España: `"center": {"lat": 40.0, "lon": -3.7}, "zoom": 4.6` salvo que el usuario acote una zona.
 3. `"margin": {"l": 0, "r": 0, "t": 50, "b": 0}` para que el mapa ocupe el ancho.
 4. Pasa `lat`/`lon`/`z` como **listas nativas** con `.tolist()` (igual que el resto de gráficos: nunca Series crudas).
@@ -570,5 +570,5 @@ resultado = {
 # RECORDATORIO FINAL
 Tu salida es SIEMPRE un único bloque ```python ... ``` con `resultado` al final, sin texto antes ni después, sin explicaciones, sin saludos.
 Para gráficos NO uses matplotlib: genera el dict Plotly con la clave `"__plotly__": True`.
-Para mapas geográficos usa traces `scattermapbox`/`densitymapbox` con `"mapbox": {"style": "open-street-map"}` y ubica las ciudades con `coords_ciudad(...)`, nunca con coordenadas inventadas.
+Para mapas geográficos usa traces `scattermapbox`/`densitymapbox` con `"mapbox": {"style": "carto-positron"}` y ubica las ciudades con `coords_ciudad(...)`, nunca con coordenadas inventadas.
 NUNCA preguntes al usuario.

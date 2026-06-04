@@ -224,13 +224,49 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .typing-label { font-size: 12px; color: var(--text3); margin-left: 6px; }
 
 /* ---- Quick questions ---- */
-#quick-questions { padding: 2px 18px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+#quick-questions { padding: 4px 18px 14px; display: flex; gap: 9px; flex-wrap: wrap; }
 .quick-btn {
-  background: var(--bg); border: 1px solid var(--border2); border-radius: 20px;
-  color: var(--text2); font-family: inherit; font-size: 13px;
-  padding: 5px 13px; cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, var(--accent-lt) 100%);
+  border: 1px solid #c5e8b3;
+  border-radius: 22px;
+  color: var(--accent-dk);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 16px; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(74,158,46,0.08);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
-.quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: var(--accent-lt); }
+.quick-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(74,158,46,0.22);
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-lt) 0%, #d4f3c3 100%);
+}
+.quick-btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(74,158,46,0.12); }
+
+/* ---- Plan multi-consulta ---- */
+.plan-box {
+  background: var(--accent-lt); border: 1px solid #c5e8b3;
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  padding: 12px 16px; font-size: 14px; color: var(--text);
+}
+.plan-box-title { font-weight: 600; color: var(--accent-dk); margin-bottom: 8px; }
+.plan-box-list { margin: 0 0 0 20px; padding: 0; }
+.plan-box-list li { margin-bottom: 4px; line-height: 1.5; }
+.plan-box-list li:last-child { margin-bottom: 0; }
+.batch-step-header {
+  display: flex; align-items: center; gap: 10px;
+  margin: 4px 0 -4px; padding: 4px 2px;
+}
+.batch-step-num {
+  flex-shrink: 0; font-size: 11px; font-weight: 700; color: #fff;
+  background: var(--accent); border-radius: 10px; padding: 2px 9px;
+  letter-spacing: 0.03em;
+}
+.batch-step-text {
+  font-size: 12px; color: var(--text2); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ---- Input ---- */
 #input-area {
@@ -449,27 +485,27 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <div id="chat-panel">
   <div id="messages">
     <div class="welcome-area" id="welcome">
-      <h3>&iquest;En qué puedo ayudarte?</h3>
+      <h3>¿En qué puedo ayudarte?</h3>
       <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente añada una lectura breve del resultado tras cada consulta.</p>
     </div>
   </div>
 
   <div id="quick-questions">
-    <button class="quick-btn" onclick="quickAsk('&iquest;Qu&eacute; tablas hay en el modelo?')">&iquest;qu&eacute; tablas hay?</button>
-    <button class="quick-btn" onclick="quickAsk('&iquest;Qu&eacute; significa Curso_corregido?')">qu&eacute; es Curso_corregido</button>
-    <button class="quick-btn" onclick="quickAsk('&iquest;Cu&aacute;ntos leads hay en el curso 2025/2026?')">leads 2025/2026</button>
-    <button class="quick-btn" onclick="quickAsk('Gr&aacute;fico de evoluci&oacute;n mensual de leads en 2025')">evoluci&oacute;n mensual</button>
-    <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
-    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de inter&eacute;s en Espa&ntilde;a')">🗺️ mapa de calor</button>
+    <button class="quick-btn" onclick="quickAsk('¿Qué tablas hay en el modelo?')">¿Qué tablas hay?</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cómo se calcula el CR?')">¿Cómo se calcula el CR?</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cuántos leads hay en el curso 2025/2026?')">Número de leads 2025/2026</button>
+    <button class="quick-btn" onclick="quickAsk('Gráfico de evolución mensual de leads')">Evolución mensual de leads</button>
+    <button class="quick-btn" onclick="quickAsk('Compara la conversión entre Madrid y Valencia')">Comparar conversión Valencia vs Madrid</button>
+    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de interés en España')">Mapa de calor de solicitudes de leads</button>
   </div>
 
   <div id="conclusions-bar">
-    <label class="toggle-switch" title="Si est&aacute; activo, tras cada consulta de datos el asistente generar&aacute; una conclusi&oacute;n breve del resultado.">
+    <label class="toggle-switch" title="Si está activo, tras cada consulta de datos el asistente generará una conclusión breve del resultado.">
       <input type="checkbox" id="conclusions-toggle">
       <span class="toggle-track"></span>
       <span class="toggle-label-text">Conclusiones</span>
     </label>
-    <span class="toggle-hint">a&ntilde;ade una lectura breve del resultado tras cada consulta de datos</span>
+    <span class="toggle-hint">añade una lectura breve del resultado tras cada consulta de datos</span>
   </div>
 
   <div id="input-area">
@@ -494,8 +530,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 
 
-var MODEL_ID    = "gpt-4o";
-var MAX_HISTORY = 12;
 var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
 var STORAGE_CTX_KEY  = "resa_assistant_session_context";
 var STORAGE_TS_KEY   = "resa_assistant_session_ts";
@@ -520,15 +554,6 @@ var CSV_TABLES = {
 };
 var PRIMARY_CSV          = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
-
-var SENSITIVE_COLUMNS = [
-  "Correo electrónico", "Correo electronico", "correo electrónico", "correo electronico",
-  "Email", "email", "E-mail", "e-mail",
-  "Nombre", "nombre",
-  "Apellidos", "apellidos",
-  "Nombre completo", "nombre completo"
-];
-
 var CONCLUSION_MAX_ROWS = 300;
 
 marked.use({ breaks: true, gfm: true });
@@ -563,13 +588,19 @@ var prompts        = {};
 var pyodide        = null;
 var loadedCsvs     = new Set();
 var busy           = false;
-var chatHistory    = [];
 var pendingClarify = null;
 var lastUserQuery  = null;
 var lastTurn       = null;
 var sessionContext = {};
 var dataTurnCount  = 0;
 var awaitingThreadConfirm = false;
+
+
+// ============================================================================
+//  Mensajes de error
+// ============================================================================
+const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
+const ERR_MSG_PROMPTS = "⚠️ <strong>Faltan archivos de contexto:</strong> {archivos}.<br>Asegúrate de que están en la misma carpeta que <code>index.html</code>.";
 
 
 // ============================================================================
@@ -586,38 +617,36 @@ async function initChat() {
   document.getElementById("boot-progress").classList.add("active");
 
   try {
-    await loadPrompts();
-    await initPyodide();
-    await loadPyodidePackages();
-    await installRuntimeHelpers();
-    await installCityCoords();
-    var csvOk = await loadPrimaryCsv();
     apiKey = key;
+    var promptsTask = loadPrompts();
+    var conversationTask = ensureConversation();
+    
+    var pyodideTask = (async function() {
+      await initPyodide();
+      await loadPyodidePackages();
+      await installRuntimeHelpers();
+      await installCityCoords();
+      return await loadPrimaryCsv();
+    })();
+
+    var results = await Promise.all([promptsTask, conversationTask, pyodideTask]);
+    var csvOk = results[2];
+
     if (csvOk) {
       await injectColumnValuesIntoContext();
     }
     await injectCityListIntoContext();
-    await ensureConversation();
     revealChatPanel();
     if (!csvOk) {
-      appendDevBanner(
-        "⚠️ <strong>El CSV principal no se cargó.</strong> " +
-        "Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>" +
-        "Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). " +
-        "Desde la carpeta: <code>python -m http.server 8000</code> " +
-        "y luego ve a <code>http://localhost:8000</code>. " +
-        "Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>."
-      );
+      appendDevBanner(ERR_MSG_CSV);
     }
+    
     var missing = [];
     for (var k in PROMPT_FILES) { if (!prompts[k]) missing.push(PROMPT_FILES[k]); }
     if (missing.length > 0) {
-      appendDevBanner(
-        "⚠️ <strong>Faltan archivos de contexto:</strong> <code>" +
-        missing.join("</code>, <code>") + "</code>.<br>" +
-        "Asegúrate de que están en la misma carpeta que <code>index.html</code>."
-      );
+      appendDevBanner(ERR_MSG_PROMPTS.replace("{archivos}", "<code>" + missing.join("</code>, <code>") + "</code>"));
     }
+
   } catch (e) {
     console.error(e);
     alert("Error inicializando: " + e.message);
@@ -629,8 +658,8 @@ async function initChat() {
 async function loadPrompts() {
   setStep("step-prompts", "active");
   var keys = Object.keys(PROMPT_FILES);
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i];
+
+  var fetchPromises = keys.map(async function(key) {
     try {
       var r = await fetch(PROMPT_FILES[key] + "?v=" + Date.now());
       if (r.ok) {
@@ -642,9 +671,17 @@ async function loadPrompts() {
     } catch (e) {
       console.warn("Error cargando " + PROMPT_FILES[key], e);
     }
-  }
+  });
+
+  await Promise.all(fetchPromises);
   var allOk = true;
-  for (var k in PROMPT_FILES) { if (!prompts[k]) { allOk = false; break; } }
+  for (var k in PROMPT_FILES) { 
+    if (!prompts[k]) { 
+      allOk = false; 
+      break; 
+    } 
+  }
+  
   setStep("step-prompts", allOk ? "done" : "error");
 }
 
@@ -660,201 +697,174 @@ async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
   // [Generar conclusiones desactivado] Sin scikit-learn.
   await pyodide.loadPackage(["pandas", "numpy"]);
-  await pyodide.runPythonAsync(
-    "import pandas as pd\n" +
-    "import numpy as np\n" +
-    "import io, json, traceback\n"
-  );
+  const pythonInitScript = `
+import pandas as pd
+import numpy as np
+import io, json, traceback
+  `;
+
+  await pyodide.runPythonAsync(pythonInitScript);
   setStep("step-pkgs", "done");
 }
 
 async function installRuntimeHelpers() {
-  var helpers =
-    "import re as _re\n" +
-    "_MES_ES_MAP = {\n" +
-    "    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,\n" +
-    "    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10,\n" +
-    "    'noviembre': 11, 'diciembre': 12,\n" +
-    "}\n" +
-    "_RE_FECHA_ES = _re.compile(r'(\\d{1,2})\\s+de\\s+([a-záéíóúñ]+)\\s+de\\s+(\\d{4})', _re.IGNORECASE)\n" +
-    "\n" +
-    "def __parse_fecha_es__(s):\n" +
-    "    if not isinstance(s, str):\n" +
-    "        return pd.NaT\n" +
-    "    m = _RE_FECHA_ES.search(s.lower())\n" +
-    "    if not m:\n" +
-    "        try:\n" +
-    "            return pd.to_datetime(s, errors='coerce', dayfirst=True)\n" +
-    "        except Exception:\n" +
-    "            return pd.NaT\n" +
-    "    d, mes, y = m.group(1), m.group(2), m.group(3)\n" +
-    "    mes_num = _MES_ES_MAP.get(mes)\n" +
-    "    if not mes_num:\n" +
-    "        return pd.NaT\n" +
-    "    try:\n" +
-    "        return pd.Timestamp(year=int(y), month=mes_num, day=int(d))\n" +
-    "    except Exception:\n" +
-    "        return pd.NaT\n" +
-    "\n" +
-    "def __parse_fechas_es__(df, cols):\n" +
-    "    for c in cols:\n" +
-    "        if c in df.columns:\n" +
-    "            df[c] = df[c].apply(__parse_fecha_es__)\n" +
-    "    return df\n" +
-    "\n" +
-    "def __reset_resultado__():\n" +
-    "    if 'resultado' in globals():\n" +
-    "        del globals()['resultado']\n" +
-    "\n" +
-    "def _default_json(o):\n" +
-    "    import numpy as _np\n" +
-    "    import pandas as _pd\n" +
-    "    if isinstance(o, (_np.integer,)): return int(o)\n" +
-    "    if isinstance(o, (_np.floating,)): return float(o)\n" +
-    "    if isinstance(o, _np.ndarray): return o.tolist()\n" +
-    "    if isinstance(o, _pd.Series): return o.tolist()\n" +
-    "    if isinstance(o, _pd.Index):\n" +
-    "        if type(o).__name__ == 'PeriodIndex': return o.astype(str).tolist()\n" +
-    "        return o.tolist()\n" +
-    "    if type(o).__name__ == 'Period': return str(o)\n" +
-    "    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()\n" +
-    "    return str(o)\n" +
-    "\n" +
-    "def __serialize_resultado__():\n" +
-    "    import json as _j\n" +
-    "    import pandas as _pd\n" +
-    "    import numpy as _np\n" +
-    "    if 'resultado' not in globals():\n" +
-    "        return _j.dumps({'kind':'none','value':None})\n" +
-    "    _r = globals()['resultado']\n" +
-    "    if isinstance(_r, dict) and _r.get('__plotly__') is True:\n" +
-    "        spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}\n" +
-    "        _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}\n" +
-    "        if isinstance(_r.get('__data__'), _pd.DataFrame):\n" +
-    "            _payload['data_df'] = _r['__data__'].to_json(orient='split', date_format='iso', force_ascii=False)\n" +
-    "        return _j.dumps(_payload, ensure_ascii=False)\n" +
-    "    if isinstance(_r, _pd.DataFrame):\n" +
-    "        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)\n" +
-    "    if isinstance(_r, _pd.Series):\n" +
-    "        _df = _r.reset_index()\n" +
-    "        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)\n" +
-    "    if isinstance(_r, dict):\n" +
-    "        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)\n" +
-    "    if isinstance(_r, bool):\n" +
-    "        return _j.dumps({'kind':'text','value':str(_r)})\n" +
-    "    if isinstance(_r, (int, _np.integer)):\n" +
-    "        return _j.dumps({'kind':'number','value':int(_r)})\n" +
-    "    if isinstance(_r, (float, _np.floating)):\n" +
-    "        return _j.dumps({'kind':'number','value':float(_r)})\n" +
-    "    if isinstance(_r, str):\n" +
-    "        _lines = [l for l in _r.split('\\n') if l.strip()]\n" +
-    "        _looks_tabular = len(_lines) >= 2 and (('|' in _r and _r.count('|') >= 2) or all(len(l.split()) >= 2 for l in _lines[:3]))\n" +
-    "        if _looks_tabular:\n" +
-    "            import io as _io\n" +
-    "            for _sep in (r'\\s*\\|\\s*', r'\\s{2,}', r'\\t'):\n" +
-    "                try:\n" +
-    "                    _df2 = _pd.read_csv(_io.StringIO(_r), sep=_sep, engine='python')\n" +
-    "                    _df2 = _df2.loc[:, ~_df2.columns.astype(str).str.match(r'^Unnamed')]\n" +
-    "                    if _df2.shape[1] >= 2 and _df2.shape[0] >= 1:\n" +
-    "                        return _j.dumps({'kind':'dataframe','value':_df2.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df2.shape)}, ensure_ascii=False)\n" +
-    "                except Exception:\n" +
-    "                    pass\n" +
-    "        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)\n" +
-    "    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)\n";
+  const helpers = `
+import re as _re
+import json as _j
+import pandas as _pd
+import numpy as _np
+import io as _io
+
+_MES_ES_MAP = {
+    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10,
+    'noviembre': 11, 'diciembre': 12,
+}
+_RE_FECHA_ES = _re.compile(r'(\\d{1,2})\\s+de\\s+([a-záéíóúñ]+)\\s+de\\s+(\\d{4})', _re.IGNORECASE)
+
+def __parse_fecha_es__(s):
+    if not isinstance(s, str):
+        return _pd.NaT
+    m = _RE_FECHA_ES.search(s.lower())
+    if not m:
+        try:
+            return _pd.to_datetime(s, errors='coerce', dayfirst=True)
+        except Exception:
+            return _pd.NaT
+    d, mes, y = m.group(1), m.group(2), m.group(3)
+    mes_num = _MES_ES_MAP.get(mes)
+    if not mes_num:
+        return _pd.NaT
+    try:
+        return _pd.Timestamp(year=int(y), month=mes_num, day=int(d))
+    except Exception:
+        return _pd.NaT
+
+def __parse_fechas_es__(df, cols):
+    for c in cols:
+        if c in df.columns:
+            df[c] = df[c].apply(__parse_fecha_es__)
+    return df
+
+def __reset_resultado__():
+    if 'resultado' in globals():
+        del globals()['resultado']
+
+def _default_json(o):
+    if isinstance(o, (_np.integer,)): return int(o)
+    if isinstance(o, (_np.floating,)): return float(o)
+    if isinstance(o, _np.ndarray): return o.tolist()
+    if isinstance(o, _pd.Series): return o.tolist()
+    if isinstance(o, _pd.Index):
+        if type(o).__name__ == 'PeriodIndex': return o.astype(str).tolist()
+        return o.tolist()
+    if type(o).__name__ == 'Period': return str(o)
+    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()
+    return str(o)
+
+def __serialize_resultado__():
+    if 'resultado' not in globals():
+        return _j.dumps({'kind':'none','value':None})
+    
+    _r = globals()['resultado']
+    
+    if isinstance(_r, dict) and _r.get('__plotly__') is True:
+        spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}
+        _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}
+        if isinstance(_r.get('__data__'), _pd.DataFrame):
+            _payload['data_df'] = _r['__data__'].to_json(orient='split', date_format='iso', force_ascii=False)
+        return _j.dumps(_payload, ensure_ascii=False)
+        
+    if isinstance(_r, _pd.DataFrame):
+        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)
+        
+    if isinstance(_r, _pd.Series):
+        _df = _r.reset_index()
+        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)
+        
+    if isinstance(_r, dict):
+        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)
+        
+    if isinstance(_r, bool):
+        return _j.dumps({'kind':'text','value':str(_r)})
+        
+    if isinstance(_r, (int, _np.integer)):
+        return _j.dumps({'kind':'number','value':int(_r)})
+        
+    if isinstance(_r, (float, _np.floating)):
+        return _j.dumps({'kind':'number','value':float(_r)})
+        
+    if isinstance(_r, str):
+        _lines = [l for l in _r.split('\\n') if l.strip()]
+        _looks_tabular = len(_lines) >= 2 and (('|' in _r and _r.count('|') >= 2) or all(len(l.split()) >= 2 for l in _lines[:3]))
+        if _looks_tabular:
+            for _sep in (r'\\s*\\|\\s*', r'\\s{2,}', r'\\t'):
+                try:
+                    _df2 = _pd.read_csv(_io.StringIO(_r), sep=_sep, engine='python')
+                    _df2 = _df2.loc[:, ~_df2.columns.astype(str).str.match(r'^Unnamed')]
+                    if _df2.shape[1] >= 2 and _df2.shape[0] >= 1:
+                        return _j.dumps({'kind':'dataframe','value':_df2.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df2.shape)}, ensure_ascii=False)
+                except Exception:
+                    pass
+        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)
+        
+    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)
+`;
+
   await pyodide.runPythonAsync(helpers);
 }
 
 async function installCityCoords() {
   if (!pyodide) return;
-  var pyCoords =
-    "CIUDADES_ES_COORDS = {\n" +
-    "    \"A Coruña\": (43.3623, -8.4115),\n" +
-    "    \"Albacete\": (38.9943, -1.8585),\n" +
-    "    \"Alcalá de Henares\": (40.4818, -3.3643),\n" +
-    "    \"Alcorcón\": (40.3459, -3.8248),\n" +
-    "    \"Algeciras\": (36.1408, -5.4562),\n" +
-    "    \"Alicante\": (38.3452, -0.4810),\n" +
-    "    \"Almería\": (36.8340, -2.4637),\n" +
-    "    \"Ávila\": (40.6566, -4.6812),\n" +
-    "    \"Badajoz\": (38.8794, -6.9707),\n" +
-    "    \"Barcelona\": (41.3851, 2.1734),\n" +
-    "    \"Bilbao\": (43.2630, -2.9350),\n" +
-    "    \"Burgos\": (42.3439, -3.6969),\n" +
-    "    \"Cáceres\": (39.4753, -6.3724),\n" +
-    "    \"Cádiz\": (36.5271, -6.2886),\n" +
-    "    \"Cartagena\": (37.6257, -0.9966),\n" +
-    "    \"Castellón de la Plana\": (39.9864, -0.0513),\n" +
-    "    \"Ciudad Real\": (38.9848, -3.9274),\n" +
-    "    \"Córdoba\": (37.8882, -4.7794),\n" +
-    "    \"Cuenca\": (40.0704, -2.1374),\n" +
-    "    \"Donostia-San Sebastián\": (43.3183, -1.9812),\n" +
-    "    \"Elche\": (38.2699, -0.7126),\n" +
-    "    \"Ferrol\": (43.4840, -8.2360),\n" +
-    "    \"Getafe\": (40.3047, -3.7325),\n" +
-    "    \"Gijón\": (43.5322, -5.6611),\n" +
-    "    \"Girona\": (41.9794, 2.8214),\n" +
-    "    \"Granada\": (37.1773, -3.5986),\n" +
-    "    \"Guadalajara\": (40.6286, -3.1611),\n" +
-    "    \"Huelva\": (37.2614, -6.9447),\n" +
-    "    \"Huesca\": (42.1362, -0.4087),\n" +
-    "    \"Jaén\": (37.7796, -3.7849),\n" +
-    "    \"Jerez de la Frontera\": (36.6850, -6.1261),\n" +
-    "    \"La Laguna\": (28.4853, -16.3200),\n" +
-    "    \"Las Palmas de Gran Canaria\": (28.1235, -15.4366),\n" +
-    "    \"León\": (42.5987, -5.5671),\n" +
-    "    \"Lleida\": (41.6176, 0.6200),\n" +
-    "    \"Logroño\": (42.4627, -2.4450),\n" +
-    "    \"Lugo\": (43.0125, -7.5559),\n" +
-    "    \"Madrid\": (40.4168, -3.7038),\n" +
-    "    \"Málaga\": (36.7213, -4.4214),\n" +
-    "    \"Mataró\": (41.5381, 2.4445),\n" +
-    "    \"Mérida\": (38.9160, -6.3437),\n" +
-    "    \"Móstoles\": (40.3223, -3.8649),\n" +
-    "    \"Murcia\": (37.9922, -1.1307),\n" +
-    "    \"Ourense\": (42.3358, -7.8639),\n" +
-    "    \"Oviedo\": (43.3619, -5.8494),\n" +
-    "    \"Palencia\": (42.0096, -4.5288),\n" +
-    "    \"Palma\": (39.5696, 2.6502),\n" +
-    "    \"Palma de Mallorca\": (39.5696, 2.6502),\n" +
-    "    \"Pamplona\": (42.8125, -1.6458),\n" +
-    "    \"Pontevedra\": (42.4310, -8.6444),\n" +
-    "    \"Reus\": (41.1561, 1.1069),\n" +
-    "    \"Sabadell\": (41.5463, 2.1086),\n" +
-    "    \"Salamanca\": (40.9701, -5.6635),\n" +
-    "    \"San Sebastián\": (43.3183, -1.9812),\n" +
-    "    \"Santander\": (43.4623, -3.8099),\n" +
-    "    \"Santiago de Compostela\": (42.8782, -8.5448),\n" +
-    "    \"Segovia\": (40.9429, -4.1088),\n" +
-    "    \"Sevilla\": (37.3891, -5.9845),\n" +
-    "    \"Soria\": (41.7665, -2.4790),\n" +
-    "    \"Tarragona\": (41.1189, 1.2445),\n" +
-    "    \"Terrassa\": (41.5610, 2.0089),\n" +
-    "    \"Teruel\": (40.3456, -1.1065),\n" +
-    "    \"Toledo\": (39.8628, -4.0273),\n" +
-    "    \"Valencia\": (39.4699, -0.3763),\n" +
-    "    \"Valladolid\": (41.6523, -4.7245),\n" +
-    "    \"Vigo\": (42.2406, -8.7207),\n" +
-    "    \"Vitoria-Gasteiz\": (42.8467, -2.6716),\n" +
-    "    \"Zaragoza\": (41.6488, -0.8891),\n" +
-    "    \"Zamora\": (41.5033, -5.7446),\n" +
-    "}\n";
-  var helper =
-    "import unicodedata as _ud\n" +
-    "def _norm_ciudad(s):\n" +
-    "    if not isinstance(s, str):\n" +
-    "        return ''\n" +
-    "    s = s.strip().lower()\n" +
-    "    s = ''.join(c for c in _ud.normalize('NFD', s) if _ud.category(c) != 'Mn')\n" +
-    "    return s\n" +
-    "_COORDS_NORM = { _norm_ciudad(k): v for k, v in CIUDADES_ES_COORDS.items() }\n" +
-    "def coords_ciudad(nombre):\n" +
-    "    \"\"\"Devuelve (lat, lon) de una ciudad española o None si no se conoce.\n" +
-    "    Tolerante a tildes y mayúsculas.\"\"\"\n" +
-    "    if nombre in CIUDADES_ES_COORDS:\n" +
-    "        return CIUDADES_ES_COORDS[nombre]\n" +
-    "    return _COORDS_NORM.get(_norm_ciudad(nombre))\n";
+  
+  const pythonCode = `
+import unicodedata as _ud
+
+CIUDADES_ES_COORDS = {
+    "Alcalá de Henares": (40.4818, -3.3643),
+    "Almería": (36.8340, -2.4637),
+    "Barcelona": (41.3851, 2.1734),
+    "Bilbao": (43.2630, -2.9350),
+    "Castelldefels": (41.2800, 1.9764),
+    "Galicia": (42.5751, -8.1339),
+    "Girona": (41.9794, 2.8214),
+    "Granada": (37.1773, -3.5986),
+    "La Coruña": (43.3623, -8.4115),
+    "Madrid": (40.4168, -3.7038),
+    "Málaga": (36.7213, -4.4214),
+    "Ourense": (42.3358, -7.8639),
+    "Pamplona": (42.8125, -1.6458),
+    "Salamanca": (40.9701, -5.6635),
+    "San Sebastian": (43.3183, -1.9812),
+    "San Cugat del Valles": (41.4684, 2.0844),
+    "Sevilla": (37.3891, -5.9845),
+    "Tarragona": (41.1189, 1.2445),
+    "Terrasa": (41.5610, 2.0089),
+    "Valencia": (39.4699, -0.3763),
+    "Valladolid": (41.6523, -4.7245),
+    "Vigo": (42.2406, -8.7207),
+    "Vitoria": (42.8467, -2.6716)
+}
+
+def _norm_ciudad(s):
+    if not isinstance(s, str):
+        return ''
+    s = s.strip().lower()
+    s = ''.join(c for c in _ud.normalize('NFD', s) if _ud.category(c) != 'Mn')
+    return s
+
+_COORDS_NORM = { _norm_ciudad(k): v for k, v in CIUDADES_ES_COORDS.items() }
+
+def coords_ciudad(nombre):
+    """Devuelve (lat, lon) de una ciudad española o None si no se conoce.
+    Tolerante a tildes y mayúsculas."""
+    if nombre in CIUDADES_ES_COORDS:
+        return CIUDADES_ES_COORDS[nombre]
+    return _COORDS_NORM.get(_norm_ciudad(nombre))
+`;
+
   try {
-    await pyodide.runPythonAsync(pyCoords + helper);
+    await pyodide.runPythonAsync(pythonCode);
   } catch (e) {
     console.warn("[coords] no se pudieron cargar las coordenadas:", e);
   }
@@ -863,16 +873,17 @@ async function installCityCoords() {
 async function injectCityListIntoContext() {
   if (!pyodide || !prompts.general) return;
   if (prompts.general.indexOf("# CIUDADES CON COORDENADAS") >= 0) return;
+  
   try {
-    var names = await pyodide.runPythonAsync(
+    const names = await pyodide.runPythonAsync(
       "', '.join(sorted(CIUDADES_ES_COORDS.keys()))"
-    );
+    );   
     if (names && String(names).trim()) {
-      prompts.general +=
-        "\n\n# CIUDADES CON COORDENADAS (para mapas)\n" +
-        "Solo estas ciudades tienen coordenadas conocidas vía `coords_ciudad(...)`. " +
-        "Si una ciudad del resultado no está aquí, `coords_ciudad` devolverá `None` " +
-        "y debes excluirla del mapa:\n" + String(names);
+      prompts.general += `
+
+# CIUDADES CON COORDENADAS (para mapas)
+Solo estas ciudades tienen coordenadas conocidas vía \`coords_ciudad(...)\`. Si una ciudad del resultado no está aquí, \`coords_ciudad\` devolverá \`None\` y debes excluirla del mapa:
+${String(names)}`;
     }
   } catch (e) {
     console.warn("[coords] no se pudo inyectar la lista de ciudades:", e);
@@ -887,52 +898,60 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
-var MAX_UNIQUE_VALUES_PER_COLUMN = 60;
-
 async function injectColumnValuesIntoContext() {
   if (!pyodide || !prompts.general) return;
   if (prompts.general.indexOf("# VALORES REALES DE LAS COLUMNAS") >= 0) return;
 
   try {
-    pyodide.globals.set("__sensitive_cols__", JSON.stringify(SENSITIVE_COLUMNS));
-    pyodide.globals.set("__max_uniques__", MAX_UNIQUE_VALUES_PER_COLUMN);
-    var pyCode =
-      "import json as _json\n" +
-      "from pandas.api.types import is_string_dtype as _pd_is_string_dtype\n" +
-      "def __collect_unique_values__():\n" +
-      "    _sensitive = set(s.strip().lower() for s in _json.loads(__sensitive_cols__))\n" +
-      "    _max = int(__max_uniques__)\n" +
-      "    _out = {}\n" +
-      "    for _col in leads_contacts.columns:\n" +
-      "        _name = str(_col)\n" +
-      "        _low = _name.strip().lower()\n" +
-      "        if _low in _sensitive:\n" +
-      "            continue\n" +
-      "        if ('correo' in _low) or ('email' in _low) or ('e-mail' in _low):\n" +
-      "            continue\n" +
-      "        if ('nombre' in _low) or ('apellido' in _low):\n" +
-      "            continue\n" +
-      "        _ser = leads_contacts[_col]\n" +
-      "        # Solo columnas de texto/categóricas; ignoramos numéricas y fechas.\n" +
-      "        _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)\n" +
-      "        if not _is_text:\n" +
-      "            continue\n" +
-      "        _vals = _ser.dropna().astype(str).str.strip()\n" +
-      "        _vals = _vals[_vals != '']\n" +
-      "        _uniques = sorted(_vals.unique().tolist())\n" +
-      "        if len(_uniques) == 0:\n" +
-      "            continue\n" +
-      "        if len(_uniques) > _max:\n" +
-      "            _out[_name] = {'alta_cardinalidad': True, 'n': len(_uniques)}\n" +
-      "        else:\n" +
-      "            _out[_name] = {'alta_cardinalidad': False, 'valores': _uniques}\n" +
-      "    return _json.dumps(_out, ensure_ascii=False)\n" +
-      "__collect_unique_values__()\n";
+    const pyCode = `
+import json as _json
+from pandas.api.types import is_string_dtype as _pd_is_string_dtype
+
+def __collect_unique_values__():
+    _total_rows = len(leads_contacts)
+    
+    # CÁLCULO DINÁMICO: 5% de las filas, con un mínimo de 10 y un máximo de seguridad de 80.
+    _dynamic_max = min(80, max(10, int(_total_rows * 0.05)))
+    
+    _out = {}
+    for _col in leads_contacts.columns:
+        _name = str(_col)
+        _low = _name.strip().lower()
+        
+        if ('correo' in _low) or ('email' in _low) or ('e-mail' in _low):
+            continue
+        if ('nombre' in _low) or ('apellido' in _low):
+            continue
+            
+        _ser = leads_contacts[_col]
+        _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)
+        if not _is_text:
+            continue
+            
+        _vals = _ser.dropna().astype(str).str.strip()
+        _vals = _vals[_vals != '']
+        _uniques = sorted(_vals.unique().tolist())
+        
+        if len(_uniques) == 0:
+            continue
+            
+        # Usamos el límite dinámico en lugar de un número fijo
+        if len(_uniques) > _dynamic_max:
+            _out[_name] = {'alta_cardinalidad': True, 'n': len(_uniques)}
+        else:
+            _out[_name] = {'alta_cardinalidad': False, 'valores': _uniques}
+            
+    return _json.dumps(_out, ensure_ascii=False)
+
+__collect_unique_values__()
+`;
+
     var jsonStr = await pyodide.runPythonAsync(pyCode);
     var colsInfo = JSON.parse(jsonStr);
     var section = buildColumnValuesSection(colsInfo);
+    
     if (section) {
-      prompts.general += "\n\n" + section;
+      prompts.general += `\n\n${section}`;
     }
   } catch (e) {
     console.warn("[valores únicos] no se pudieron extraer:", e);
@@ -942,52 +961,27 @@ async function injectColumnValuesIntoContext() {
 function buildColumnValuesSection(colsInfo) {
   var cols = Object.keys(colsInfo || {});
   if (cols.length === 0) return "";
+  const header = `
+# VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)
 
-  var lines = [];
-  lines.push("# VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)");
-  lines.push("");
-  lines.push(
-    "Estos son los valores EXACTOS que existen en cada columna categórica del " +
-    "DataFrame `leads_contacts`, tal y como están escritos en los datos " +
-    "(con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una " +
-    "categoría para filtrar, DEBES traducir lo que escriba al valor exacto de " +
-    "esta lista antes de filtrar.");
-  lines.push("");
-  lines.push(
-    "Reglas de filtrado por estos valores:");
-  lines.push(
-    "1. Filtra SIEMPRE usando uno de los valores literales de la lista de la " +
-    "columna correspondiente. No uses cadenas que no aparezcan aquí.");
-  lines.push(
-    "2. El texto del usuario puede venir sin tildes, en otra capitalización o " +
-    "con pequeñas variaciones (p. ej. \"alcala de henares\" o \"ALCALA DE " +
-    "HENARES\"). Identifica a qué valor real corresponde (\"Alcalá de " +
-    "Henares\") y filtra por ESE valor exacto. Si dudas entre varios, elige el " +
-    "más parecido ignorando tildes y mayúsculas/minúsculas.");
-  lines.push(
-    "3. Si el usuario menciona un valor que no se corresponde con ninguno de la " +
-    "lista de esa columna, asigna a `resultado` un string corto explicando que " +
-    "ese valor no existe en los datos y, si procede, sugiere los valores " +
-    "disponibles más parecidos.");
-  lines.push(
-    "4. Para columnas marcadas como de ALTA CARDINALIDAD no se lista el detalle: " +
-    "trátalas con `.str.contains(..., case=False, na=False)` en lugar de " +
-    "igualdad exacta.");
-  lines.push("");
+Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`leads_contacts\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
 
-  for (var i = 0; i < cols.length; i++) {
-    var name = cols[i];
+Reglas de filtrado por estos valores:
+1. Filtra SIEMPRE usando uno de los valores literales de la lista de la columna correspondiente. No uses cadenas que no aparezcan aquí.
+2. El texto del usuario puede venir sin tildes, en otra capitalización o con pequeñas variaciones (p. ej. "alcala de henares" o "ALCALA DE HENARES"). Identifica a qué valor real corresponde ("Alcalá de Henares") y filtra por ESE valor exacto. Si dudas entre varios, elige el más parecido ignorando tildes y mayúsculas/minúsculas.
+3. Si el usuario menciona un valor que no se corresponde con ninguno de la lista de esa columna, asigna a \`resultado\` un string corto explicando que ese valor no existe en los datos y, si procede, sugiere los valores disponibles más parecidos.
+4. Para columnas marcadas como de ALTA CARDINALIDAD no se lista el detalle: trátalas con \`.str.contains(..., case=False, na=False)\` en lugar de igualdad exacta.
+`;
+  const columnLines = cols.map(function(name) {
     var info = colsInfo[name];
     if (info.alta_cardinalidad) {
-      lines.push("- `" + name + "`: alta cardinalidad (" + info.n +
-                 " valores distintos), no se enumera; usa coincidencia parcial.");
+      return `- \`${name}\`: alta cardinalidad (${info.n} valores distintos), no se enumera; usa coincidencia parcial.`;
     } else {
-      var vals = info.valores.map(function (v) { return '"' + v + '"'; });
-      lines.push("- `" + name + "`: " + vals.join(", "));
+      var vals = info.valores.map(function(v) { return `"${v}"`; }).join(", ");
+      return `- \`${name}\`: ${vals}`;
     }
-  }
-
-  return lines.join("\n");
+  });
+  return header + "\n" + columnLines.join("\n");
 }
 
 
@@ -1025,14 +1019,15 @@ async function startNewChat() {
   await clearPyodideEnv();
   pendingClarify = null;
   var box = document.getElementById("messages");
-  box.innerHTML =
-    '<div class="welcome-area" id="welcome">' +
-    '<h3>&iquest;En qu&eacute; puedo ayudarte?</h3>' +
-    '<p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, ' +
-    'si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y ' +
-    'produce un gr&aacute;fico interactivo.</p></div>';
+  box.innerHTML = `
+    <div class="welcome-area" id="welcome">
+      <h3>¿En qué puedo ayudarte?</h3>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo.</p>
+    </div>
+  `;
   var quicks = document.getElementById("quick-questions");
   if (quicks) quicks.style.display = "";
+  
   setStatus("nuevo chat · listo", "ok");
   await createConversation();
   document.getElementById("user-input").focus();
@@ -1054,59 +1049,73 @@ async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) return true;
   var file = CSV_TABLES[varName];
   if (!file) {
-    showDevAlert("loadCsv: «" + varName + "» no existe en CSV_TABLES.");
+    showDevAlert(`loadCsv: «${varName}» no existe en CSV_TABLES.`);
     return false;
   }
+  
   try {
-    var r = await fetch(file + "?v=" + Date.now());
+    var r = await fetch(`${file}?v=${Date.now()}`);
     if (!r.ok) {
-      showDevAlert(
-        "<strong>No se pudo cargar " + esc(file) + "</strong><br>" +
-        "HTTP " + r.status + " " + esc(r.statusText) + "<br><br>" +
-        "Comprueba que el fichero está en la carpeta del proyecto y que estás " +
-        "abriendo el HTML con un servidor HTTP local."
-      );
+      showDevAlert(`
+        <strong>No se pudo cargar ${esc(file)}</strong><br>
+        HTTP ${r.status} ${esc(r.statusText)}<br><br>
+        Comprueba que el fichero está en la carpeta del proyecto y que estás abriendo el HTML con un servidor HTTP local.
+      `);
       return false;
     }
     var text = await r.text();
     if (!text || !text.trim()) {
-      showDevAlert("<strong>El fichero " + esc(file) + " está vacío.</strong>");
+      showDevAlert(`<strong>El fichero ${esc(file)} está vacío.</strong>`);
       return false;
     }
+    
     pyodide.globals.set("__csv_buffer__", text);
     var isPrimary = (varName === PRIMARY_CSV);
-    var pyCode =
-      "from io import StringIO as _SIO\n" +
-      "import traceback as _tb\n" +
-      "try:\n" +
-      "    " + varName + " = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)\n" +
-      "    " + varName + " = " + varName + ".drop_duplicates()\n" +
-      (isPrimary
-        ? "    " + varName + " = __parse_fechas_es__(" + varName + ", " + JSON.stringify(PRIMARY_DATE_COLUMNS) + ")\n"
-        : "") +
-      "    __csv_load_ok__ = True\n" +
-      "    __csv_error__   = ''\n" +
-      "except Exception as _e:\n" +
-      "    __csv_load_ok__ = False\n" +
-      "    __csv_error__   = _tb.format_exc()\n" +
-      "del __csv_buffer__\n";
+    var pyCode = `
+from io import StringIO as _SIO
+import traceback as _tb
+
+try:
+    ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)
+    ${varName} = ${varName}.drop_duplicates()
+    ${isPrimary ? `${varName} = __parse_fechas_es__(${varName}, ${JSON.stringify(PRIMARY_DATE_COLUMNS)})` : ""}
+    
+    __csv_load_ok__ = True
+    __csv_error__   = ''
+except Exception as _e:
+    __csv_load_ok__ = False
+    __csv_error__   = _tb.format_exc()
+
+del __csv_buffer__
+`;
+
     await pyodide.runPythonAsync(pyCode);
+    
     var ok = pyodide.globals.get("__csv_load_ok__");
     var errTxt = pyodide.globals.get("__csv_error__") || "";
-    if (!ok) {
-      showDevAlert(
-        "<strong>pd.read_csv falló parseando " + esc(file) + "</strong>" +
-        "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(String(errTxt)) + "</pre>"
+
+    try {
+      await pyodide.runPythonAsync(
+        "for _k in ('__csv_load_ok__', '__csv_error__'):\n    globals().pop(_k, None)"
       );
+    } catch (e) {}
+
+    if (!ok) {
+      showDevAlert(`
+        <strong>pd.read_csv falló parseando ${esc(file)}</strong>
+        <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(String(errTxt))}</pre>
+      `);
       return false;
     }
+    
     loadedCsvs.add(varName);
     return true;
+    
   } catch (e) {
-    showDevAlert(
-      "<strong>Error inesperado cargando " + esc(file) + "</strong>" +
-      "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(e.message || String(e)) + "</pre>"
-    );
+    showDevAlert(`
+      <strong>Error inesperado cargando ${esc(file)}</strong>
+      <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(e.message || String(e))}</pre>
+    `);
     return false;
   }
 }
@@ -1125,30 +1134,21 @@ async function ensureTablesLoaded(pythonCode) {
 // ============================================================================
 //  API del modelo
 // ============================================================================
+
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  var cfg      = {
-    model:            "gpt-4o",
-    responsesUrl:     "https://api.openai.com/v1/responses",
-    conversationsUrl: "https://api.openai.com/v1/conversations"
-  };
   var threaded = opts.threaded === true;
-  var hasServerState = threaded && (conversationId || lastResponseId);
-  var input;
-  if (hasServerState) {
-    var last = messages[messages.length - 1];
-    input = [{ role: "user", content: toInputContent(last && last.content, "input_text") }];
-  } else {
-    input = messages.map(function (m) {
-      var type = (m.role === "assistant") ? "output_text" : "input_text";
-      return { role: m.role, content: toInputContent(m.content, type) };
-    });
-  }
+  
+  var last = messages[messages.length - 1];
+  var input = [{ 
+    role: last.role || "user", 
+    content: [{ type: "input_text", text: String(last.content || "") }] 
+  }];
 
   var body = {
-    model: opts.model || cfg.model,
+    model: opts.model || "gpt-4o",
     instructions: systemPrompt,
-    input:input,
+    input: input,
     max_output_tokens: opts.maxTokens || 1500,
     store: threaded,
     truncation: "auto"
@@ -1170,7 +1170,7 @@ async function callModel(messages, systemPrompt, opts) {
     }
   }
 
-  var r = await fetch(cfg.responsesUrl, {
+  var r = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
       "Content-Type":  "application/json",
@@ -1183,10 +1183,11 @@ async function callModel(messages, systemPrompt, opts) {
     var errData = await r.json().catch(function () { return {}; });
     var errMsg = (errData.error && errData.error.message) || ("HTTP " + r.status);
     var param = errData.error && errData.error.param;
+    
     if (param && Object.prototype.hasOwnProperty.call(body, param)) {
       if (param === "prompt_cache_retention") supportsCacheRetention = false;
       delete body[param];
-      r = await fetch(cfg.responsesUrl, {
+      r = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           "Content-Type":  "application/json",
@@ -1210,19 +1211,6 @@ async function callModel(messages, systemPrompt, opts) {
   return extractOpenAIText(d);
 }
 
-function toInputContent(content, blockType) {
-  if (typeof content === "string") {
-    return [{ type: blockType, text: content }];
-  }
-  if (Array.isArray(content)) {
-    return content.map(function (b) {
-      var text = (b && (b.text != null ? b.text : b.content)) || "";
-      return { type: blockType, text: String(text) };
-    });
-  }
-  return [{ type: blockType, text: String(content == null ? "" : content) }];
-}
-
 function extractOpenAIText(d) {
   if (typeof d.output_text === "string" && d.output_text.length) {
     return d.output_text;
@@ -1243,6 +1231,7 @@ function extractOpenAIText(d) {
   }
   return out;
 }
+
 
 async function ensureConversation() {
   if (conversationId) return conversationId;
@@ -1277,7 +1266,6 @@ function clearLocalSession() {
   conversationId = null;
   lastResponseId = null;
   sessionContext = {};
-  chatHistory = [];
   lastTurn = null;
   lastUserQuery = null;
   dataTurnCount = 0;
@@ -1354,11 +1342,11 @@ async function sendMessage(text) {
       return;
     }
 
-    // ----- Paso 2: clarify + generación -----
-    await runDataPipeline(userText);
+    // ----- Paso 2: planificación multi-consulta + clarify + generación -----
+    await runDataTurn(userText);
   } catch (e) {
     clearStaleTypings();
-    appendError("Error en la consulta: " + (e.message || String(e)));
+    appendError(`Error en la consulta: ${e.message || String(e)}`);
     setStatus("error", "error");
   } finally {
     if (!pendingClarify) setBusy(false);
@@ -1399,7 +1387,7 @@ async function routeMessage(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.router,
-      { maxTokens: 300, temperature: 0.2 }
+      { model: "gpt-4o-mini", maxTokens: 300, temperature: 0.2 }
     );
     removeTyping(tid);
     var j = extractJSON(reply);
@@ -1429,14 +1417,14 @@ async function answerModelQuery(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.modelo_datos,
-      { maxTokens: 1200, temperature: 0.5 }
+      { model: "gpt-4o-mini", maxTokens: 1200, temperature: 0.5 }
     );
     removeTyping(tid);
     appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
     setStatus("listo", "ok");
   } catch (e) {
     removeTyping(tid);
-    appendError("Error al consultar el modelo: " + e.message);
+    appendError(`Error al consultar el modelo: ${e.message}`);
     setStatus("error", "error");
   }
 }
@@ -1459,7 +1447,7 @@ function rememberQueryParams(queryText) {
 
   var mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
   if (mCurso) {
-    sessionContext.curso = mCurso[1] + "/" + mCurso[2];
+    sessionContext.curso = `${mCurso[1]}/${mCurso[2]}`;
   } else if (/\bhist[oó]ric|\btodos los cursos\b/i.test(t)) {
     sessionContext.curso = "Histórico (todos los cursos)";
   }
@@ -1478,37 +1466,37 @@ function rememberQueryParams(queryText) {
 function buildSessionContextText() {
   var keys = Object.keys(sessionContext);
   if (keys.length === 0) return "";
-  var lines = [];
-  for (var i = 0; i < keys.length; i++) {
-    lines.push("- " + keys[i] + ": " + sessionContext[keys[i]]);
-  }
-  return lines.join("\n");
+  
+  return keys.map(k => `- ${k}: ${sessionContext[k]}`).join("\n");
 }
 
 async function planSlots(text) {
   if (!prompts.clarify) return { slots: [] };
   var tid = appendTyping("comprobando si necesito aclaraciones...");
   setStatus("planificando...", "busy");
+  
   try {
-    var userContent = "";
     var ctx = buildSessionContextText();
+    var userContent = "";
+    
     if (ctx) {
-      userContent += "CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN:\n" + ctx + "\n";
+      userContent += `CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN:\n${ctx}\n`;
     }
     if (lastTurn && lastTurn.userQuery) {
-      userContent += "Última consulta resuelta: \"" + lastTurn.userQuery + "\"\n";
+      userContent += `Última consulta resuelta: "${lastTurn.userQuery}"\n`;
     }
-    userContent += "\nCONSULTA ACTUAL DEL USUARIO:\n" + text;
+    userContent += `\nCONSULTA ACTUAL DEL USUARIO:\n${text}`;
 
     var reply = await callModel(
       [{ role: "user", content: userContent }],
       prompts.clarify,
-      { maxTokens: 600, threaded: false, temperature: 0.5 }
+      { model: "gpt-4o-mini", maxTokens: 600, threaded: false, temperature: 0.5 }
     );
 
     removeTyping(tid);
     var j = extractJSON(reply);
     if (!j || !Array.isArray(j.slots)) return { slots: [] };
+    
     return { slots: sanitizeSlots(dropKnownSlots(j.slots)) };
   } catch (e) {
     removeTyping(tid);
@@ -1517,15 +1505,7 @@ async function planSlots(text) {
 }
 
 function dropKnownSlots(slots) {
-  var out = [];
-  for (var i = 0; i < slots.length; i++) {
-    var s = slots[i];
-    if (s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)) {
-      continue;
-    }
-    out.push(s);
-  }
-  return out;
+  return slots.filter(s => !(s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)));
 }
 
 function sanitizeSlots(raw) {
@@ -1533,12 +1513,15 @@ function sanitizeSlots(raw) {
   for (var i = 0; i < raw.length && i < 4; i++) {
     var s = raw[i];
     if (!s || !s.pregunta) continue;
+    
     var opciones = Array.isArray(s.opciones)
       ? s.opciones.slice(0, 4).filter(Boolean).map(String)
       : [];
+      
     if (opciones.length < 2) continue;
+    
     clean.push({
-      slot: s.slot || ("slot_" + i),
+      slot: s.slot || `slot_${i}`,
       pregunta: String(s.pregunta),
       opciones: opciones,
       razon: s.razon ? String(s.razon) : "",
@@ -1556,20 +1539,24 @@ function askNextSlot() {
   var slot = pendingClarify.missing[0];
   var idx = pendingClarify.answered.length + 1;
   var total = pendingClarify.total;
+  
   appendClarify(slot, idx, total);
-  setStatus("esperando aclaración (" + idx + "/" + total + ")...", "busy");
+  setStatus(`esperando aclaración (${idx}/${total})...`, "busy");
 }
 
 async function answerClarify(answerText) {
   if (!pendingClarify) return;
   var slot = pendingClarify.missing.shift();
   if (!slot) return;
+  
   markClarifyAnswered(answerText);
+  
   pendingClarify.answered.push({
     slot: slot.slot,
     pregunta: slot.pregunta,
     answer: answerText
   });
+  
   if (pendingClarify.missing.length > 0) {
     askNextSlot();
     return;
@@ -1581,13 +1568,16 @@ function markClarifyAnswered(answerText) {
   var lastBox = document.querySelector(".clarify-box:not(.answered)");
   if (!lastBox) return;
   lastBox.classList.add("answered");
+  
   var btns = lastBox.querySelectorAll(".clarify-option");
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].disabled = true;
-    if (btns[i].textContent === answerText) btns[i].classList.add("selected");
-  }
+  btns.forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === answerText) btn.classList.add("selected");
+  });
+  
   var inp = lastBox.querySelector(".clarify-other-input");
   if (inp) inp.disabled = true;
+  
   var ob = lastBox.querySelector(".clarify-other-btn");
   if (ob) ob.disabled = true;
 }
@@ -1597,11 +1587,12 @@ async function finalizeClarify() {
   var pipe = pendingClarify;
   pendingClarify = null;
   setBusy(true);
+  
   try {
     rememberAnsweredSlots(pipe.answered);
     await answerDataQuery(pipe.userQuery, pipe.answered);
   } catch (e) {
-    appendError("Error en la consulta: " + e.message);
+    appendError(`Error en la consulta: ${e.message}`);
     setStatus("error", "error");
   } finally {
     setBusy(false);
@@ -1626,11 +1617,12 @@ var CONTEXT_LABELS = {
 
 function summarizeThreadContext() {
   var keys = Object.keys(sessionContext);
-  var parts = [];
-  for (var i = 0; i < keys.length; i++) {
-    var label = CONTEXT_LABELS[keys[i]] || keys[i];
-    parts.push(label + " «" + sessionContext[keys[i]] + "»");
-  }
+  
+  var parts = keys.map(function(k) {
+    var label = CONTEXT_LABELS[k] || k;
+    return `${label} «${sessionContext[k]}»`;
+  });
+  
   if (parts.length === 1) return parts[0];
   return parts.slice(0, -1).join(", ") + " y " + parts[parts.length - 1];
 }
@@ -1638,13 +1630,14 @@ function summarizeThreadContext() {
 function askThreadConfirm(pendingQuery) {
   awaitingThreadConfirm = true;
   window.__pendingThreadQuery = pendingQuery;
+  
   var resumen = summarizeThreadContext();
+  
   appendThreadConfirm(
-    "¿Seguimos con " + resumen + "?",
-    "Llevamos varias consultas con este contexto. Pulsa «Sí» para mantenerlo, " +
-    "«No» para olvidar todo y empezar de cero, o escribe en la caja para añadir " +
-    "matices a esta consulta (se enviarán junto a tu pregunta)."
+    `¿Seguimos con ${resumen}?`,
+    "Llevamos varias consultas con este contexto. Pulsa «Sí» para mantenerlo, «No» para olvidar todo y empezar de cero, o escribe en la caja para añadir matices a esta consulta (se enviarán junto a tu pregunta)."
   );
+  
   setStatus("esperando confirmación...", "busy");
 }
 
@@ -1652,16 +1645,17 @@ async function wipeAllMemory() {
   conversationId = null;
   lastResponseId = null;
   sessionContext = {};
-  chatHistory = [];
   lastTurn = null;
   lastUserQuery = null;
   dataTurnCount = 0;
   pendingClarify = null;
+  
   try {
     localStorage.removeItem(STORAGE_CONV_KEY);
     localStorage.removeItem(STORAGE_CTX_KEY);
     localStorage.removeItem(STORAGE_TS_KEY);
   } catch (e) {}
+  
   await clearPyodideEnv();
   await createConversation();
 }
@@ -1669,8 +1663,10 @@ async function wipeAllMemory() {
 async function handleThreadConfirm(userText) {
   awaitingThreadConfirm = false;
   markThreadConfirmAnswered(userText);
+  
   var query = window.__pendingThreadQuery;
   window.__pendingThreadQuery = null;
+  
   var norm = userText.trim().toLowerCase();
   var esSi = /^(s[íi]|si|vale|ok|correcto|sigue|seguimos|exacto|eso es)\b/.test(norm);
   var esNo = /^(no|cambia|cambiar|otra|nuevo|empez)/.test(norm);
@@ -1679,18 +1675,18 @@ async function handleThreadConfirm(userText) {
   try {
     if (esSi) {
       dataTurnCount++;
-      await runDataPipeline(query);
+      await runDataTurn(query);
     } else if (esNo) {
       await wipeAllMemory();
       dataTurnCount++;
-      await runDataPipeline(query);
+      await runDataTurn(query);
     } else {
       var combinada = mergeExtraInfoIntoQuery(query, userText);
       dataTurnCount++;
-      await runDataPipeline(combinada);
+      await runDataTurn(combinada);
     }
   } catch (e) {
-    appendError("Error en la consulta: " + (e.message || String(e)));
+    appendError(`Error en la consulta: ${e.message || String(e)}`);
     setStatus("error", "error");
   } finally {
     if (!pendingClarify) setBusy(false);
@@ -1700,11 +1696,130 @@ async function handleThreadConfirm(userText) {
 function mergeExtraInfoIntoQuery(pendingQuery, extraInfo) {
   var base = (pendingQuery || "").trim();
   var extra = (extraInfo || "").trim();
+  
   if (!base) return extra;
   if (!extra) return base;
-  return base +
-    "\n\nInformación adicional indicada por el usuario para esta consulta:\n" +
-    extra;
+  
+  return `${base}\n\nInformación adicional indicada por el usuario para esta consulta:\n${extra}`;
+}
+
+
+async function runDataTurn(userText) {
+  var subRequests = await planRequests(userText);
+
+  if (subRequests.length <= 1) {
+    await runDataPipeline(subRequests[0] || userText);
+    return;
+  }
+  await runDataBatch(userText, subRequests);
+}
+
+async function planRequests(userText) {
+  if (!prompts.router) return [userText];
+
+  var tid = appendTyping("planificando la consulta...");
+  setStatus("planificando la consulta...", "busy");
+  try {
+    var instrucciones =
+      "Eres un planificador. Recibes el mensaje de un usuario que consulta datos de un CRM " +
+      "y debes decidir CUÁNTAS peticiones de datos independientes contiene.\n\n" +
+      "REGLA CENTRAL: divide en varias peticiones SOLO cuando el mensaje pide cosas TOTALMENTE " +
+      "DIFERENTES (distinta métrica, distinta dimensión de análisis o distinto tipo de salida). " +
+      "Por defecto, asume que es UNA SOLA petición. Ante la duda, NO dividas.\n\n" +
+      "UNA COMPARACIÓN ES UNA SOLA PETICIÓN. Comparar, enfrentar o contrastar valores de la MISMA " +
+      "métrica entre categorías (ciudades, residencias, cursos, etc.) produce un único resultado y " +
+      "NO se divide nunca. Ejemplos de UNA sola petición:\n" +
+      "- 'Comparación de la evolución histórica de solicitudes con ciudad de interés Madrid vs Barcelona' " +
+      "→ UNA petición (misma métrica 'solicitudes', misma dimensión 'evolución histórica', solo cambia la categoría comparada).\n" +
+      "- 'Compara la conversión de Madrid y Valencia' → UNA petición.\n" +
+      "- 'Leads por ciudad de interés en 2025/2026' → UNA petición.\n\n" +
+      "SON VARIAS PETICIONES cuando se piden análisis distintos que darían resultados separados. Ejemplo:\n" +
+      "- 'La evolución de leads con ciudad de interés Madrid históricamente Y las 5 residencias con mejor CR de Madrid' " +
+      "→ DOS peticiones: (1) evolución histórica de leads de Madrid; (2) top 5 residencias por CR en Madrid. " +
+      "Son métricas/salidas diferentes (una serie temporal de volumen vs. un ranking de tasa de conversión).\n" +
+      "- 'Dame el total de contactos del curso 2025/2026 y además un gráfico de evolución mensual' → DOS peticiones.\n\n" +
+      "Pista práctica: si lo natural sería dibujarlo en UN solo gráfico o tabla (aunque tenga varias series), " +
+      "es UNA petición. Si necesitarías gráficos/tablas SEPARADOS con significados distintos, son VARIAS.\n\n" +
+      "Devuelve EXCLUSIVAMENTE un JSON con esta forma, sin texto adicional:\n" +
+      '{\"peticiones\": [\"texto de la petición 1 autocontenida\", \"texto de la petición 2 autocontenida\"]}\n\n' +
+      "Cada elemento debe ser una reformulación AUTOCONTENIDA y clara de esa sub-petición, conservando " +
+      "todos los filtros mencionados por el usuario (curso, ciudad, métrica, etc.). Si solo hay una petición " +
+      "(incluidas TODAS las comparaciones), devuelve un único elemento en el array.";
+
+    var ctx = buildSessionContextText();
+    var userContent = "";
+    if (ctx) userContent += "CONTEXTO YA CONOCIDO DE LA CONVERSACIÓN:\n" + ctx + "\n\n";
+    userContent += "MENSAJE DEL USUARIO:\n" + userText;
+
+    var reply = await callModel(
+      [{ role: "user", content: userContent }],
+      instrucciones,
+      { model: "gpt-4o-mini", maxTokens: 500, threaded: false, temperature: 0.1 }
+    );
+    removeTyping(tid);
+
+    var j = extractJSON(reply);
+    if (!j || !Array.isArray(j.peticiones)) return [userText];
+
+    var limpio = j.peticiones
+      .filter(function (p) { return p && String(p).trim(); })
+      .map(function (p) { return String(p).trim(); })
+      .slice(0, 6);
+
+    if (limpio.length === 0) return [userText];
+    return limpio;
+  } catch (e) {
+    removeTyping(tid);
+    console.warn("[planificador] error:", e);
+    return [userText];
+  }
+}
+
+async function runDataBatch(originalText, subRequests) {
+  appendPlanNotice(subRequests);
+
+  for (var i = 0; i < subRequests.length; i++) {
+    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
+    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
+    try {
+      await answerDataQuery(subRequests[i], []);
+    } catch (e) {
+      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
+    }
+  }
+
+  lastUserQuery = originalText;
+  setStatus("listo", "ok");
+}
+
+function appendPlanNotice(subRequests) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var items = subRequests.map(function (s, i) {
+    return '<li>' + esc(s) + '</li>';
+  }).join("");
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente<span class="route-badge datos">plan</span></div>'
+    + '<div class="msg-text"><div class="plan-box">'
+    + '<div class="plan-box-title">He detectado ' + subRequests.length
+    + ' peticiones. Las resuelvo una a una:</div>'
+    + '<ol class="plan-box-list">' + items + '</ol>'
+    + '</div></div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+function appendBatchStepHeader(step, total, text) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "batch-step-header";
+  d.innerHTML = '<span class="batch-step-num">' + step + '/' + total + '</span>'
+    + '<span class="batch-step-text">' + esc(text) + '</span>';
+  box.appendChild(d);
+  scrollToBottom();
 }
 
 async function runDataPipeline(userText) {
@@ -1720,6 +1835,7 @@ async function runDataPipeline(userText) {
     askNextSlot();
     return;
   }
+  
   lastUserQuery = userText;
   await answerDataQuery(userText, []);
 }
@@ -1729,27 +1845,27 @@ async function runDataPipeline(userText) {
 
 async function answerDataQuery(userText, answeredSlots) {
   var enriched = buildEnrichedQuery(userText, answeredSlots);
-  trimHistory();
-  chatHistory.push({ role: "user", content: enriched });
+  var currentMessage = [{ role: "user", content: enriched }];
 
   var tid = appendTyping("generando código...");
   setStatus("llamando a la API...", "busy");
   var reply;
+  
   try {
-    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
+    reply = await callModel(currentMessage, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
   } catch (e) {
     removeTyping(tid);
-    appendError("Error de API: " + e.message);
+    appendError(`Error de API: ${e.message}`);
     setStatus("error", "error");
     return;
   }
-  chatHistory.push({ role: "assistant", content: reply });
+  
   removeTyping(tid);
 
   var code = extractPythonCode(reply);
   if (!code) {
     appendAssistantText(
-      "El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n" + reply,
+      `El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n${reply}`,
       "datos"
     );
     setStatus("respuesta sin código", "error");
@@ -1758,6 +1874,7 @@ async function answerDataQuery(userText, answeredSlots) {
 
   setStatus("ejecutando código...", "busy");
   await ensureTablesLoaded(code);
+  
   var execResult = await runPython(code);
   if (execResult.kind === "error") {
     execResult = await retryWithModelFix(code, execResult);
@@ -1771,6 +1888,7 @@ async function answerDataQuery(userText, answeredSlots) {
     enrichedQuery: enriched,
     answeredSlots: answeredSlots.slice()
   };
+  
   if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
     rememberQueryParams(enriched);
   }
@@ -1790,17 +1908,8 @@ async function answerDataQuery(userText, answeredSlots) {
 
 function buildEnrichedQuery(userText, answeredSlots) {
   if (!answeredSlots || answeredSlots.length === 0) return userText;
-  var out = userText + "\n\nContexto adicional ya acotado por el usuario:\n";
-  for (var i = 0; i < answeredSlots.length; i++) {
-    out += "- " + answeredSlots[i].pregunta + " → " + answeredSlots[i].answer + "\n";
-  }
-  return out;
-}
-
-function trimHistory() {
-  if (chatHistory.length > MAX_HISTORY) {
-    chatHistory = chatHistory.slice(chatHistory.length - MAX_HISTORY);
-  }
+  var slotsText = answeredSlots.map(a => `- ${a.pregunta} → ${a.answer}`).join("\n");
+  return `${userText}\n\nContexto adicional ya acotado por el usuario:\n${slotsText}`;
 }
 
 function setExecutionStatus(execResult) {
@@ -1808,31 +1917,38 @@ function setExecutionStatus(execResult) {
   setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
 }
 
-
 async function retryWithModelFix(originalCode, firstError) {
   appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
   var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
-  var fixMessages = chatHistory.slice();
-  fixMessages.push({
+  var fixMessages = [{
     role: "user",
-    content:
-      "El código que has generado ha fallado al ejecutarse en Pyodide.\n\n" +
-      "CÓDIGO QUE FALLÓ:\n```python\n" + originalCode + "\n```\n\n" +
-      "ERROR (Python):\n```\n" + (firstError.trace || firstError.value || "") + "\n```\n\n" +
-      "Devuelve EXCLUSIVAMENTE un nuevo bloque ```python ... ``` con el código " +
-      "corregido. Asegúrate de que la variable `resultado` queda asignada al " +
-      "final. NO escribas explicaciones."
-  });
+    content: `El código que has generado ha fallado al ejecutarse en Pyodide.
+
+CÓDIGO QUE FALLÓ:
+\`\`\`python
+${originalCode}
+\`\`\`
+
+ERROR (Python):
+\`\`\`
+${firstError.trace || firstError.value || ""}
+\`\`\`
+
+Devuelve EXCLUSIVAMENTE un nuevo bloque \`\`\`python ... \`\`\` con el código corregido. Asegúrate de que la variable \`resultado\` queda asignada al final. NO escribas explicaciones.`
+  }];
+  
   try {
-    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5});
+    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
     var code = extractPythonCode(reply);
+    
     if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
     if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
+    
     await ensureTablesLoaded(code);
     var second = await runPython(code);
+    
     if (second.kind === "error") return friendlyError(second, code, firstErrorPack);
     second.__codeUsed = code;
-    chatHistory.push({ role: "assistant", content: reply });
     return second;
   } catch (e) {
     return friendlyError(firstError, originalCode, firstErrorPack);
@@ -1842,18 +1958,13 @@ async function retryWithModelFix(originalCode, firstError) {
 function friendlyError(execError, code, firstError) {
   return {
     kind: "error_friendly",
-    value: "No he podido obtener una respuesta esta vez. " +
-           "Prueba a reformular tu pregunta con más detalle " +
-           "(por ejemplo, indicando el curso, la métrica concreta o las " +
-           "categorías exactas que quieres comparar).",
+    value: "No he podido obtener una respuesta esta vez. Prueba a reformular tu pregunta con más detalle (por ejemplo, indicando el curso, la métrica concreta o las categorías exactas que quieres comparar).",
     technical: execError.value || "",
     trace: execError.trace || "",
     firstError: firstError || null,
     __codeUsed: code
   };
 }
-
-
 
 function conclusionsEnabled() {
   var t = document.getElementById("conclusions-toggle");
@@ -1878,9 +1989,11 @@ async function appendExplanationTo(resultEl, userQuery, code) {
 
   var loadingEl = document.createElement("div");
   loadingEl.className = "explain-loading";
-  loadingEl.innerHTML =
-    '<div class="typing-dots"><span></span><span></span><span></span></div>' +
-    '<span>preparando explicaci&oacute;n...</span>';
+  loadingEl.innerHTML = `
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+    <span>preparando explicación...</span>
+  `;
+  
   var codeToggle = textBody.querySelector(".code-toggle");
   if (codeToggle) textBody.insertBefore(loadingEl, codeToggle);
   else textBody.appendChild(loadingEl);
@@ -1888,16 +2001,14 @@ async function appendExplanationTo(resultEl, userQuery, code) {
 
   setStatus("generando explicación...", "busy");
   try {
-    var payload =
-      "PREGUNTA ORIGINAL DEL USUARIO:\n" + userQuery + "\n\n" +
-      "CÓDIGO QUE SE HA EJECUTADO:\n```python\n" + code + "\n```\n\n" +
-      "Explica en lenguaje sencillo y de negocio qué hace este código, siguiendo " +
-      "las reglas del system prompt.";
+    var payload = `PREGUNTA ORIGINAL DEL USUARIO:\n${userQuery}\n\nCÓDIGO QUE SE HA EJECUTADO:\n\`\`\`python\n${code}\n\`\`\`\n\nExplica en lenguaje sencillo y de negocio qué hace este código, siguiendo las reglas del system prompt.`;
+    
     var reply = await callModel(
       [{ role: "user", content: payload }],
       prompts.explicacion,
-      { maxTokens: 500, temperature: 0.3 }
+      { model: "gpt-4o-mini", maxTokens: 500, temperature: 0.3 }
     );
+    
     var text = (reply || "").trim();
     if (!text) {
       removeExplanationPlaceholder(loadingEl);
@@ -1916,9 +2027,10 @@ function replaceExplanationPlaceholder(loadingEl, text) {
   if (!loadingEl || !loadingEl.parentNode) return;
   var details = document.createElement("details");
   details.className = "explain-details";
-  details.innerHTML =
-    '<summary>Explicación de código ejecutado</summary>' +
-    '<div class="explain-body">' + renderRich(text) + '</div>';
+  details.innerHTML = `
+    <summary>Explicación de código ejecutado</summary>
+    <div class="explain-body">${renderRich(text)}</div>
+  `;
   loadingEl.parentNode.replaceChild(details, loadingEl);
   scrollToBottom();
 }
@@ -1938,9 +2050,11 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
 
   var loadingEl = document.createElement("div");
   loadingEl.className = "conclusion-loading";
-  loadingEl.innerHTML =
-    '<div class="typing-dots"><span></span><span></span><span></span></div>' +
-    '<span>generando conclusión...</span>';
+  loadingEl.innerHTML = `
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+    <span>generando conclusión...</span>
+  `;
+  
   var codeToggle = textBody.querySelector(".code-toggle");
   if (codeToggle) textBody.insertBefore(loadingEl, codeToggle);
   else textBody.appendChild(loadingEl);
@@ -1949,11 +2063,13 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
   setStatus("generando conclusión...", "busy");
   try {
     var built = buildConclusionPayload(userQuery, execResult);
+    
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { maxTokens: 500, temperature: 0.6 }
+      { model: "gpt-4o-mini", maxTokens: 500, temperature: 0.6 }
     );
+    
     var text = (reply || "").trim();
     if (!text) {
       replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
@@ -1963,7 +2079,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     }
     setStatus("listo", "ok");
   } catch (e) {
-    replaceConclusionPlaceholder(loadingEl, null, "No se pudo generar la conclusión: " + (e.message || String(e)));
+    replaceConclusionPlaceholder(loadingEl, null, `No se pudo generar la conclusión: ${e.message || String(e)}`);
     setStatus("error generando conclusión", "error");
   }
 }
@@ -1971,15 +2087,18 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
 function replaceConclusionPlaceholder(loadingEl, text, errorMsg) {
   if (!loadingEl || !loadingEl.parentNode) return;
   var newEl = document.createElement("div");
+  
   if (text) {
     newEl.className = "conclusion-block";
-    newEl.innerHTML =
-      '<div class="conclusion-label">conclusión</div>' +
-      renderRich(text);
+    newEl.innerHTML = `
+      <div class="conclusion-label">conclusión</div>
+      ${renderRich(text)}
+    `;
   } else {
     newEl.className = "conclusion-error";
     newEl.textContent = errorMsg || "No se pudo generar la conclusión.";
   }
+  
   loadingEl.parentNode.replaceChild(newEl, loadingEl);
   scrollToBottom();
 }
@@ -1990,6 +2109,7 @@ function appendConclusionError(resultEl, msg) {
   var el = document.createElement("div");
   el.className = "conclusion-error";
   el.textContent = msg;
+  
   var codeToggle = textBody.querySelector(".code-toggle");
   if (codeToggle) textBody.insertBefore(el, codeToggle);
   else textBody.appendChild(el);
@@ -1998,109 +2118,99 @@ function appendConclusionError(resultEl, msg) {
 function buildConclusionPayload(userQuery, r) {
   var aliasMap = {};
   var serialized = serializeResultForLLM(r, aliasMap);
-  var payload =
-    "PREGUNTA ORIGINAL DEL USUARIO:\n" +
-    userQuery + "\n\n" +
-    "RESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto " +
-    "se han sustituido por alias genéricos tipo \"Ciudad A\", \"Residencia B\", " +
-    "etc.; los números son reales):\n" +
-    serialized + "\n\n" +
-    "Redacta la conclusión refiriéndote a las categorías por su alias EXACTO " +
-    "(p. ej. \"Ciudad A\"). NO inventes nombres reales. Sigue las reglas del system prompt.";
+  
+  var payload = `PREGUNTA ORIGINAL DEL USUARIO:\n${userQuery}\n\nRESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto se han sustituido por alias genéricos tipo "Ciudad A", "Residencia B", etc.; los números son reales):\n${serialized}\n\nRedacta la conclusión refiriéndote a las categorías por su alias EXACTO (p. ej. "Ciudad A"). NO inventes nombres reales. Sigue las reglas del system prompt.`;
+  
   return { payload: payload, aliasMap: aliasMap };
 }
+
 
 function serializeResultForLLM(r, aliasMap) {
   if (!r) return "(sin resultado)";
 
   if (r.kind === "number") {
-    // Damos pistas de naturaleza de la cifra (porcentaje vs conteo) para que la
-    // conclusión la contextualice bien en lugar de soltar el número a secas.
     var num = r.value;
     var hint = "";
     if (typeof num === "number" && num > 0 && num < 1) {
-      hint = " (es una fracción entre 0 y 1; probablemente una tasa/proporción: "
-           + (Math.round(num * 1000) / 10) + " %)";
+      hint = ` (es una fracción entre 0 y 1; probablemente una tasa/proporción: ${Math.round(num * 1000) / 10} %)`;
     } else if (typeof num === "number" && Number.isInteger(num)) {
       hint = " (conteo entero de registros/solicitudes)";
     }
-    return "Valor numérico (real): " + String(num) + hint
-         + "\nNOTA: esta es la única cifra del resultado; contextualiza su magnitud "
-         + "respecto a la pregunta, sin inventar comparaciones que no estén en los datos.";
+    return `Valor numérico (real): ${num}${hint}\nNOTA: esta es la única cifra del resultado; contextualiza su magnitud respecto a la pregunta, sin inventar comparaciones que no estén en los datos.`;
   }
+  
   if (r.kind === "text") {
-    return "Texto devuelto por el script (es lo que ve el usuario):\n" + String(r.value);
+    return `Texto devuelto por el script (es lo que ve el usuario):\n${r.value}`;
   }
+  
   if (r.kind === "dict") {
     var dictTable = tableFromDict(r.value);
     return tableToAnonymizedText(dictTable, aliasMap, null);
   }
+  
   if (r.kind === "dataframe") {
     var dfTable = tableFromDataFrame(r);
     return tableToAnonymizedText(dfTable.table, aliasMap, dfTable.shapeNote);
   }
+  
   if (r.kind === "plotly") {
     var plotTable;
     var fuente;
+    
     if (r.data_df) {
       var dfWrap = tableFromDataFrame({ value: r.data_df, shape: null });
       plotTable = dfWrap.table;
       fuente = "Estos son los datos EXACTOS que sostienen el gráfico que ve el usuario.";
     } else {
       plotTable = tableFromPlotlySpec(r.value);
-      fuente = "Estos datos se han reconstruido a partir de las series del gráfico "
-             + "(el script no adjuntó la tabla original), pueden estar incompletos: "
-             + "razona solo sobre lo que aparece.";
+      fuente = "Estos datos se han reconstruido a partir de las series del gráfico (el script no adjuntó la tabla original), pueden estar incompletos: razona solo sobre lo que aparece.";
     }
+    
     if (!plotTable || plotTable.columns.length === 0) {
       return "El resultado es un gráfico, pero no se pudieron extraer datos tabulares de sus series.";
     }
-    return "Datos subyacentes del gráfico (lo que el usuario ve representado). " + fuente + "\n" +
-           tableToAnonymizedText(plotTable, aliasMap, null);
+    return `Datos subyacentes del gráfico (lo que el usuario ve representado). ${fuente}\n${tableToAnonymizedText(plotTable, aliasMap, null)}`;
   }
-  return "Resultado no estructurado: " + JSON.stringify(r);
+  
+  return `Resultado no estructurado: ${JSON.stringify(r)}`;
 }
-
 
 function tableFromDataFrame(r) {
   var parsed;
-  try { parsed = JSON.parse(r.value); }
-  catch (e) { return { table: { columns: ["error"], rows: [["DataFrame no parseable"]] }, shapeNote: null }; }
+  try { 
+    parsed = JSON.parse(r.value); 
+  } catch (e) { 
+    return { table: { columns: ["error"], rows: [["DataFrame no parseable"]] }, shapeNote: null }; 
+  }
 
   var cols = Array.isArray(parsed.columns) ? parsed.columns.slice() : [];
   var data = Array.isArray(parsed.data) ? parsed.data : [];
-
-  // Columnas con PII directa → se eliminan (no se pseudonimizan).
   var dropIdx = {};
-  for (var i = 0; i < cols.length; i++) {
-    if (isSensitiveColumn(cols[i])) dropIdx[i] = true;
-  }
-  var keepCols = [];
-  for (var c = 0; c < cols.length; c++) {
-    if (!dropIdx[c]) keepCols.push(String(cols[c]));
-  }
+  cols.forEach(function(col, i) {
+    if (isSensitiveColumn(col)) dropIdx[i] = true;
+  });
+  
+  var keepCols = cols.filter(function(_, i) { return !dropIdx[i]; }).map(String);
 
   var totalRows = data.length;
   var maxRows = Math.min(totalRows, CONCLUSION_MAX_ROWS);
-  var rows = [];
-  for (var rIdx = 0; rIdx < maxRows; rIdx++) {
-    var row = data[rIdx] || [];
-    var keepRow = [];
-    for (var k = 0; k < row.length; k++) {
-      if (!dropIdx[k]) keepRow.push(row[k]);
-    }
-    rows.push(keepRow);
-  }
+  
+  var rows = data.slice(0, maxRows).map(function(row) {
+    return row.filter(function(_, i) { return !dropIdx[i]; });
+  });
 
   var shapeNote = null;
   var sensibleEliminadas = Object.keys(dropIdx).length;
   var parts = [];
+  
   var origShape = (r.shape && r.shape.length === 2)
-    ? (r.shape[0] + " filas × " + r.shape[1] + " columnas (original)")
-    : (totalRows + " filas × " + cols.length + " columnas");
-  parts.push("Shape: " + origShape);
-  if (sensibleEliminadas > 0) parts.push("columnas con datos personales eliminadas: " + sensibleEliminadas);
-  if (totalRows > maxRows) parts.push("mostrando las primeras " + maxRows + " de " + totalRows + " filas");
+    ? `${r.shape[0]} filas × ${r.shape[1]} columnas (original)`
+    : `${totalRows} filas × ${cols.length} columnas`;
+    
+  parts.push(`Shape: ${origShape}`);
+  if (sensibleEliminadas > 0) parts.push(`columnas con datos personales eliminadas: ${sensibleEliminadas}`);
+  if (totalRows > maxRows) parts.push(`mostrando las primeras ${maxRows} de ${totalRows} filas`);
+  
   shapeNote = parts.join(" | ");
 
   return { table: { columns: keepCols, rows: rows }, shapeNote: shapeNote };
@@ -2113,12 +2223,8 @@ function tableFromDict(maybeJsonString) {
   } catch (e) {
     return { columns: ["valor"], rows: [[String(maybeJsonString)]] };
   }
-  var rows = [];
-  for (var k in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, k)) {
-      rows.push([k, obj[k]]);
-    }
-  }
+  
+  var rows = Object.entries(obj).map(function(entry) { return [entry[0], entry[1]]; });
   return { columns: ["KPI", "Valor"], rows: rows };
 }
 
@@ -2126,6 +2232,7 @@ function tableFromPlotlySpec(jsonStr) {
   var spec;
   try { spec = JSON.parse(jsonStr); }
   catch (e) { return { columns: [], rows: [] }; }
+  
   var traces = Array.isArray(spec.data) ? spec.data : [];
   if (traces.length === 0) return { columns: [], rows: [] };
 
@@ -2136,7 +2243,7 @@ function tableFromPlotlySpec(jsonStr) {
 
   for (var t = 0; t < traces.length; t++) {
     var tr = traces[t] || {};
-    var serieName = tr.name || ("Serie " + (t + 1));
+    var serieName = tr.name || `Serie ${t + 1}`;
     if (seriesNames.indexOf(serieName) < 0) seriesNames.push(serieName);
 
     var keys, vals;
@@ -2148,6 +2255,7 @@ function tableFromPlotlySpec(jsonStr) {
       keys = horizontal ? (tr.y || []) : (tr.x || []);
       vals = horizontal ? (tr.x || []) : (tr.y || []);
     }
+    
     var n = Math.min(keys.length, vals.length);
     for (var i = 0; i < n; i++) {
       var cat = String(keys[i]);
@@ -2177,6 +2285,7 @@ function tableFromPlotlySpec(jsonStr) {
   var columns = [axisTitle].concat(seriesNames);
   var rows = [];
   var limit = Math.min(catOrder.length, CONCLUSION_MAX_ROWS);
+  
   for (var c = 0; c < limit; c++) {
     var category = catOrder[c];
     var rowArr = [category];
@@ -2193,31 +2302,31 @@ function tableFromPlotlySpec(jsonStr) {
 // ---------------------------------------------------------------------------
 //  Pseudonimización reversible + render a texto
 // ---------------------------------------------------------------------------
+
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
   var columns = table.columns || [];
   var rows = table.rows || [];
-
   var anonState = { counters: {}, valueToAlias: {} };
-
-  var outRows = [];
-  for (var r = 0; r < rows.length; r++) {
-    var row = rows[r] || [];
-    var outRow = [];
-    for (var c = 0; c < row.length; c++) {
-      var colName = columns[c] !== undefined ? String(columns[c]) : ("col_" + c);
-      outRow.push(anonymizeCell(row[c], colName, anonState, aliasMap));
-    }
-    outRows.push(outRow);
-  }
+  var outRows = rows.map(function(row) {
+    return row.map(function(cell, c) {
+      var colName = columns[c] !== undefined ? String(columns[c]) : `col_${c}`;
+      return anonymizeCell(cell, colName, anonState, aliasMap);
+    });
+  });
 
   var lines = [];
-  if (shapeNote) lines.push(shapeNote);
-  if (shapeNote) lines.push("");
-  lines.push(columns.map(function (x) { return String(x); }).join(" | "));
-  lines.push(columns.map(function () { return "---"; }).join(" | "));
-  for (var i = 0; i < outRows.length; i++) {
-    lines.push(outRows[i].join(" | "));
+  if (shapeNote) {
+    lines.push(shapeNote);
+    lines.push("");
   }
+  
+  lines.push(columns.map(String).join(" | "));
+  lines.push(columns.map(function() { return "---"; }).join(" | "));
+  
+  outRows.forEach(function(outRow) {
+    lines.push(outRow.join(" | "));
+  });
+  
   return lines.join("\n");
 }
 
@@ -2228,7 +2337,6 @@ function anonymizeCell(val, colName, anonState, aliasMap) {
   var asStr = String(val).trim();
   if (asStr === "") return "—";
   if (isNumericLike(asStr)) return asStr;
-
   if (isTemporalColumn(colName)) return asStr;
 
   return aliasFor(asStr, colName, anonState, aliasMap);
@@ -2236,20 +2344,20 @@ function anonymizeCell(val, colName, anonState, aliasMap) {
 
 function isTemporalColumn(colName) {
   var s = String(colName).toLowerCase();
-  if (s.indexOf("mes") >= 0)   return true;
-  if (s.indexOf("fecha") >= 0) return true;
-  if (s.indexOf("año") >= 0 || s.indexOf("anio") >= 0 || s.indexOf("year") >= 0) return true;
-  return false;
+  return s.includes("mes") || s.includes("fecha") || s.includes("año") || s.includes("anio") || s.includes("year");
 }
 
 function aliasFor(realValue, colName, anonState, aliasMap) {
-  if (Object.prototype.hasOwnProperty.call(anonState.valueToAlias, realValue)) {
+  if (realValue in anonState.valueToAlias) {
     return anonState.valueToAlias[realValue];
   }
+  
   var prefix = aliasPrefixForColumn(colName);
   if (!anonState.counters[prefix]) anonState.counters[prefix] = 0;
+  
   var idx = anonState.counters[prefix]++;
-  var alias = prefix + " " + indexToLetters(idx);
+  var alias = `${prefix} ${indexToLetters(idx)}`;
+  
   anonState.valueToAlias[realValue] = alias;
   aliasMap[alias] = realValue;
   return alias;
@@ -2257,22 +2365,22 @@ function aliasFor(realValue, colName, anonState, aliasMap) {
 
 function aliasPrefixForColumn(colName) {
   var s = String(colName).toLowerCase();
-  if (s.indexOf("ciudad") >= 0)     return "Ciudad";
-  if (s.indexOf("residencia") >= 0) return "Residencia";
-  if (s.indexOf("curso") >= 0)      return "Curso";
-  if (s.indexOf("origen") >= 0)     return "Origen";
-  if (s.indexOf("fuente") >= 0)     return "Fuente";
-  if (s.indexOf("campaña") >= 0 || s.indexOf("campana") >= 0) return "Campaña";
-  if (s.indexOf("tipo") >= 0)       return "Tipo";
-  if (s.indexOf("particular") >= 0 || s.indexOf("grupo") >= 0 || s.indexOf("segmento") >= 0) return "Segmento";
-  if (s.indexOf("mes") >= 0)        return "Mes";
-  if (s.indexOf("kpi") >= 0 || s.indexOf("métrica") >= 0 || s.indexOf("metrica") >= 0) return "Métrica";
+  if (s.includes("ciudad")) return "Ciudad";
+  if (s.includes("residencia")) return "Residencia";
+  if (s.includes("curso")) return "Curso";
+  if (s.includes("origen")) return "Origen";
+  if (s.includes("fuente")) return "Fuente";
+  if (s.includes("campaña") || s.includes("campana")) return "Campaña";
+  if (s.includes("tipo")) return "Tipo";
+  if (s.includes("particular") || s.includes("grupo") || s.includes("segmento")) return "Segmento";
+  if (s.includes("mes")) return "Mes";
+  if (s.includes("kpi") || s.includes("métrica") || s.includes("metrica")) return "Métrica";
   return "Categoría";
 }
 
 function indexToLetters(n) {
   var s = "";
-  n = n + 1; // 1-based
+  n = n + 1;
   while (n > 0) {
     var rem = (n - 1) % 26;
     s = String.fromCharCode(65 + rem) + s;
@@ -2289,16 +2397,13 @@ function deanonymizeText(text, aliasMap) {
   aliases.sort(function (a, b) { return b.length - a.length; });
 
   var lowerAliasMap = {};
-  for (var i = 0; i < aliases.length; i++) {
-    lowerAliasMap[aliases[i].toLowerCase()] = aliasMap[aliases[i]];
-  }
+  aliases.forEach(function(alias) {
+    lowerAliasMap[alias.toLowerCase()] = aliasMap[alias];
+  });
 
   var alternation = aliases.map(escapeRegExp).join("|");
   
-  var pattern = new RegExp(
-    "(^|[^0-9A-Za-zÀ-ÿ])(" + alternation + ")(?![0-9A-Za-zÀ-ÿ])",
-    "gi"
-  );
+  var pattern = new RegExp(`(^|[^0-9A-Za-zÀ-ÿ])(${alternation})(?![0-9A-Za-zÀ-ÿ])`, "gi");
   
   return text.replace(pattern, function (m, pre, matchedAlias) {
     var real = lowerAliasMap[matchedAlias.toLowerCase()];
@@ -2320,16 +2425,14 @@ function formatNumberForLLM(val) {
 }
 
 function isSensitiveColumn(colName) {
-  if (colName === null || colName === undefined) return false;
+  if (!colName) return false;
   var s = String(colName).trim().toLowerCase();
-  for (var i = 0; i < SENSITIVE_COLUMNS.length; i++) {
-    if (s === SENSITIVE_COLUMNS[i].toLowerCase()) return true;
-  }
-  if (s.indexOf("correo") >= 0) return true;
-  if (s.indexOf("email") >= 0 || s.indexOf("e-mail") >= 0) return true;
-  if (s.indexOf("nombre") >= 0) return true;
-  if (s.indexOf("apellido") >= 0) return true;
-  return false;
+  
+  return s.includes("correo") || 
+         s.includes("email") || 
+         s.includes("e-mail") || 
+         s.includes("nombre") || 
+         s.includes("apellido");
 }
 
 
@@ -2341,14 +2444,20 @@ function isSensitiveColumn(colName) {
 
 async function runPython(code) {
   if (!code) return { kind: "error", value: "Código vacío" };
+  
   var normalized = normalizeCode(code);
-  try { await pyodide.runPythonAsync("__reset_resultado__()"); } catch (e) {}
+  
+  try { 
+    await pyodide.runPythonAsync("__reset_resultado__()"); 
+  } catch (e) {}
+  
   try {
     await pyodide.runPythonAsync(normalized);
   } catch (e) {
     var msg = e && e.message ? e.message : String(e);
     return { kind: "error", value: extractPyErrorMessage(msg), trace: msg };
   }
+  
   try {
     var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
     return JSON.parse(jsonStr);
@@ -2359,20 +2468,18 @@ async function runPython(code) {
       var diag = await pyodide.runPythonAsync(
         "(type(resultado).__name__ + ' => ' + repr(resultado)[:400]) if 'resultado' in globals() else 'resultado no asignado'"
       );
-      diagnostic = "Tipo de resultado: " + String(diag) + "\n\n" + serMsg;
+      diagnostic = `Tipo de resultado: ${String(diag)}\n\n${serMsg}`;
     } catch (e2) {}
+    
     return { kind: "error", value: "No se pudo serializar el resultado", trace: diagnostic };
   }
 }
 
 function extractPyErrorMessage(traceback) {
   if (!traceback) return "Error desconocido";
-  var lines = traceback.split("\n").filter(function (l) { return l.trim(); });
-  for (var i = lines.length - 1; i >= 0; i--) {
-    var line = lines[i];
-    if (/^[A-Z]\w*Error:/.test(line) || /^[A-Z]\w*Warning:/.test(line)) return line;
-  }
-  return lines[lines.length - 1] || "Error en la ejecución";
+  var lines = traceback.split("\n").filter(l => l.trim());
+  var errLine = lines.reverse().find(line => /^[A-Z]\w*(Error|Warning):/.test(line));
+  return errLine || lines[0] || "Error en la ejecución";
 }
 
 
@@ -2626,14 +2733,91 @@ function renderPlotlyInto(elId, jsonStr) {
       }
     }
     if (isMap) {
-      el.style.minHeight = "520px";
-      if (layout.height == null) layout.height = 520;
-      if (!layout.mapbox) layout.mapbox = {};
-      if (!layout.mapbox.style) layout.mapbox.style = "open-street-map";
+      beautifyMap(el, data, layout);
     }
     Plotly.newPlot(el, data, layout, config);
   } catch (e) {
     el.innerHTML = '<div class="error-box">Error renderizando el gráfico: ' + esc(e.message || String(e)) + '</div>';
+  }
+}
+
+function beautifyMap(el, data, layout) {
+  el.style.minHeight = "560px";
+  if (layout.height == null) layout.height = 560;
+  if (!layout.mapbox) layout.mapbox = {};
+  layout.mapbox.style = "carto-positron";
+  if (!layout.mapbox.center) layout.mapbox.center = { lat: 40.0, lon: -3.7 };
+  if (layout.mapbox.zoom == null) layout.mapbox.zoom = 4.7;
+
+  layout.paper_bgcolor = "rgba(0,0,0,0)";
+  layout.plot_bgcolor  = "rgba(0,0,0,0)";
+  if (!layout.margin) layout.margin = {};
+  if (layout.margin.l == null) layout.margin.l = 0;
+  if (layout.margin.r == null) layout.margin.r = 0;
+  if (layout.margin.b == null) layout.margin.b = 0;
+  if (layout.margin.t == null) layout.margin.t = 54;
+  if (!layout.font) layout.font = {};
+  if (!layout.font.family) layout.font.family = "Arial, Helvetica, sans-serif";
+  if (!layout.font.color)  layout.font.color = "#1a1a1a";
+
+  if (layout.title && typeof layout.title === "object") {
+    if (layout.title.x == null) layout.title.x = 0.02;
+    if (!layout.title.xanchor) layout.title.xanchor = "left";
+    if (!layout.title.font) layout.title.font = {};
+    if (layout.title.font.size == null) layout.title.font.size = 16;
+  }
+
+  for (var i = 0; i < data.length; i++) {
+    var tr = data[i];
+    if (!tr) continue;
+    var tt = String(tr.type || "");
+
+    if (tt === "scattermapbox") {
+      tr.mode = tr.mode || "markers";
+      tr.marker = tr.marker || {};
+      if (!tr.marker.colorscale) {
+        tr.marker.colorscale = [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
+      }
+      if (tr.marker.opacity == null) tr.marker.opacity = 0.9;
+      tr.marker.sizemode = tr.marker.sizemode || "diameter";
+      var halo = makeHaloTrace(tr);
+      if (halo) { data.splice(i, 1, halo, tr); i++; }
+    } else if (tt === "densitymapbox") {
+      if (!tr.colorscale) {
+        tr.colorscale = [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
+      }
+      if (tr.radius == null) tr.radius = 38;
+      if (tr.opacity == null) tr.opacity = 0.85;
+    }
+  }
+}
+
+function makeHaloTrace(tr) {
+  try {
+    var size = (tr.marker && tr.marker.size);
+    var haloSize;
+    if (Array.isArray(size)) {
+      haloSize = size.map(function (s) { return (Number(s) || 10) + 14; });
+    } else if (typeof size === "number") {
+      haloSize = size + 14;
+    } else {
+      haloSize = 24;
+    }
+    return {
+      type: "scattermapbox",
+      lat: (tr.lat || []).slice(),
+      lon: (tr.lon || []).slice(),
+      mode: "markers",
+      hoverinfo: "skip",
+      showlegend: false,
+      marker: {
+        size: haloSize,
+        color: "rgba(112,213,73,0.22)",
+        sizemode: tr.marker && tr.marker.sizemode ? tr.marker.sizemode : "diameter"
+      }
+    };
+  } catch (e) {
+    return null;
   }
 }
 
