@@ -2491,64 +2491,54 @@ function extractPythonCode(reply) {
 }
 
 function normalizeCode(code) {
-  code = code.replace(/^\uFEFF/, "")
-             .replace(/\r\n/g, "\n")
-             .replace(/\r/g, "\n");
+  code = code.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   code = stripCommonLeadingWhitespace(code);
   return code.trim();
 }
 
 function stripCommonLeadingWhitespace(code) {
-  var lines = code.split("\n");
-  var minLead = Infinity;
-  for (var i = 0; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    var lead = lines[i].match(/^[ \t]*/)[0].length;
-    if (lead < minLead) minLead = lead;
-    if (minLead === 0) break;
-  }
-  if (minLead === Infinity || minLead === 0) return code;
-  for (var j = 0; j < lines.length; j++) {
-    if (lines[j].length >= minLead) lines[j] = lines[j].substring(minLead);
-  }
-  return lines.join("\n");
+  const lines = code.split("\n");
+  const indents = lines
+    .filter(line => line.trim().length > 0)
+    .map(line => line.match(/^[ \t]*/)[0].length);
+  const minLead = indents.length > 0 ? Math.min(...indents) : 0;
+  
+  if (minLead === 0) return code;
+  return lines.map(line => line.length >= minLead ? line.substring(minLead) : line).join("\n");
 }
 
 
 // ============================================================================
-//  Render del chat
+//  Renderizado de mensajes (UI)
 // ============================================================================
 
-function appendMsg(role, text) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg " + role;
-  var av = role === "user" ? "U" : "A";
-  var rl = role === "user" ? "Tú" : "Asistente";
-  var formattedText = role === "user" ? esc(text) : renderRich(text);
-  d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">' + rl + '</div>'
-    + '<div class="msg-text">' + formattedText + '</div>'
-    + '</div>';
+function appendMsg(role, text, route = null) {
+  const box = document.getElementById("messages");
+  const d = document.createElement("div");
+  d.className = `msg ${role}`;
+
+  const isUser = role === "user";
+  const avatar = isUser ? "U" : "A";
+  const roleName = isUser ? "Tú" : "Asistente";
+  const formattedText = isUser ? esc(text) : renderRich(text);
+  const badgeHtml = route 
+    ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
+    : '';
+
+  d.innerHTML = `
+    <div class="msg-avatar">${avatar}</div>
+    <div class="msg-body">
+      <div class="msg-role">${roleName}${badgeHtml}</div>
+      <div class="msg-text">${formattedText}</div>
+    </div>
+  `;
+
   box.appendChild(d);
   scrollToBottom();
 }
 
 function appendAssistantText(text, route) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  var badge = route
-    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
-    : '';
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + badge + '</div>'
-    + '<div class="msg-text">' + renderRich(text) + '</div>'
-    + '</div>';
-  box.appendChild(d);
-  scrollToBottom();
+  appendMsg("assistant", text, route);
 }
 
 function routeLabel(route) {
@@ -2560,117 +2550,131 @@ function routeLabel(route) {
 }
 
 function appendResult(result, code, route) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
+  const box = document.getElementById("messages");
+  const d = document.createElement("div");
   d.className = "msg assistant";
-  var boxCls = (route === "insight") ? "result-box insight" : "result-box";
-  var inner = (result.kind === "error" || result.kind === "error_friendly")
-    ? renderError(result)
-    : '<div class="' + boxCls + '">' + renderResult(result) + '</div>';
-  inner += renderCodeToggle(code, route === "insight");
-  var badge = route
-    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
+  const isError = result.kind === "error" || result.kind === "error_friendly";
+  const boxCls = route === "insight" ? "result-box insight" : "result-box";
+  
+  const resultContent = isError 
+    ? renderError(result) 
+    : `<div class="${boxCls}">${renderResult(result)}</div>`;
+
+  const codeHtml = renderCodeToggle(code, route === "insight");
+  const badgeHtml = route 
+    ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
     : '';
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + badge + '</div>'
-    + '<div class="msg-text">' + inner + '</div>'
-    + '</div>';
+
+  d.innerHTML = `
+    <div class="msg-avatar">A</div>
+    <div class="msg-body">
+      <div class="msg-role">Asistente${badgeHtml}</div>
+      <div class="msg-text">
+        ${resultContent}
+        ${codeHtml}
+      </div>
+    </div>
+  `;
+
   box.appendChild(d);
   attachCodeToggle(d);
   if (result.kind === "plotly" && result.__plotElId) {
     renderPlotlyInto(result.__plotElId, result.value);
   }
+  
   scrollToBottom();
   return d;
 }
 
 function attachCodeToggle(container) {
-  var toggle = container.querySelector(".code-toggle");
+  const toggle = container.querySelector(".code-toggle");
   if (!toggle) return;
-  toggle.addEventListener("click", function () {
-    this.classList.toggle("expanded");
-    var blk = this.nextElementSibling;
-    if (blk) blk.classList.toggle("expanded");
+  toggle.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    btn.classList.toggle("expanded");
+    const codeBlock = btn.nextElementSibling;
+    if (codeBlock) {
+      codeBlock.classList.toggle("expanded");
+    }
   });
 }
 
 function renderResult(r) {
-  if (r.kind === "number")    return renderNumber(r);
-  if (r.kind === "text")      return '<div class="text-result">' + renderRich(r.value) + '</div>';
-  if (r.kind === "dict")      return renderDict(r);
-  if (r.kind === "dataframe") return renderDataFrame(JSON.parse(r.value), r.shape);
-  if (r.kind === "plotly") {
-    var id = "plot_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
-    r.__plotElId = id;
-    return '<div class="plot-container" id="' + id + '"></div>';
+  switch (r.kind) {
+    case "number":    return renderNumber(r);
+    case "text":      return `<div class="text-result">${renderRich(r.value)}</div>`;
+    case "dict":      return renderDict(r);
+    case "dataframe": return renderDataFrame(JSON.parse(r.value), r.shape);
+    case "plotly":
+      const id = `plot_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      r.__plotElId = id;
+      return `<div class="plot-container" id="${id}"></div>`;
+    case "none":      return `<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>`;
+    default:          return `<div class="text-result">${esc(JSON.stringify(r))}</div>`;
   }
-  if (r.kind === "none") return '<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>';
-  return '<div class="text-result">' + esc(JSON.stringify(r)) + '</div>';
 }
 
 function renderNumber(r) {
-  var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
-    ? r.value.toFixed(4).replace(/\.?0+$/, "")
-    : new Intl.NumberFormat("es-ES").format(r.value);
-  return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
+  const val = r.value;
+  const formatted = (typeof val === "number" && !Number.isInteger(val))
+    ? val.toFixed(4).replace(/\.?0+$/, "")
+    : new Intl.NumberFormat("es-ES").format(val);
+    
+  return `<div class="scalar-label">resultado</div><div class="scalar">${esc(formatted)}</div>`;
 }
 
 function renderDict(r) {
-  var obj;
-  try { obj = JSON.parse(r.value); } catch (e) { return '<div class="text-result">' + esc(r.value) + '</div>'; }
-  var rows = '';
-  for (var k in obj) {
-    var v = obj[k];
-    if (typeof v === "number") v = new Intl.NumberFormat("es-ES").format(v);
-    rows += '<tr><td><strong>' + esc(k) + '</strong></td><td class="num">' + esc(String(v)) + '</td></tr>';
+  try {
+    const obj = JSON.parse(r.value);
+    const rowsHtml = Object.entries(obj).map(([k, v]) => {
+      const displayVal = typeof v === "number" ? new Intl.NumberFormat("es-ES").format(v) : String(v);
+      return `<tr><td><strong>${esc(k)}</strong></td><td class="num">${esc(displayVal)}</td></tr>`;
+    }).join("");
+    return `<table>${rowsHtml}</table>`;
+  } catch (e) {
+    return `<div class="text-result">${esc(r.value)}</div>`;
   }
-  return '<table>' + rows + '</table>';
 }
 
 function renderDataFrame(df, shape) {
-  var cols = df.columns || [];
-  var rows = df.data || [];
+  const cols = df.columns || [];
+  const rows = df.data || [];
+  
   if (rows.length === 0) return '<div class="text-result"><em>Sin resultados.</em></div>';
-  var html = '<table><thead><tr>';
-  for (var i = 0; i < cols.length; i++) html += '<th>' + esc(String(cols[i])) + '</th>';
-  html += '</tr></thead><tbody>';
-  var maxRows = Math.min(rows.length, 100);
-  for (var r = 0; r < maxRows; r++) {
-    html += '<tr>';
-    for (var c = 0; c < rows[r].length; c++) html += renderCell(rows[r][c]);
-    html += '</tr>';
-  }
-  html += '</tbody></table>';
+
+  const thead = `<tr>${cols.map(c => `<th>${esc(String(c))}</th>`).join("")}</tr>`;
+  
+  const maxRows = Math.min(rows.length, 100);
+  const tbody = rows.slice(0, maxRows).map(row => 
+    `<tr>${row.map(cell => renderCell(cell)).join("")}</tr>`
+  ).join("");
+
+  let html = `<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+  
   if (shape && shape[0] > maxRows) {
-    html += '<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ' + maxRows + ' de ' + shape[0] + ' filas.</div>';
+    html += `<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ${maxRows} de ${shape[0]} filas.</div>`;
   }
   return html;
 }
 
-function renderCell(val) {
-  var isNum = typeof val === "number";
-  var display;
-  if (val === null || val === undefined) {
-    display = "—";
-  } else if (isNum) {
-    display = Number.isInteger(val)
-      ? new Intl.NumberFormat("es-ES").format(val)
-      : val.toFixed(4).replace(/\.?0+$/, "");
-  } else if (Array.isArray(val)) {
-    display = val.map(formatCellScalar).join(", ");
-  } else if (typeof val === "object") {
-    var parts = [];
-    for (var k in val) {
-      if (Object.prototype.hasOwnProperty.call(val, k)) {
-        parts.push(k + ": " + formatCellScalar(val[k]));
-      }
-    }
-    display = parts.join(", ");
-  } else {
-    display = String(val);
+function formatCellScalar(v) {
+  if (v == null) return "—";
+  if (typeof v === "number") {
+    return Number.isInteger(v) 
+      ? new Intl.NumberFormat("es-ES").format(v) 
+      : v.toFixed(4).replace(/\.?0+$/, "");
   }
-  return '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+  if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
+  if (typeof v === "object") {
+    return Object.entries(v).map(([k, val]) => `${k}: ${formatCellScalar(val)}`).join(", ");
+  }
+  return String(v);
+}
+
+function renderCell(val) {
+  const isNum = typeof val === "number";
+  const display = formatCellScalar(val);
+  return `<td${isNum ? ' class="num"' : ''}>${esc(display)}</td>`;
 }
 
 function formatCellScalar(v) {
@@ -2686,106 +2690,109 @@ function formatCellScalar(v) {
 }
 
 function renderPlotlyInto(elId, jsonStr) {
-  var el = document.getElementById(elId);
+  const el = document.getElementById(elId);
   if (!el) return;
+  
   if (typeof Plotly === "undefined") {
     el.innerHTML = '<div class="error-box">Plotly no está cargado en la página.</div>';
     return;
   }
+  
   try {
-    var spec = JSON.parse(jsonStr);
-    var data    = spec.data    || [];
-    var layout  = spec.layout  || {};
-    var config  = spec.config  || { displaylogo: false, responsive: true };
-    if (!config.responsive) config.responsive = true;
-    var isMap = false;
-    for (var ti = 0; ti < data.length; ti++) {
-      var tt = data[ti] && data[ti].type ? String(data[ti].type) : "";
-      if (tt.indexOf("mapbox") >= 0 || tt === "choropleth" || tt === "scattergeo" || tt === "densitymapbox") {
-        isMap = true; break;
-      }
-    }
-    if (isMap) {
-      beautifyMap(el, data, layout);
-    }
+    const spec = JSON.parse(jsonStr);
+    const data = spec.data || [];
+    const layout = spec.layout || {};
+    const config = spec.config || { displaylogo: false, responsive: true };
+    config.responsive = true; 
+    const isMap = data.some(tr => {
+      const type = String(tr?.type || "");
+      return type.includes("mapbox") || type === "choropleth" || type === "scattergeo";
+    });
+
+    if (isMap) beautifyMap(el, data, layout);
+    
     Plotly.newPlot(el, data, layout, config);
   } catch (e) {
-    el.innerHTML = '<div class="error-box">Error renderizando el gráfico: ' + esc(e.message || String(e)) + '</div>';
+    el.innerHTML = `<div class="error-box">Error renderizando el gráfico: ${esc(e.message || String(e))}</div>`;
   }
 }
 
-
 function beautifyMap(el, data, layout) {
   el.style.minHeight = "560px";
-  if (layout.height == null) layout.height = 560;
-  if (!layout.mapbox) layout.mapbox = {};
+  layout.height ??= 560;
+  layout.mapbox ??= {};
   layout.mapbox.style = "carto-positron";
-  if (!layout.mapbox.center) layout.mapbox.center = { lat: 40.0, lon: -3.7 };
-  if (layout.mapbox.zoom == null) layout.mapbox.zoom = 4.7;
+  layout.mapbox.center ??= { lat: 40.0, lon: -3.7 };
+  layout.mapbox.zoom ??= 4.7;
+
   layout.paper_bgcolor = "rgba(0,0,0,0)";
   layout.plot_bgcolor  = "rgba(0,0,0,0)";
-  if (!layout.margin) layout.margin = {};
-  if (layout.margin.l == null) layout.margin.l = 0;
-  if (layout.margin.r == null) layout.margin.r = 0;
-  if (layout.margin.b == null) layout.margin.b = 0;
-  if (layout.margin.t == null) layout.margin.t = 54;
-  if (!layout.font) layout.font = {};
-  if (!layout.font.family) layout.font.family = "Arial, Helvetica, sans-serif";
-  if (!layout.font.color)  layout.font.color = "#1a1a1a";
+  
+  layout.margin ??= {};
+  layout.margin.l ??= 0;
+  layout.margin.r ??= 0;
+  layout.margin.b ??= 0;
+  layout.margin.t ??= 54;
+  
+  layout.font ??= {};
+  layout.font.family ??= "Arial, Helvetica, sans-serif";
+  layout.font.color ??= "#1a1a1a";
+
   if (layout.title && typeof layout.title === "object") {
-    if (layout.title.x == null) layout.title.x = 0.02;
-    if (!layout.title.xanchor) layout.title.xanchor = "left";
-    if (!layout.title.font) layout.title.font = {};
-    if (layout.title.font.size == null) layout.title.font.size = 16;
+    layout.title.x ??= 0.02;
+    layout.title.xanchor ??= "left";
+    layout.title.font ??= {};
+    layout.title.font.size ??= 16;
   }
 
-  for (var i = 0; i < data.length; i++) {
-    var tr = data[i];
+  for (let i = 0; i < data.length; i++) {
+    const tr = data[i];
     if (!tr) continue;
-    var tt = String(tr.type || "");
+    
+    const type = String(tr.type || "");
 
-    if (tt === "scattermapbox") {
-      tr.mode = tr.mode || "markers";
-      tr.marker = tr.marker || {};
-      if (!tr.marker.colorscale) {
-        tr.marker.colorscale = [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
+    if (type === "scattermapbox") {
+      tr.mode ??= "markers";
+      tr.marker ??= {};
+      tr.marker.colorscale ??= [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
+      tr.marker.opacity ??= 0.9;
+      tr.marker.sizemode ??= "diameter";
+      
+      const halo = makeHaloTrace(tr);
+      if (halo) { 
+        data.splice(i, 1, halo, tr); 
+        i++;
       }
-      if (tr.marker.opacity == null) tr.marker.opacity = 0.9;
-      tr.marker.sizemode = tr.marker.sizemode || "diameter";
-      var halo = makeHaloTrace(tr);
-      if (halo) { data.splice(i, 1, halo, tr); i++; }
-    } else if (tt === "densitymapbox") {
-      if (!tr.colorscale) {
-        tr.colorscale = [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
-      }
-      if (tr.radius == null) tr.radius = 38;
-      if (tr.opacity == null) tr.opacity = 0.85;
+    } else if (type === "densitymapbox") {
+      tr.colorscale ??= [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
+      tr.radius ??= 38;
+      tr.opacity ??= 0.85;
     }
   }
 }
 
 function makeHaloTrace(tr) {
   try {
-    var size = (tr.marker && tr.marker.size);
-    var haloSize;
+    const size = tr.marker?.size;
+    let haloSize = 24;
+    
     if (Array.isArray(size)) {
-      haloSize = size.map(function (s) { return (Number(s) || 10) + 14; });
+      haloSize = size.map(s => (Number(s) || 10) + 14);
     } else if (typeof size === "number") {
       haloSize = size + 14;
-    } else {
-      haloSize = 24;
     }
+
     return {
       type: "scattermapbox",
-      lat: (tr.lat || []).slice(),
-      lon: (tr.lon || []).slice(),
+      lat: [...(tr.lat || [])],
+      lon: [...(tr.lon || [])],
       mode: "markers",
       hoverinfo: "skip",
       showlegend: false,
       marker: {
         size: haloSize,
         color: "rgba(112,213,73,0.22)",
-        sizemode: tr.marker && tr.marker.sizemode ? tr.marker.sizemode : "diameter"
+        sizemode: tr.marker?.sizemode || "diameter"
       }
     };
   } catch (e) {
@@ -2794,35 +2801,36 @@ function makeHaloTrace(tr) {
 }
 
 function renderError(r) {
-  var techParts = [];
-  var summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
-  if (summary) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(summary) + '</div>');
-  if (r.trace) techParts.push('<pre>' + esc(r.trace) + '</pre>');
+  const techParts = [];
+  const summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
+  
+  if (summary) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(summary)}</div>`);
+  if (r.trace) techParts.push(`<pre>${esc(r.trace)}</pre>`);
+  
   if (r.firstError) {
-    techParts.push('<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>');
-    if (r.firstError.value) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(r.firstError.value) + '</div>');
-    if (r.firstError.trace) techParts.push('<pre>' + esc(r.firstError.trace) + '</pre>');
-    if (r.firstError.code)  techParts.push('<pre>' + esc(r.firstError.code) + '</pre>');
+    techParts.push(`<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>`);
+    if (r.firstError.value) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(r.firstError.value)}</div>`);
+    if (r.firstError.trace) techParts.push(`<pre>${esc(r.firstError.trace)}</pre>`);
+    if (r.firstError.code)  techParts.push(`<pre>${esc(r.firstError.code)}</pre>`);
   }
-  var techHtml = techParts.join("");
-  var details = techHtml
-    ? '<details class="err-details"><summary>ver detalles técnicos del error</summary>' + techHtml + '</details>'
+  
+  const techHtml = techParts.join("");
+  const details = techHtml 
+    ? `<details class="err-details"><summary>ver detalles técnicos del error</summary>${techHtml}</details>` 
     : "";
-  if (r.kind === "error_friendly") {
-    return '<div class="error-box">' +
-      '<strong>No he podido responder.</strong> ' + esc(r.value) +
-      details + '</div>';
-  }
-  return '<div class="error-box">' +
-    '<strong>Error al ejecutar el código:</strong> ' + esc(r.value) +
-    details + '</div>';
+    
+  const prefix = r.kind === "error_friendly" ? "No he podido responder." : "Error al ejecutar el código:";
+  
+  return `<div class="error-box"><strong>${prefix}</strong> ${esc(r.value)}${details}</div>`;
 }
 
 function renderCodeToggle(code, isInsight) {
-  if (!code) return '';
-  var label = isInsight ? "ver script de análisis" : "ver código ejecutado";
-  return '<span class="code-toggle"><span class="arrow">▶</span> ' + label + '</span>' +
-    '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
+  if (!code) return "";
+  const label = isInsight ? "ver script de análisis" : "ver código ejecutado";
+  return `
+    <span class="code-toggle"><span class="arrow">▶</span> ${label}</span>
+    <div class="code-block"><pre>${esc(code)}</pre></div>
+  `;
 }
 
 
