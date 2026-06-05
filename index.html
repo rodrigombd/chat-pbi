@@ -2276,6 +2276,18 @@ function tableFromPlotlySpec(jsonStr) {
 //  Pseudonimización reversible + render a texto
 // ---------------------------------------------------------------------------
 
+// Columnas cuyo contenido NO se anonimiza (se pasan en claro al LLM de conclusiones).
+var WHITELIST_NO_ANON = [
+  'Origen/Campaña Posibles Clientes', 'Fuente de Posible Cliente', 'Curso', 'Curso_corregido', 
+  'Ciudades de interés', 'Ciudad_deinteres_corregido', 'Tipo de registro', 'Ciudad actual', 'Ciudad_actual_corregido', 
+  'Fecha creación', 'Origen_Agrupado', 'Fuente_Agrupada', 
+];
+
+function isWhitelistedColumn(colName) {
+  var s = String(colName).toLowerCase().trim();
+  return WHITELIST_NO_ANON.some(function (w) { return s === w; });
+}
+
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
   var columns = table.columns || [];
   var rows = table.rows || [];
@@ -2303,6 +2315,7 @@ function tableToAnonymizedText(table, aliasMap, shapeNote) {
   return lines.join("\n");
 }
 
+
 function anonymizeCell(val, colName, anonState, aliasMap) {
   if (val === null || val === undefined) return "—";
   if (typeof val === "number") return formatNumberForLLM(val);
@@ -2311,6 +2324,7 @@ function anonymizeCell(val, colName, anonState, aliasMap) {
   if (asStr === "") return "—";
   if (isNumericLike(asStr)) return asStr;
   if (isTemporalColumn(colName)) return asStr;
+  if (isWhitelistedColumn(colName)) return asStr;
 
   return aliasFor(asStr, colName, anonState, aliasMap);
 }
