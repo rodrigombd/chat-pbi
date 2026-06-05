@@ -2623,7 +2623,7 @@ function beautifyMap(el, data, layout) {
 function makeHaloTrace(tr) {
   try {
     const size = tr.marker?.size;
-    let haloSize = 24; // Valor por defecto
+    let haloSize = 24;
     
     if (Array.isArray(size)) {
       haloSize = size.map(s => (Number(s) || 10) + 14);
