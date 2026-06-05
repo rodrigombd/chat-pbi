@@ -458,7 +458,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
   <span class="header-right">
-    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversación nueva y olvida el contexto anterior" style="display:none;">Limpiar memoria</button>
+    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversación nueva y olvida el contexto anterior" style="display:none;">+ Limpiar memoria</button>
     <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
   </span>
 </header>
@@ -485,18 +485,18 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <div id="chat-panel">
   <div id="messages">
     <div class="welcome-area" id="welcome">
-      <h3>¿En qué puedo ayudarte?</h3>
-      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta y se muestra por pantalla. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente añada una lectura breve del resultado tras cada consulta.</p>
+      <h3>&iquest;En qué puedo ayudarte?</h3>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente añada una lectura breve del resultado tras cada consulta.</p>
     </div>
   </div>
 
   <div id="quick-questions">
     <button class="quick-btn" onclick="quickAsk('¿Qué tablas hay en el modelo?')">¿Qué tablas hay?</button>
     <button class="quick-btn" onclick="quickAsk('¿Cómo se calcula el CR?')">¿Cómo se calcula el CR?</button>
-    <button class="quick-btn" onclick="quickAsk('¿Cuántos leads hay en el curso 2025/2026?')">Número de leads 2025/2026</button>
-    <button class="quick-btn" onclick="quickAsk('Gráfico de evolución mensual de leads')">Evolución mensual de leads</button>
-    <button class="quick-btn" onclick="quickAsk('Compara la conversión entre Madrid y Valencia')">Comparar conversión Valencia vs Madrid</button>
-    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de interés en España')">Mapa de calor de solicitudes de leads</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cuántas solicitudes de leads hay para el curso 2025/2026?')"> Solicitudes de leads 2025/2026</button>
+    <button class="quick-btn" onclick="quickAsk('Gráfico de evolución mensual de leads para curso 2024/2025')">Evolución de solicitudes para 2024/2025</button>
+    <button class="quick-btn" onclick="quickAsk('Compara la conversión entre Madrid y Valencia')">Comparar conversión Madrid vs Valencia</button>
+    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de interés en España')">Mapa de calor de leads por ciudad</button>
   </div>
 
   <div id="conclusions-bar">
@@ -533,7 +533,10 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
 var STORAGE_CTX_KEY  = "resa_assistant_session_context";
 var STORAGE_TS_KEY   = "resa_assistant_session_ts";
-var SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+var STORAGE_HIST_KEY = "resa_assistant_turn_history";
+var SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+var MAX_HISTORY_TURNS = 40;
+var HISTORY_INJECT_TURNS = 12;
 var conversationId   = null;
 var lastResponseId   = null;
 var supportsCacheRetention = true;
@@ -542,7 +545,6 @@ var PROMPT_FILES = {
   router:          "context_router.txt",
   clarify:         "context_clarify.txt",
   modelo_datos:    "context_modelo_datos.txt",
-  planificador:    "context_planificador.txt",
   general:         "context_general.txt",
   conclusiones:    "context_conclusiones.txt",
   explicacion:     "context_explicacion.txt"
@@ -592,6 +594,7 @@ var pendingClarify = null;
 var lastUserQuery  = null;
 var lastTurn       = null;
 var sessionContext = {};
+var turnHistory    = [];
 
 
 // ============================================================================
@@ -1135,13 +1138,16 @@ async function ensureTablesLoaded(pythonCode) {
 
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  var threaded = opts.threaded === true;
-  
-  var last = messages[messages.length - 1];
-  var input = [{ 
-    role: last.role || "user", 
-    content: [{ type: "input_text", text: String(last.content || "") }] 
-  }];
+  var threaded = opts.threaded !== false;
+
+  var input = messages.map(function (m) {
+    var role = m.role || "user";
+    var contentType = role === "assistant" ? "output_text" : "input_text";
+    return {
+      role: role,
+      content: [{ type: contentType, text: String(m.content || "") }]
+    };
+  });
 
   var body = {
     model: opts.model || "gpt-4o",
@@ -1210,22 +1216,23 @@ async function callModel(messages, systemPrompt, opts) {
 }
 
 function extractOpenAIText(d) {
-  if (typeof d?.output_text === "string" && d.output_text.length > 0) {
+  if (typeof d.output_text === "string" && d.output_text.length) {
     return d.output_text;
   }
-  let out = "";
-  if (Array.isArray(d?.output)) {
-    d.output.forEach(item => {
-      if (item?.type === "message" && Array.isArray(item?.content)) {
-        item.content.forEach(c => {
-          if ((c?.type === "output_text" || c?.type === "text") && c?.text) {
+  var out = "";
+  if (Array.isArray(d.output)) {
+    for (var i = 0; i < d.output.length; i++) {
+      var item = d.output[i];
+      if (item && item.type === "message" && Array.isArray(item.content)) {
+        for (var j = 0; j < item.content.length; j++) {
+          var c = item.content[j];
+          if (c && (c.type === "output_text" || c.type === "text") && c.text) {
             out += c.text;
           }
-        });
+        }
       }
-    });
+    }
   }
-  
   return out;
 }
 
@@ -1247,6 +1254,10 @@ async function ensureConversation() {
       var rawCtx = localStorage.getItem(STORAGE_CTX_KEY);
       if (rawCtx) sessionContext = JSON.parse(rawCtx) || {};
     } catch (e) { sessionContext = {}; }
+    try {
+      var rawHist = localStorage.getItem(STORAGE_HIST_KEY);
+      if (rawHist) turnHistory = JSON.parse(rawHist) || [];
+    } catch (e) { turnHistory = []; }
     touchSession();
     return conversationId;
   }
@@ -1263,12 +1274,14 @@ function clearLocalSession() {
   conversationId = null;
   lastResponseId = null;
   sessionContext = {};
+  turnHistory = [];
   lastTurn = null;
   lastUserQuery = null;
   try {
     localStorage.removeItem(STORAGE_CONV_KEY);
     localStorage.removeItem(STORAGE_CTX_KEY);
     localStorage.removeItem(STORAGE_TS_KEY);
+    localStorage.removeItem(STORAGE_HIST_KEY);
   } catch (e) {}
 }
 
@@ -1371,7 +1384,7 @@ async function routeMessage(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.router,
-      { model: "gpt-4o-mini", maxTokens: 300, temperature: 0.2 }
+      { model: "gpt-4o", maxTokens: 400, temperature: 0.2, threaded: false }
     );
     removeTyping(tid);
     var j = extractJSON(reply);
@@ -1401,7 +1414,7 @@ async function answerModelQuery(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.modelo_datos,
-      { model: "gpt-4o", maxTokens: 1200, temperature: 0.5 }
+      { model: "gpt-4o", maxTokens: 1500, temperature: 0.5 }
     );
     removeTyping(tid);
     appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
@@ -1417,21 +1430,19 @@ async function answerModelQuery(userText) {
 // ----- Paso 2b: planificación de clarify (usa context_clarify.txt) -----
 function rememberAnsweredSlots(answeredSlots) {
   if (!answeredSlots) return;
-  
-  answeredSlots.forEach(a => {
-    if (a?.slot && a?.answer) {
-      sessionContext[a.slot] = String(a.answer);
-    }
-  });
-  
+  for (var i = 0; i < answeredSlots.length; i++) {
+    var a = answeredSlots[i];
+    if (!a || !a.slot || !a.answer) continue;
+    sessionContext[a.slot] = String(a.answer);
+  }
   try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
 }
 
 function rememberQueryParams(queryText) {
   if (!queryText) return;
-  const t = String(queryText);
+  var t = String(queryText);
 
-  const mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
+  var mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
   if (mCurso) {
     sessionContext.curso = `${mCurso[1]}/${mCurso[2]}`;
   } else if (/\bhist[oó]ric|\btodos los cursos\b/i.test(t)) {
@@ -1450,40 +1461,107 @@ function rememberQueryParams(queryText) {
 }
 
 function buildSessionContextText() {
-  return Object.entries(sessionContext)
-    .map(([k, v]) => `- ${k}: ${v}`)
-    .join("\n");
+  var keys = Object.keys(sessionContext);
+  if (keys.length === 0) return "";
+  
+  return keys.map(k => `- ${k}: ${sessionContext[k]}`).join("\n");
 }
 
-// ============================================================================
-//  Motor de Aclaraciones (Planificador)
-// ============================================================================
+function summarizeResultForMemory(execResult) {
+  if (!execResult) return "";
+
+  function tablePreview(table, shapeNote) {
+    if (!table) return "";
+    var cols = Array.isArray(table.columns) ? table.columns : [];
+    var rows = Array.isArray(table.rows) ? table.rows : [];
+    var head = (shapeNote ? shapeNote + ". " : "");
+    if (cols.length) head += "columnas: " + cols.join(", ") + ". ";
+    var preview = rows.slice(0, 6).map(function (r) {
+      return (Array.isArray(r) ? r : Object.values(r)).join(" | ");
+    }).join(" ; ");
+    return (head + preview).slice(0, 700);
+  }
+
+  if (execResult.kind === "number") {
+    return "Valor numérico: " + String(execResult.value);
+  }
+  if (execResult.kind === "text") {
+    return String(execResult.value || "").slice(0, 400);
+  }
+  if (execResult.kind === "dict") {
+    return tablePreview(tableFromDict(execResult.value), null);
+  }
+  if (execResult.kind === "dataframe") {
+    var df = tableFromDataFrame(execResult);
+    return tablePreview(df.table, df.shapeNote);
+  }
+  if (execResult.kind === "plotly") {
+    var table;
+    if (execResult.data_df) {
+      table = tableFromDataFrame({ value: execResult.data_df, shape: null }).table;
+    } else {
+      table = tableFromPlotlySpec(execResult.value);
+    }
+    return "Gráfico generado. " + tablePreview(table, null);
+  }
+  return "";
+}
+
+function recordTurnInHistory(userText, execResult) {
+  var resumen = summarizeResultForMemory(execResult);
+  turnHistory.push({
+    q: String(userText || "").slice(0, 500),
+    r: resumen,
+    ts: Date.now()
+  });
+  if (turnHistory.length > MAX_HISTORY_TURNS) {
+    turnHistory = turnHistory.slice(turnHistory.length - MAX_HISTORY_TURNS);
+  }
+  try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
+}
+
+function buildHistoryContextText() {
+  if (!turnHistory.length) return "";
+  var recent = turnHistory.slice(-HISTORY_INJECT_TURNS);
+  return recent.map(function (t, i) {
+    var line = (i + 1) + ". Pregunta: " + t.q;
+    if (t.r) line += "\n   Resultado: " + t.r;
+    return line;
+  }).join("\n");
+}
+
+function buildFullMemoryText() {
+  var parts = [];
+  var ctx = buildSessionContextText();
+  if (ctx) parts.push("CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n" + ctx);
+  var hist = buildHistoryContextText();
+  if (hist) parts.push("HISTORIAL DE CONSULTAS Y RESULTADOS PREVIOS DE ESTA SESIÓN:\n" + hist);
+  return parts.join("\n\n");
+}
 
 async function planSlots(text) {
   if (!prompts.clarify) return { slots: [] };
-  
-  const tid = appendTyping("comprobando si necesito aclaraciones...");
+  var tid = appendTyping("comprobando si necesito aclaraciones...");
   setStatus("planificando...", "busy");
   
   try {
-    const ctx = buildSessionContextText();
-    let userContent = "";
-    
-    if (ctx) userContent += `CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN:\n${ctx}\n`;
-    if (lastTurn?.userQuery) userContent += `Última consulta resuelta: "${lastTurn.userQuery}"\n`;
-    
-    userContent += `\nCONSULTA ACTUAL DEL USUARIO:\n${text}`;
+    var memory = buildFullMemoryText();
+    var userContent = "";
 
-    const reply = await callModel(
+    if (memory) {
+      userContent += memory + "\n\n";
+    }
+    userContent += `CONSULTA ACTUAL DEL USUARIO:\n${text}`;
+
+    var reply = await callModel(
       [{ role: "user", content: userContent }],
       prompts.clarify,
-      { model: "gpt-4o", maxTokens: 600, threaded: false, temperature: 0.5 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.5, threaded: false }
     );
 
     removeTyping(tid);
-    const j = extractJSON(reply);
-    
-    if (!j?.slots || !Array.isArray(j.slots)) return { slots: [] };
+    var j = extractJSON(reply);
+    if (!j || !Array.isArray(j.slots)) return { slots: [] };
     
     return { slots: sanitizeSlots(dropKnownSlots(j.slots)) };
   } catch (e) {
@@ -1493,40 +1571,40 @@ async function planSlots(text) {
 }
 
 function dropKnownSlots(slots) {
-  return slots.filter(s => !(s?.slot && sessionContext.hasOwnProperty(s.slot)));
+  return slots.filter(s => !(s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)));
 }
 
 function sanitizeSlots(raw) {
-  return raw.slice(0, 4).reduce((clean, s) => {
-    if (!s?.pregunta) return clean;
+  var clean = [];
+  for (var i = 0; i < raw.length && i < 4; i++) {
+    var s = raw[i];
+    if (!s || !s.pregunta) continue;
     
-    const opciones = Array.isArray(s.opciones) ? s.opciones.slice(0, 4).filter(Boolean).map(String) : [];
-    if (opciones.length >= 2) {
-      clean.push({
-        slot: s.slot || `slot_${clean.length}`,
-        pregunta: String(s.pregunta),
-        opciones: opciones,
-        razon: s.razon ? String(s.razon) : "",
-        permitirOtro: s.permitirOtro !== false
-      });
-    }
-    return clean;
-  }, []);
+    var opciones = Array.isArray(s.opciones)
+      ? s.opciones.slice(0, 4).filter(Boolean).map(String)
+      : [];
+      
+    if (opciones.length < 2) continue;
+    
+    clean.push({
+      slot: s.slot || `slot_${i}`,
+      pregunta: String(s.pregunta),
+      opciones: opciones,
+      razon: s.razon ? String(s.razon) : "",
+      permitirOtro: s.permitirOtro !== false
+    });
+  }
+  return clean;
 }
-
-// ============================================================================
-//  Ejecución Visual de Aclaraciones
-// ============================================================================
 
 function askNextSlot() {
   if (!pendingClarify || pendingClarify.missing.length === 0) {
     finalizeClarify();
     return;
   }
-  
-  const slot = pendingClarify.missing[0];
-  const idx = pendingClarify.answered.length + 1;
-  const total = pendingClarify.total;
+  var slot = pendingClarify.missing[0];
+  var idx = pendingClarify.answered.length + 1;
+  var total = pendingClarify.total;
   
   appendClarify(slot, idx, total);
   setStatus(`esperando aclaración (${idx}/${total})...`, "busy");
@@ -1534,8 +1612,7 @@ function askNextSlot() {
 
 async function answerClarify(answerText) {
   if (!pendingClarify) return;
-  
-  const slot = pendingClarify.missing.shift();
+  var slot = pendingClarify.missing.shift();
   if (!slot) return;
   
   markClarifyAnswered(answerText);
@@ -1548,18 +1625,49 @@ async function answerClarify(answerText) {
   
   if (pendingClarify.missing.length > 0) {
     askNextSlot();
-  } else {
-    await finalizeClarify();
+    return;
+  }
+  await finalizeClarify();
+}
+
+function markClarifyAnswered(answerText) {
+  var lastBox = document.querySelector(".clarify-box:not(.answered)");
+  if (!lastBox) return;
+  lastBox.classList.add("answered");
+  
+  var btns = lastBox.querySelectorAll(".clarify-option");
+  btns.forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === answerText) btn.classList.add("selected");
+  });
+  
+  var inp = lastBox.querySelector(".clarify-other-input");
+  if (inp) inp.disabled = true;
+  
+  var ob = lastBox.querySelector(".clarify-other-btn");
+  if (ob) ob.disabled = true;
+}
+
+async function finalizeClarify() {
+  if (!pendingClarify) return;
+  var pipe = pendingClarify;
+  pendingClarify = null;
+  setBusy(true);
+  
+  try {
+    rememberAnsweredSlots(pipe.answered);
+    await answerDataQuery(pipe.userQuery, pipe.answered);
+  } catch (e) {
+    appendError(`Error en la consulta: ${e.message}`);
+    setStatus("error", "error");
+  } finally {
+    setBusy(false);
   }
 }
 
-// ============================================================================
-//  Planificación y ejecución de la consulta de datos
-// ============================================================================
 
 async function runDataTurn(userText) {
   var subRequests = await planRequests(userText);
-
   if (subRequests.length <= 1) {
     await runDataPipeline(subRequests[0] || userText);
     return;
@@ -1568,22 +1676,46 @@ async function runDataTurn(userText) {
 }
 
 async function planRequests(userText) {
-  if (!prompts.planificador) return [userText];
+  if (!prompts.router) return [userText];
 
   var tid = appendTyping("planificando la consulta...");
   setStatus("planificando la consulta...", "busy");
   try {
-    var instrucciones = prompts.planificador;
+    var instrucciones =
+      "Eres un planificador. Recibes el mensaje de un usuario que consulta datos de un CRM " +
+      "y debes decidir CUÁNTAS peticiones de datos independientes contiene.\n\n" +
+      "REGLA CENTRAL: divide en varias peticiones SOLO cuando el mensaje pide cosas TOTALMENTE " +
+      "DIFERENTES (distinta métrica, distinta dimensión de análisis o distinto tipo de salida). " +
+      "Por defecto, asume que es UNA SOLA petición. Ante la duda, NO dividas.\n\n" +
+      "UNA COMPARACIÓN ES UNA SOLA PETICIÓN. Comparar, enfrentar o contrastar valores de la MISMA " +
+      "métrica entre categorías (ciudades, residencias, cursos, etc.) produce un único resultado y " +
+      "NO se divide nunca. Ejemplos de UNA sola petición:\n" +
+      "- 'Comparación de la evolución histórica de solicitudes con ciudad de interés Madrid vs Barcelona' " +
+      "→ UNA petición (misma métrica 'solicitudes', misma dimensión 'evolución histórica', solo cambia la categoría comparada).\n" +
+      "- 'Compara la conversión de Madrid y Valencia' → UNA petición.\n" +
+      "- 'Leads por ciudad de interés en 2025/2026' → UNA petición.\n\n" +
+      "SON VARIAS PETICIONES cuando se piden análisis distintos que darían resultados separados. Ejemplo:\n" +
+      "- 'La evolución de leads con ciudad de interés Madrid históricamente Y las 5 residencias con mejor CR de Madrid' " +
+      "→ DOS peticiones: (1) evolución histórica de leads de Madrid; (2) top 5 residencias por CR en Madrid. " +
+      "Son métricas/salidas diferentes (una serie temporal de volumen vs. un ranking de tasa de conversión).\n" +
+      "- 'Dame el total de contactos del curso 2025/2026 y además un gráfico de evolución mensual' → DOS peticiones.\n\n" +
+      "Pista práctica: si lo natural sería dibujarlo en UN solo gráfico o tabla (aunque tenga varias series), " +
+      "es UNA petición. Si necesitarías gráficos/tablas SEPARADOS con significados distintos, son VARIAS.\n\n" +
+      "Devuelve EXCLUSIVAMENTE un JSON con esta forma, sin texto adicional:\n" +
+      '{\"peticiones\": [\"texto de la petición 1 autocontenida\", \"texto de la petición 2 autocontenida\"]}\n\n' +
+      "Cada elemento debe ser una reformulación AUTOCONTENIDA y clara de esa sub-petición, conservando " +
+      "todos los filtros mencionados por el usuario (curso, ciudad, métrica, etc.). Si solo hay una petición " +
+      "(incluidas TODAS las comparaciones), devuelve un único elemento en el array.";
 
-    var ctx = buildSessionContextText();
+    var memory = buildFullMemoryText();
     var userContent = "";
-    if (ctx) userContent += "CONTEXTO YA CONOCIDO DE LA CONVERSACIÓN:\n" + ctx + "\n\n";
+    if (memory) userContent += memory + "\n\n";
     userContent += "MENSAJE DEL USUARIO:\n" + userText;
 
     var reply = await callModel(
       [{ role: "user", content: userContent }],
       instrucciones,
-      { model: "gpt-4o", maxTokens: 500, threaded: false, temperature: 0.1 }
+      { model: "gpt-4o", maxTokens: 600, temperature: 0.1, threaded: false }
     );
     removeTyping(tid);
 
@@ -1717,9 +1849,10 @@ async function answerDataQuery(userText, answeredSlots) {
     enrichedQuery: enriched,
     answeredSlots: answeredSlots.slice()
   };
-  
+
   if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
     rememberQueryParams(enriched);
+    recordTurnInHistory(userText, execResult);
   }
   rememberAnsweredSlots(answeredSlots);
   touchSession();
@@ -1735,9 +1868,19 @@ async function answerDataQuery(userText, answeredSlots) {
 }
 
 function buildEnrichedQuery(userText, answeredSlots) {
-  if (!answeredSlots || answeredSlots.length === 0) return userText;
-  var slotsText = answeredSlots.map(a => `- ${a.pregunta} → ${a.answer}`).join("\n");
-  return `${userText}\n\nContexto adicional ya acotado por el usuario:\n${slotsText}`;
+  var sections = [];
+  var memory = buildFullMemoryText();
+  if (memory) sections.push(memory);
+
+  sections.push("CONSULTA ACTUAL:\n" + userText);
+
+  if (answeredSlots && answeredSlots.length > 0) {
+    var slotsText = answeredSlots.map(a => `- ${a.pregunta} → ${a.answer}`).join("\n");
+    sections.push("Contexto adicional ya acotado por el usuario:\n" + slotsText);
+  }
+
+  if (sections.length === 1) return userText;
+  return sections.join("\n\n");
 }
 
 function setExecutionStatus(execResult) {
@@ -1834,7 +1977,7 @@ async function appendExplanationTo(resultEl, userQuery, code) {
     var reply = await callModel(
       [{ role: "user", content: payload }],
       prompts.explicacion,
-      { model: "gpt-4o", maxTokens: 500, temperature: 0.3 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.3 }
     );
     
     var text = (reply || "").trim();
@@ -1867,6 +2010,8 @@ function removeExplanationPlaceholder(loadingEl) {
   if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
 }
 
+// ----- Conclusiones analíticas -----
+
 async function appendConclusionTo(resultEl, userQuery, execResult) {
   if (!resultEl) return;
   if (!prompts.conclusiones) {
@@ -1895,7 +2040,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { model: "gpt-4o", maxTokens: 500, temperature: 0.6 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.6 }
     );
     
     var text = (reply || "").trim();
@@ -2346,22 +2491,27 @@ function extractPythonCode(reply) {
 }
 
 function normalizeCode(code) {
-  code = code.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  code = code.replace(/^\uFEFF/, "")
+             .replace(/\r\n/g, "\n")
+             .replace(/\r/g, "\n");
   code = stripCommonLeadingWhitespace(code);
   return code.trim();
 }
 
 function stripCommonLeadingWhitespace(code) {
-  const lines = code.split("\n");
-  const indents = lines
-    .filter(line => line.trim().length > 0)
-    .map(line => line.match(/^[ \t]*/)[0].length);
-    
-  const minLead = indents.length > 0 ? Math.min(...indents) : 0;
-  
-  if (minLead === 0) return code;
-  
-  return lines.map(line => line.length >= minLead ? line.substring(minLead) : line).join("\n");
+  var lines = code.split("\n");
+  var minLead = Infinity;
+  for (var i = 0; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    var lead = lines[i].match(/^[ \t]*/)[0].length;
+    if (lead < minLead) minLead = lead;
+    if (minLead === 0) break;
+  }
+  if (minLead === Infinity || minLead === 0) return code;
+  for (var j = 0; j < lines.length; j++) {
+    if (lines[j].length >= minLead) lines[j] = lines[j].substring(minLead);
+  }
+  return lines.join("\n");
 }
 
 
@@ -2369,34 +2519,36 @@ function stripCommonLeadingWhitespace(code) {
 //  Render del chat
 // ============================================================================
 
-function appendMsg(role, text, route = null) {
-  const box = document.getElementById("messages");
-  const d = document.createElement("div");
-  d.className = `msg ${role}`;
-
-  const isUser = role === "user";
-  const avatar = isUser ? "U" : "A";
-  const roleName = isUser ? "Tú" : "Asistente";
-  const formattedText = isUser ? esc(text) : renderRich(text);
-  
-  const badgeHtml = route 
-    ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
-    : '';
-
-  d.innerHTML = `
-    <div class="msg-avatar">${avatar}</div>
-    <div class="msg-body">
-      <div class="msg-role">${roleName}${badgeHtml}</div>
-      <div class="msg-text">${formattedText}</div>
-    </div>
-  `;
-
+function appendMsg(role, text) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg " + role;
+  var av = role === "user" ? "U" : "A";
+  var rl = role === "user" ? "Tú" : "Asistente";
+  var formattedText = role === "user" ? esc(text) : renderRich(text);
+  d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">' + rl + '</div>'
+    + '<div class="msg-text">' + formattedText + '</div>'
+    + '</div>';
   box.appendChild(d);
   scrollToBottom();
 }
 
 function appendAssistantText(text, route) {
-  appendMsg("assistant", text, route);
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var badge = route
+    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
+    : '';
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente' + badge + '</div>'
+    + '<div class="msg-text">' + renderRich(text) + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
 }
 
 function routeLabel(route) {
@@ -2408,240 +2560,232 @@ function routeLabel(route) {
 }
 
 function appendResult(result, code, route) {
-  const box = document.getElementById("messages");
-  const d = document.createElement("div");
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
   d.className = "msg assistant";
-
-  const isError = result.kind === "error" || result.kind === "error_friendly";
-  const boxCls = route === "insight" ? "result-box insight" : "result-box";
-  
-  const resultContent = isError 
-    ? renderError(result) 
-    : `<div class="${boxCls}">${renderResult(result)}</div>`;
-
-  const codeHtml = renderCodeToggle(code, route === "insight");
-  const badgeHtml = route 
-    ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
+  var boxCls = (route === "insight") ? "result-box insight" : "result-box";
+  var inner = (result.kind === "error" || result.kind === "error_friendly")
+    ? renderError(result)
+    : '<div class="' + boxCls + '">' + renderResult(result) + '</div>';
+  inner += renderCodeToggle(code, route === "insight");
+  var badge = route
+    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
     : '';
-
-  d.innerHTML = `
-    <div class="msg-avatar">A</div>
-    <div class="msg-body">
-      <div class="msg-role">Asistente${badgeHtml}</div>
-      <div class="msg-text">
-        ${resultContent}
-        ${codeHtml}
-      </div>
-    </div>
-  `;
-
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente' + badge + '</div>'
+    + '<div class="msg-text">' + inner + '</div>'
+    + '</div>';
   box.appendChild(d);
   attachCodeToggle(d);
-  
   if (result.kind === "plotly" && result.__plotElId) {
     renderPlotlyInto(result.__plotElId, result.value);
   }
-  
   scrollToBottom();
   return d;
 }
 
 function attachCodeToggle(container) {
-  const toggle = container.querySelector(".code-toggle");
+  var toggle = container.querySelector(".code-toggle");
   if (!toggle) return;
-  toggle.addEventListener("click", (e) => {
-    const btn = e.currentTarget;
-    btn.classList.toggle("expanded");
-    const codeBlock = btn.nextElementSibling;
-    if (codeBlock) {
-      codeBlock.classList.toggle("expanded");
-    }
+  toggle.addEventListener("click", function () {
+    this.classList.toggle("expanded");
+    var blk = this.nextElementSibling;
+    if (blk) blk.classList.toggle("expanded");
   });
 }
 
 function renderResult(r) {
-  switch (r.kind) {
-    case "number":    return renderNumber(r);
-    case "text":      return `<div class="text-result">${renderRich(r.value)}</div>`;
-    case "dict":      return renderDict(r);
-    case "dataframe": return renderDataFrame(JSON.parse(r.value), r.shape);
-    case "plotly":
-      const id = `plot_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      r.__plotElId = id;
-      return `<div class="plot-container" id="${id}"></div>`;
-    case "none":      return `<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>`;
-    default:          return `<div class="text-result">${esc(JSON.stringify(r))}</div>`;
+  if (r.kind === "number")    return renderNumber(r);
+  if (r.kind === "text")      return '<div class="text-result">' + renderRich(r.value) + '</div>';
+  if (r.kind === "dict")      return renderDict(r);
+  if (r.kind === "dataframe") return renderDataFrame(JSON.parse(r.value), r.shape);
+  if (r.kind === "plotly") {
+    var id = "plot_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
+    r.__plotElId = id;
+    return '<div class="plot-container" id="' + id + '"></div>';
   }
+  if (r.kind === "none") return '<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>';
+  return '<div class="text-result">' + esc(JSON.stringify(r)) + '</div>';
 }
 
 function renderNumber(r) {
-  const val = r.value;
-  const formatted = (typeof val === "number" && !Number.isInteger(val))
-    ? val.toFixed(4).replace(/\.?0+$/, "")
-    : new Intl.NumberFormat("es-ES").format(val);
-    
-  return `<div class="scalar-label">resultado</div><div class="scalar">${esc(formatted)}</div>`;
+  var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
+    ? r.value.toFixed(4).replace(/\.?0+$/, "")
+    : new Intl.NumberFormat("es-ES").format(r.value);
+  return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
 }
 
 function renderDict(r) {
-  try {
-    const obj = JSON.parse(r.value);
-    const rowsHtml = Object.entries(obj).map(([k, v]) => {
-      const displayVal = typeof v === "number" ? new Intl.NumberFormat("es-ES").format(v) : String(v);
-      return `<tr><td><strong>${esc(k)}</strong></td><td class="num">${esc(displayVal)}</td></tr>`;
-    }).join("");
-    return `<table>${rowsHtml}</table>`;
-  } catch (e) {
-    return `<div class="text-result">${esc(r.value)}</div>`;
+  var obj;
+  try { obj = JSON.parse(r.value); } catch (e) { return '<div class="text-result">' + esc(r.value) + '</div>'; }
+  var rows = '';
+  for (var k in obj) {
+    var v = obj[k];
+    if (typeof v === "number") v = new Intl.NumberFormat("es-ES").format(v);
+    rows += '<tr><td><strong>' + esc(k) + '</strong></td><td class="num">' + esc(String(v)) + '</td></tr>';
   }
+  return '<table>' + rows + '</table>';
 }
 
 function renderDataFrame(df, shape) {
-  const cols = df.columns || [];
-  const rows = df.data || [];
-  
+  var cols = df.columns || [];
+  var rows = df.data || [];
   if (rows.length === 0) return '<div class="text-result"><em>Sin resultados.</em></div>';
-
-  const thead = `<tr>${cols.map(c => `<th>${esc(String(c))}</th>`).join("")}</tr>`;
-  
-  const maxRows = Math.min(rows.length, 100);
-  const tbody = rows.slice(0, maxRows).map(row => 
-    `<tr>${row.map(cell => renderCell(cell)).join("")}</tr>`
-  ).join("");
-
-  let html = `<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
-  
+  var html = '<table><thead><tr>';
+  for (var i = 0; i < cols.length; i++) html += '<th>' + esc(String(cols[i])) + '</th>';
+  html += '</tr></thead><tbody>';
+  var maxRows = Math.min(rows.length, 100);
+  for (var r = 0; r < maxRows; r++) {
+    html += '<tr>';
+    for (var c = 0; c < rows[r].length; c++) html += renderCell(rows[r][c]);
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
   if (shape && shape[0] > maxRows) {
-    html += `<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ${maxRows} de ${shape[0]} filas.</div>`;
+    html += '<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ' + maxRows + ' de ' + shape[0] + ' filas.</div>';
   }
   return html;
 }
 
+function renderCell(val) {
+  var isNum = typeof val === "number";
+  var display;
+  if (val === null || val === undefined) {
+    display = "—";
+  } else if (isNum) {
+    display = Number.isInteger(val)
+      ? new Intl.NumberFormat("es-ES").format(val)
+      : val.toFixed(4).replace(/\.?0+$/, "");
+  } else if (Array.isArray(val)) {
+    display = val.map(formatCellScalar).join(", ");
+  } else if (typeof val === "object") {
+    var parts = [];
+    for (var k in val) {
+      if (Object.prototype.hasOwnProperty.call(val, k)) {
+        parts.push(k + ": " + formatCellScalar(val[k]));
+      }
+    }
+    display = parts.join(", ");
+  } else {
+    display = String(val);
+  }
+  return '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+}
+
 function formatCellScalar(v) {
-  if (v == null) return "—";
+  if (v === null || v === undefined) return "—";
   if (typeof v === "number") {
-    return Number.isInteger(v) 
-      ? new Intl.NumberFormat("es-ES").format(v) 
+    return Number.isInteger(v)
+      ? new Intl.NumberFormat("es-ES").format(v)
       : v.toFixed(4).replace(/\.?0+$/, "");
   }
   if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
-  if (typeof v === "object") {
-    return Object.entries(v).map(([k, val]) => `${k}: ${formatCellScalar(val)}`).join(", ");
-  }
+  if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
-function renderCell(val) {
-  const isNum = typeof val === "number";
-  const display = formatCellScalar(val);
-  return `<td${isNum ? ' class="num"' : ''}>${esc(display)}</td>`;
-}
-
 function renderPlotlyInto(elId, jsonStr) {
-  const el = document.getElementById(elId);
+  var el = document.getElementById(elId);
   if (!el) return;
-  
   if (typeof Plotly === "undefined") {
     el.innerHTML = '<div class="error-box">Plotly no está cargado en la página.</div>';
     return;
   }
-  
   try {
-    const spec = JSON.parse(jsonStr);
-    const data = spec.data || [];
-    const layout = spec.layout || {};
-    const config = spec.config || { displaylogo: false, responsive: true };
-    config.responsive = true;
-
-    const isMap = data.some(tr => {
-      const type = String(tr?.type || "");
-      return type.includes("mapbox") || type === "choropleth" || type === "scattergeo";
-    });
-
-    if (isMap) beautifyMap(el, data, layout);
-    
+    var spec = JSON.parse(jsonStr);
+    var data    = spec.data    || [];
+    var layout  = spec.layout  || {};
+    var config  = spec.config  || { displaylogo: false, responsive: true };
+    if (!config.responsive) config.responsive = true;
+    var isMap = false;
+    for (var ti = 0; ti < data.length; ti++) {
+      var tt = data[ti] && data[ti].type ? String(data[ti].type) : "";
+      if (tt.indexOf("mapbox") >= 0 || tt === "choropleth" || tt === "scattergeo" || tt === "densitymapbox") {
+        isMap = true; break;
+      }
+    }
+    if (isMap) {
+      beautifyMap(el, data, layout);
+    }
     Plotly.newPlot(el, data, layout, config);
   } catch (e) {
-    el.innerHTML = `<div class="error-box">Error renderizando el gráfico: ${esc(e.message || String(e))}</div>`;
+    el.innerHTML = '<div class="error-box">Error renderizando el gráfico: ' + esc(e.message || String(e)) + '</div>';
   }
 }
 
+
 function beautifyMap(el, data, layout) {
   el.style.minHeight = "560px";
-  layout.height ??= 560;
-  layout.mapbox ??= {};
+  if (layout.height == null) layout.height = 560;
+  if (!layout.mapbox) layout.mapbox = {};
   layout.mapbox.style = "carto-positron";
-  layout.mapbox.center ??= { lat: 40.0, lon: -3.7 };
-  layout.mapbox.zoom ??= 4.7;
-
+  if (!layout.mapbox.center) layout.mapbox.center = { lat: 40.0, lon: -3.7 };
+  if (layout.mapbox.zoom == null) layout.mapbox.zoom = 4.7;
   layout.paper_bgcolor = "rgba(0,0,0,0)";
   layout.plot_bgcolor  = "rgba(0,0,0,0)";
-  
-  layout.margin ??= {};
-  layout.margin.l ??= 0;
-  layout.margin.r ??= 0;
-  layout.margin.b ??= 0;
-  layout.margin.t ??= 54;
-  
-  layout.font ??= {};
-  layout.font.family ??= "Arial, Helvetica, sans-serif";
-  layout.font.color ??= "#1a1a1a";
-
+  if (!layout.margin) layout.margin = {};
+  if (layout.margin.l == null) layout.margin.l = 0;
+  if (layout.margin.r == null) layout.margin.r = 0;
+  if (layout.margin.b == null) layout.margin.b = 0;
+  if (layout.margin.t == null) layout.margin.t = 54;
+  if (!layout.font) layout.font = {};
+  if (!layout.font.family) layout.font.family = "Arial, Helvetica, sans-serif";
+  if (!layout.font.color)  layout.font.color = "#1a1a1a";
   if (layout.title && typeof layout.title === "object") {
-    layout.title.x ??= 0.02;
-    layout.title.xanchor ??= "left";
-    layout.title.font ??= {};
-    layout.title.font.size ??= 16;
+    if (layout.title.x == null) layout.title.x = 0.02;
+    if (!layout.title.xanchor) layout.title.xanchor = "left";
+    if (!layout.title.font) layout.title.font = {};
+    if (layout.title.font.size == null) layout.title.font.size = 16;
   }
 
-  for (let i = 0; i < data.length; i++) {
-    const tr = data[i];
+  for (var i = 0; i < data.length; i++) {
+    var tr = data[i];
     if (!tr) continue;
-    
-    const type = String(tr.type || "");
+    var tt = String(tr.type || "");
 
-    if (type === "scattermapbox") {
-      tr.mode ??= "markers";
-      tr.marker ??= {};
-      tr.marker.colorscale ??= [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
-      tr.marker.opacity ??= 0.9;
-      tr.marker.sizemode ??= "diameter";
-      
-      const halo = makeHaloTrace(tr);
-      if (halo) { 
-        data.splice(i, 1, halo, tr); 
-        i++;
+    if (tt === "scattermapbox") {
+      tr.mode = tr.mode || "markers";
+      tr.marker = tr.marker || {};
+      if (!tr.marker.colorscale) {
+        tr.marker.colorscale = [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
       }
-    } else if (type === "densitymapbox") {
-      tr.colorscale ??= [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
-      tr.radius ??= 38;
-      tr.opacity ??= 0.85;
+      if (tr.marker.opacity == null) tr.marker.opacity = 0.9;
+      tr.marker.sizemode = tr.marker.sizemode || "diameter";
+      var halo = makeHaloTrace(tr);
+      if (halo) { data.splice(i, 1, halo, tr); i++; }
+    } else if (tt === "densitymapbox") {
+      if (!tr.colorscale) {
+        tr.colorscale = [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
+      }
+      if (tr.radius == null) tr.radius = 38;
+      if (tr.opacity == null) tr.opacity = 0.85;
     }
   }
 }
 
 function makeHaloTrace(tr) {
   try {
-    const size = tr.marker?.size;
-    let haloSize = 24;
-    
+    var size = (tr.marker && tr.marker.size);
+    var haloSize;
     if (Array.isArray(size)) {
-      haloSize = size.map(s => (Number(s) || 10) + 14);
+      haloSize = size.map(function (s) { return (Number(s) || 10) + 14; });
     } else if (typeof size === "number") {
       haloSize = size + 14;
+    } else {
+      haloSize = 24;
     }
-
     return {
       type: "scattermapbox",
-      lat: [...(tr.lat || [])],
-      lon: [...(tr.lon || [])],
+      lat: (tr.lat || []).slice(),
+      lon: (tr.lon || []).slice(),
       mode: "markers",
       hoverinfo: "skip",
       showlegend: false,
       marker: {
         size: haloSize,
         color: "rgba(112,213,73,0.22)",
-        sizemode: tr.marker?.sizemode || "diameter"
+        sizemode: tr.marker && tr.marker.sizemode ? tr.marker.sizemode : "diameter"
       }
     };
   } catch (e) {
@@ -2650,36 +2794,35 @@ function makeHaloTrace(tr) {
 }
 
 function renderError(r) {
-  const techParts = [];
-  const summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
-  
-  if (summary) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(summary)}</div>`);
-  if (r.trace) techParts.push(`<pre>${esc(r.trace)}</pre>`);
-  
+  var techParts = [];
+  var summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
+  if (summary) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(summary) + '</div>');
+  if (r.trace) techParts.push('<pre>' + esc(r.trace) + '</pre>');
   if (r.firstError) {
-    techParts.push(`<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>`);
-    if (r.firstError.value) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(r.firstError.value)}</div>`);
-    if (r.firstError.trace) techParts.push(`<pre>${esc(r.firstError.trace)}</pre>`);
-    if (r.firstError.code)  techParts.push(`<pre>${esc(r.firstError.code)}</pre>`);
+    techParts.push('<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>');
+    if (r.firstError.value) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(r.firstError.value) + '</div>');
+    if (r.firstError.trace) techParts.push('<pre>' + esc(r.firstError.trace) + '</pre>');
+    if (r.firstError.code)  techParts.push('<pre>' + esc(r.firstError.code) + '</pre>');
   }
-  
-  const techHtml = techParts.join("");
-  const details = techHtml 
-    ? `<details class="err-details"><summary>ver detalles técnicos del error</summary>${techHtml}</details>` 
+  var techHtml = techParts.join("");
+  var details = techHtml
+    ? '<details class="err-details"><summary>ver detalles técnicos del error</summary>' + techHtml + '</details>'
     : "";
-    
-  const prefix = r.kind === "error_friendly" ? "No he podido responder." : "Error al ejecutar el código:";
-  
-  return `<div class="error-box"><strong>${prefix}</strong> ${esc(r.value)}${details}</div>`;
+  if (r.kind === "error_friendly") {
+    return '<div class="error-box">' +
+      '<strong>No he podido responder.</strong> ' + esc(r.value) +
+      details + '</div>';
+  }
+  return '<div class="error-box">' +
+    '<strong>Error al ejecutar el código:</strong> ' + esc(r.value) +
+    details + '</div>';
 }
 
 function renderCodeToggle(code, isInsight) {
-  if (!code) return "";
-  const label = isInsight ? "ver script de análisis" : "ver código ejecutado";
-  return `
-    <span class="code-toggle"><span class="arrow">▶</span> ${label}</span>
-    <div class="code-block"><pre>${esc(code)}</pre></div>
-  `;
+  if (!code) return '';
+  var label = isInsight ? "ver script de análisis" : "ver código ejecutado";
+  return '<span class="code-toggle"><span class="arrow">▶</span> ' + label + '</span>' +
+    '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
 }
 
 
@@ -2688,88 +2831,66 @@ function renderCodeToggle(code, isInsight) {
 // ============================================================================
 
 function appendClarify(payload, step, total) {
-  const box = document.getElementById("messages");
-  const d = document.createElement("div");
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
   d.className = "msg assistant";
-  
-  d.innerHTML = `
-    <div class="msg-avatar">A</div>
-    <div class="msg-body">
-      <div class="msg-role">Asistente · necesita aclaración</div>
-      <div class="msg-text">${buildClarifyBoxHtml(payload, step, total)}</div>
-    </div>
-  `;
-  
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente · necesita aclaración</div>'
+    + '<div class="msg-text">' + buildClarifyBoxHtml(payload, step, total) + '</div>'
+    + '</div>';
   box.appendChild(d);
   attachClarifyListeners(d, payload);
   scrollToBottom();
 }
 
 function buildClarifyBoxHtml(payload, step, total) {
-  const opciones = (payload.opciones || []).slice(0, 4);
-  
-  const optsBtns = opciones.map(opt => 
-    `<button class="clarify-option" data-opt="${esc(opt)}">${esc(opt)}</button>`
-  ).join("");
-
-  const otherLabel = payload.permitirOtro !== false
+  var opciones = (payload.opciones || []).slice(0, 4);
+  var optsHtml = '<div class="clarify-options">';
+  for (var i = 0; i < opciones.length; i++) {
+    optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
+                '">' + esc(opciones[i]) + '</button>';
+  }
+  var otherLabel = (payload.permitirOtro !== false)
       ? "Otro... (escribe tu respuesta)"
       : "Ninguna de estas: escribe tu respuesta";
-      
-  const otherWrap = `
-    <div class="clarify-other-wrap">
-      <input type="text" class="clarify-other-input" placeholder="${esc(otherLabel)}">
-      <button class="clarify-other-btn">Enviar</button>
-    </div>
-  `;
-
-  const progressHtml = (step && total && total > 1)
-    ? `<div class="clarify-progress">Aclaración ${step} de ${total}</div>` : '';
-    
-  const razonHtml = payload.razon 
-    ? `<div class="clarify-why">${esc(payload.razon)}</div>` : '';
-
-  return `
-    <div class="clarify-box">
-      ${progressHtml}
-      <div class="clarify-q">${esc(payload.pregunta || "¿Puedes concretar?")}</div>
-      ${razonHtml}
-      <div class="clarify-options">
-        ${optsBtns}
-        ${otherWrap}
-      </div>
-    </div>
-  `;
-}
-
-function bindClarifyBoxEvents(container, onSubmitCallback) {
-  container.querySelectorAll(".clarify-option").forEach(btn => {
-    btn.addEventListener("click", (ev) => {
-      onSubmitCallback(ev.currentTarget.getAttribute("data-opt"));
-    });
-  });
-
-  const otherInput = container.querySelector(".clarify-other-input");
-  const otherBtn = container.querySelector(".clarify-other-btn");
-
-  if (otherInput && otherBtn) {
-    const submit = () => {
-      const v = otherInput.value.trim();
-      if (v) onSubmitCallback(v);
-    };
-    
-    otherBtn.addEventListener("click", submit);
-    otherInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") { 
-        ev.preventDefault(); 
-        submit(); 
-      }
-    });
-  }
+  optsHtml +=
+    '<div class="clarify-other-wrap">' +
+    '<input type="text" class="clarify-other-input" placeholder="' + esc(otherLabel) + '">' +
+    '<button class="clarify-other-btn">Enviar</button>' +
+    '</div>';
+  optsHtml += '</div>';
+  var progressHtml = (step && total && total > 1)
+    ? '<div class="clarify-progress">Aclaración ' + step + ' de ' + total + '</div>'
+    : '';
+  var razonHtml = payload.razon
+    ? '<div class="clarify-why">' + esc(payload.razon) + '</div>'
+    : '';
+  return '<div class="clarify-box">' + progressHtml
+    + '<div class="clarify-q">' + esc(payload.pregunta || "¿Puedes concretar?") + '</div>'
+    + razonHtml + optsHtml + '</div>';
 }
 
 function attachClarifyListeners(container, payload) {
-  bindClarifyBoxEvents(container, answerClarify);
+  var btns = container.querySelectorAll(".clarify-option");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function (ev) {
+      var txt = ev.currentTarget.getAttribute("data-opt");
+      answerClarify(txt);
+    });
+  }
+  var otherInput = container.querySelector(".clarify-other-input");
+  var otherBtn = container.querySelector(".clarify-other-btn");
+  if (otherInput && otherBtn) {
+    var submit = function () {
+      var v = otherInput.value.trim();
+      if (v) answerClarify(v);
+    };
+    otherBtn.addEventListener("click", submit);
+    otherInput.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); submit(); }
+    });
+  }
 }
 
 
@@ -2778,130 +2899,103 @@ function attachClarifyListeners(container, payload) {
 // ============================================================================
 
 function appendTyping(label) {
-  const box = document.getElementById("messages");
-  const id = `t_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-  const d = document.createElement("div");
-  
+  var box = document.getElementById("messages");
+  var id = "t" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  var d = document.createElement("div");
   d.className = "msg assistant";
   d.id = id;
-  
-  const labelHtml = label ? `<span class="typing-label">${esc(label)}</span>` : "";
-  
-  d.innerHTML = `
-    <div class="msg-avatar">A</div>
-    <div class="msg-body">
-      <div class="msg-role">Asistente</div>
-      <div class="typing-dots">
-        <span></span><span></span><span></span>
-        ${labelHtml}
-      </div>
-    </div>
-  `;
-  
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="typing-dots"><span></span><span></span><span></span>'
+    + (label ? '<span class="typing-label">' + esc(label) + '</span>' : '')
+    + '</div>'
+    + '</div>';
   box.appendChild(d);
   scrollToBottom();
   return id;
 }
 
 function removeTyping(id) {
-  const e = document.getElementById(id);
+  var e = document.getElementById(id);
   if (e) e.remove();
 }
 
 function clearStaleTypings() {
-  document.querySelectorAll(".typing-dots").forEach(node => {
-    const msg = node.closest(".msg");
+  var nodes = document.querySelectorAll(".typing-dots");
+  for (var i = 0; i < nodes.length; i++) {
+    var msg = nodes[i].closest(".msg");
     if (msg) msg.remove();
-  });
+  }
 }
 
-// ============================================================================
-//  Alertas y Errores
-// ============================================================================
-
 function appendError(msg) {
-  const box = document.getElementById("messages");
-  const d = document.createElement("div");
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
   d.className = "msg assistant";
-  
-  d.innerHTML = `
-    <div class="msg-avatar">A</div>
-    <div class="msg-body">
-      <div class="msg-role">Asistente</div>
-      <div class="msg-text">
-        <div class="error-box">${esc(msg)}</div>
-      </div>
-    </div>
-  `;
-  
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente</div>'
+    + '<div class="msg-text"><div class="error-box">' + esc(msg) + '</div></div>'
+    + '</div>';
   box.appendChild(d);
   scrollToBottom();
 }
 
 function appendRetryNotice(text) {
-  const box = document.getElementById("messages");
-  const d = document.createElement("div");
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
   d.className = "msg assistant";
-  
-  d.innerHTML = `
-    <div class="msg-avatar">A</div>
-    <div class="msg-body">
-      <div class="retry-notice">${esc(text)}</div>
-    </div>
-  `;
-  
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="retry-notice">' + esc(text) + '</div>'
+    + '</div>';
   box.appendChild(d);
   scrollToBottom();
 }
 
 function showDevAlert(htmlMsg) {
   console.warn("[DEV ALERT]", htmlMsg.replace(/<[^>]+>/g, ""));
-  const box = document.getElementById("messages");
+  var box = document.getElementById("messages");
   if (!box) return;
-  
-  const d = document.createElement("div");
+  var d = document.createElement("div");
   d.className = "msg assistant";
-  
-  d.innerHTML = `
-    <div class="msg-avatar" style="background:#f5a623;">!</div>
-    <div class="msg-body">
-      <div class="msg-role" style="color:#b05a00;">Error de carga</div>
-      <div class="msg-text">
-        <div class="error-box">${htmlMsg}</div>
-      </div>
-    </div>
-  `;
-  
+  d.innerHTML =
+    '<div class="msg-avatar" style="background:#f5a623;">!</div>' +
+    '<div class="msg-body">' +
+    '<div class="msg-role" style="color:#b05a00;">Error de carga</div>' +
+    '<div class="msg-text"><div class="error-box">' + htmlMsg + '</div></div>' +
+    '</div>';
   box.appendChild(d);
   scrollToBottom();
 }
 
 function appendDevBanner(htmlMsg) {
   console.warn("[DEV BANNER]", htmlMsg.replace(/<[^>]+>/g, ""));
-  const box = document.getElementById("messages");
+  var box = document.getElementById("messages");
   if (!box) return;
-  
-  const d = document.createElement("div");
+  var d = document.createElement("div");
   d.className = "dev-banner";
   d.innerHTML = htmlMsg;
-  
   box.insertBefore(d, box.firstChild);
 }
 
+
+// ============================================================================
+//  Utilidades UI
+// ============================================================================
+
 function scrollToBottom() {
-  const box = document.getElementById("messages");
-  if (box) box.scrollTop = box.scrollHeight;
+  var box = document.getElementById("messages");
+  box.scrollTop = box.scrollHeight;
 }
 
 function setStatus(msg, kind) {
-  const textEl = document.getElementById("footer-text");
-  if (textEl) textEl.textContent = msg;
-  
-  const dot = document.getElementById("status-dot");
-  if (dot) {
-    dot.classList.remove("busy", "error");
-    if (kind) dot.classList.add(kind);
-  }
+  document.getElementById("footer-text").textContent = msg;
+  var dot = document.getElementById("status-dot");
+  dot.classList.remove("busy", "error");
+  if (kind === "busy") dot.classList.add("busy");
+  else if (kind === "error") dot.classList.add("error");
 }
 
 function esc(s) {
@@ -2913,25 +3007,19 @@ function esc(s) {
 }
 
 function handleKey(e) {
-  if (e.key === "Enter" && !e.shiftKey) { 
-    e.preventDefault(); 
-    sendMessage(); 
-  }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 function autoResize(el) {
   el.style.height = "auto";
-  el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
 }
 
-const quickAsk = (t) => sendMessage(t);
+function quickAsk(t) { sendMessage(t); }
 
-const apiKeyInput = document.getElementById("api-key-input");
-if (apiKeyInput) {
-  apiKeyInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") initChat();
-  });
-}
+document.getElementById("api-key-input").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") initChat();
+});
 </script>
 </body>
 </html>

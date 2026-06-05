@@ -61,6 +61,7 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 13. **ERROR DE SERIALIZACIÓN (OverflowError):** Si agrupas datos por periodos de tiempo usando `dt.to_period("M")`, el índice resultante será de tipo `PeriodIndex`. Si vas a incluir este índice o DataFrame en `resultado` (por ejemplo, en la clave `__data__` del dict Plotly), **DEBES convertir el índice a strings antes** llamando a `.index = df.index.astype(str)`. Si dejas objetos `Period` crudos, el serializador JSON fallará con un `Maximum recursion level reached`.
 
 14. **Filtra SIEMPRE por los valores reales de las columnas.** Al final de este documento hay (o se añade en tiempo de ejecución) una sección titulada **"VALORES REALES DE LAS COLUMNAS"** con la lista cerrada de valores que existen en cada columna categórica, escritos tal cual están en los datos (con tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría, traduce lo que escriba al valor EXACTO de esa lista antes de filtrar (p. ej. "alcala de henares" → `"Alcalá de Henares"`), ignorando tildes y mayúsculas para emparejar. Nunca filtres por una cadena que no aparezca en esa lista; si no hay correspondencia, devuelve un `resultado` de texto avisando de que ese valor no existe.
+15. **Siempre que se pueda mostrar la información en un gráfico y el usuario no pida lo contrario, muestra un gráfico.**
 
 # ENTORNO DE EJECUCIÓN
 Pyodide en navegador. Disponibles: `pandas` (pd), `numpy` (np). NO hay red, NO hay ficheros, NO hay shell. Los DataFrames están en variables globales.
