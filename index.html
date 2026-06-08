@@ -458,7 +458,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
   <span class="header-right">
-    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversación nueva y olvida el contexto anterior" style="display:none;">+ Limpiar memoria</button>
+    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversación nueva y olvida el contexto anterior" style="display:none;">Limpiar memoria</button>
     <span class="header-model" id="header-model">openai &middot; pyodide &middot; plotly</span>
   </span>
 </header>
@@ -485,7 +485,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <div id="chat-panel">
   <div id="messages">
     <div class="welcome-area" id="welcome">
-      <h3>&iquest;En qué puedo ayudarte?</h3>
+      <h3>¿En qué puedo ayudarte?</h3>
       <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente añada una lectura breve del resultado tras cada consulta.</p>
     </div>
   </div>
@@ -505,7 +505,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <span class="toggle-track"></span>
       <span class="toggle-label-text">Conclusiones</span>
     </label>
-    <span class="toggle-hint">añade una lectura breve del resultado tras cada consulta de datos</span>
+    <span class="toggle-hint">Añade una lectura breve del resultado tras cada consulta de datos</span>
   </div>
 
   <div id="input-area">
@@ -542,19 +542,19 @@ var lastResponseId   = null;
 var supportsCacheRetention = true;
 
 var PROMPT_FILES = {
-  router:          "context_router.txt",
-  clarify:         "context_clarify.txt",
-  modelo_datos:    "context_modelo_datos.txt",
-  general:         "context_general.txt",
-  conclusiones:    "context_conclusiones.txt",
-  explicacion:     "context_explicacion.txt"
-  // , insights_parser: "context_insights_parser.txt"
+  router: "context_router.txt",
+  clarify: "context_clarify.txt",
+  modelo_datos: "context_modelo_datos.txt",
+  general: "context_general.txt",
+  conclusiones: "context_conclusiones.txt",
+  explicacion: "context_explicacion.txt" //,
+  //insights_parser: "context_insights_parser.txt"
 };
 
 var CSV_TABLES = {
-  "leads_contacts":             "Leads_Contacts.csv"
+  "leads_contacts": "Leads_Contacts.csv"
 };
-var PRIMARY_CSV          = "leads_contacts";
+var PRIMARY_CSV = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 var CONCLUSION_MAX_ROWS = 300;
 
@@ -585,16 +585,16 @@ function renderRich(text) {
 //  Estado
 // ============================================================================
 
-var apiKey         = "";
-var prompts        = {};
-var pyodide        = null;
-var loadedCsvs     = new Set();
-var busy           = false;
+var apiKey = "";
+var prompts = {};
+var pyodide = null;
+var loadedCsvs = new Set();
+var busy = false;
 var pendingClarify = null;
-var lastUserQuery  = null;
-var lastTurn       = null;
+var lastUserQuery = null;
+var lastTurn = null;
 var sessionContext = {};
-var turnHistory    = [];
+var turnHistory = [];
 
 
 // ============================================================================

@@ -211,6 +211,12 @@ resultado = {
               "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"]}
    ```
 
+4. **Orden de las categorías (de mayor a menor por defecto)**: siempre que el gráfico compare una métrica entre categorías SIN un orden natural propio (rankings, top N, leads/contactos/CR por ciudad, por residencia, por origen, por fuente, por curso cuando no es una evolución, etc.), ORDENA los datos de MAYOR a MENOR por el valor de la métrica antes de construir las traces (`.sort_values("<metrica>", ascending=False)`). Así la categoría más grande queda primero y la lectura es inmediata. Detalles según orientación:
+   - **Barras verticales** (≤ 6 categorías): la barra más alta a la IZQUIERDA, descendiendo hacia la derecha.
+   - **Barras horizontales** (> 6 categorías): la barra más larga ARRIBA. Como Plotly dibuja el eje Y de abajo hacia arriba, para conseguirlo ordena el DataFrame de MENOR a mayor (`ascending=True`) justo antes de pasar `x`/`y`, de modo que el valor mayor quede en la última posición y se pinte en lo más alto (es lo que hace el ejemplo de barras horizontales de top N).
+   - **NO reordenes** cuando el eje tiene un orden intrínseco que debe respetarse: series temporales (cronológico Ene→Dic o Sep→Ago), escalas ordinales o cualquier secuencia con significado propio. En esos casos manda el orden natural, no la magnitud.
+   - En comparaciones de dos series por categoría (barras agrupadas), ordena las categorías por el valor de la serie principal (la primera) de mayor a menor.
+
 ## Selección del tipo de gráfico
 
 - **Serie temporal** (evolución por fechas, meses o años) → `"type": "scatter", "mode": "lines+markers"`. Una línea por serie.
