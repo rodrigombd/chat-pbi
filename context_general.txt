@@ -147,6 +147,7 @@ NO inventes otra fórmula. Esta es la única válida.
 
 NO importes `plotly`. NO uses `matplotlib`. Genera un dict con la estructura de Plotly.js (figura JSON) y márcalo con la clave `"__plotly__": True`. El front lo renderiza con la librería Plotly de JavaScript directamente.
 
+REGLA DE PLOTLY Y PORCENTAJES: Si usas "tickformat": ".1%" en un eje, DEBES pasar los datos en proporción de 0 a 1 (ej. 0.15). NUNCA los multipliques por 100 antes de pasarlos a "x" o "y", porque Plotly los multiplicará otra vez.
 ## Estructura del dict
 
 ```python
@@ -199,7 +200,7 @@ resultado = {
        "plot_bgcolor": "white",
        "paper_bgcolor": "white",
        "font": {"family": "Arial, Helvetica, sans-serif", "size": 12, "color": "#1a1a1a"},
-       "margin": {"l": 60, "r": 30, "t": 60, "b": 60},
+       "margin": {"l": 60, "r": 150, "t": 60, "b": 60},
        "hovermode": "x unified",
        "showlegend": True
    }
@@ -217,10 +218,17 @@ resultado = {
    - **NO reordenes** cuando el eje tiene un orden intrínseco que debe respetarse: series temporales (cronológico Ene→Dic o Sep→Ago), escalas ordinales o cualquier secuencia con significado propio. En esos casos manda el orden natural, no la magnitud.
    - En comparaciones de dos series por categoría (barras agrupadas), ordena las categorías por el valor de la serie principal (la primera) de mayor a menor.
 
+5. **Alturas dinámicas y textos largos (REGLA CRÍTICA)**:
+   - Si generas un gráfico con muchas categorías (especialmente barras horizontales), NO uses la altura por defecto porque las barras se aplastarán y serán ilegibles.
+   - Calcula dinámicamente la propiedad `"height"` dentro del `layout` basándote en el número de categorías (filas del DataFrame). Dale unos 30 píxeles a cada categoría y asegura un mínimo de 500px.
+     Ejemplo práctico: `"layout": { "height": max(500, len(df_plot) * 30), ... }`
+   - Para evitar que las etiquetas o nombres de categoría muy largos se corten por la izquierda, incluye SIEMPRE `"automargin": True` en la configuración del eje que contiene las etiquetas categóricas (normalmente `"yaxis"` en gráficos horizontales o `"xaxis"` en verticales).
+   - De esta forma, el gráfico crecerá lo que necesite hacia abajo y el contenedor permitirá al usuario hacer scroll cómodamente para ver el 100% de los datos.
+
 ## Selección del tipo de gráfico
 
 - **Serie temporal** (evolución por fechas, meses o años) → `"type": "scatter", "mode": "lines+markers"`. Una línea por serie.
-- **Comparación entre categorías** (top N, ranking) → `"type": "bar"`. Si hay más de 6 categorías, usa `"orientation": "h"` (horizontal) y ordena de mayor a menor (la mayor arriba). Si son ≤ 6, vertical.
+- **Comparación entre categorías** (top N, ranking) → `"type": "bar"`. Si hay más de 6 categorías, usa `"orientation": "h"` (horizontal) y ordena de mayor a menor (la mayor arriba), aplicando además la altura dinámica de la regla 5 (`"height": max(500, len(df_plot) * 30)`) y `"automargin": True` en el `yaxis`. Si son ≤ 6, vertical.
 - **Comparar dos métricas/periodos por categoría** → barras AGRUPADAS: dos traces de tipo `"bar"` con `"layout": {"barmode": "group"}`. Si quieres apilar, `"barmode": "stack"`. NUNCA dos tartas.
 - **Composición/proporción** → barras apiladas al 100% (calcula las proporciones tú y pon ejes en `"tickformat": ".0%"`).
 - **TARTA** (`"type": "pie"`): PROHIBIDA salvo que el usuario la pida EXPLÍCITAMENTE con la palabra "tarta", "pie".
@@ -318,6 +326,7 @@ resultado = {
     }],
     "layout": {
         "title": {"text": "Top 10 ciudades de interés (Leads)", "x": 0.02, "xanchor": "left", "font": {"size": 16}},
+        "height": max(500, len(y_labels) * 30),
         "xaxis": {"title": "Leads", "gridcolor": "#eeeeee"},
         "yaxis": {"title": "", "automargin": True},
         "plot_bgcolor": "white",
