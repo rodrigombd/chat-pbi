@@ -217,7 +217,7 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 /* ---- Typing dots ---- */
 .typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
-.typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
+.typing-dots span:not(.typing-label) { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
 @keyframes tpulse { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
@@ -547,7 +547,8 @@ var PROMPT_FILES = {
   modelo_datos: "context_modelo_datos.txt",
   general: "context_general.txt",
   conclusiones: "context_conclusiones.txt",
-  explicacion: "context_explicacion.txt" //,
+  explicacion: "context_explicacion.txt",
+  planificador: "context_planificador.txt" //,
   //insights_parser: "context_insights_parser.txt"
 };
 
@@ -1681,32 +1682,6 @@ async function planRequests(userText) {
   var tid = appendTyping("planificando la consulta...");
   setStatus("planificando la consulta...", "busy");
   try {
-    var instrucciones =
-      "Eres un planificador. Recibes el mensaje de un usuario que consulta datos de un CRM " +
-      "y debes decidir CUÁNTAS peticiones de datos independientes contiene.\n\n" +
-      "REGLA CENTRAL: divide en varias peticiones SOLO cuando el mensaje pide cosas TOTALMENTE " +
-      "DIFERENTES (distinta métrica, distinta dimensión de análisis o distinto tipo de salida). " +
-      "Por defecto, asume que es UNA SOLA petición. Ante la duda, NO dividas.\n\n" +
-      "UNA COMPARACIÓN ES UNA SOLA PETICIÓN. Comparar, enfrentar o contrastar valores de la MISMA " +
-      "métrica entre categorías (ciudades, residencias, cursos, etc.) produce un único resultado y " +
-      "NO se divide nunca. Ejemplos de UNA sola petición:\n" +
-      "- 'Comparación de la evolución histórica de solicitudes con ciudad de interés Madrid vs Barcelona' " +
-      "→ UNA petición (misma métrica 'solicitudes', misma dimensión 'evolución histórica', solo cambia la categoría comparada).\n" +
-      "- 'Compara la conversión de Madrid y Valencia' → UNA petición.\n" +
-      "- 'Leads por ciudad de interés en 2025/2026' → UNA petición.\n\n" +
-      "SON VARIAS PETICIONES cuando se piden análisis distintos que darían resultados separados. Ejemplo:\n" +
-      "- 'La evolución de leads con ciudad de interés Madrid históricamente Y las 5 residencias con mejor CR de Madrid' " +
-      "→ DOS peticiones: (1) evolución histórica de leads de Madrid; (2) top 5 residencias por CR en Madrid. " +
-      "Son métricas/salidas diferentes (una serie temporal de volumen vs. un ranking de tasa de conversión).\n" +
-      "- 'Dame el total de contactos del curso 2025/2026 y además un gráfico de evolución mensual' → DOS peticiones.\n\n" +
-      "Pista práctica: si lo natural sería dibujarlo en UN solo gráfico o tabla (aunque tenga varias series), " +
-      "es UNA petición. Si necesitarías gráficos/tablas SEPARADOS con significados distintos, son VARIAS.\n\n" +
-      "Devuelve EXCLUSIVAMENTE un JSON con esta forma, sin texto adicional:\n" +
-      '{\"peticiones\": [\"texto de la petición 1 autocontenida\", \"texto de la petición 2 autocontenida\"]}\n\n' +
-      "Cada elemento debe ser una reformulación AUTOCONTENIDA y clara de esa sub-petición, conservando " +
-      "todos los filtros mencionados por el usuario (curso, ciudad, métrica, etc.). Si solo hay una petición " +
-      "(incluidas TODAS las comparaciones), devuelve un único elemento en el array.";
-
     var memory = buildFullMemoryText();
     var userContent = "";
     if (memory) userContent += memory + "\n\n";
@@ -1714,7 +1689,7 @@ async function planRequests(userText) {
 
     var reply = await callModel(
       [{ role: "user", content: userContent }],
-      instrucciones,
+      prompts.planificador,
       { model: "gpt-4o", maxTokens: 600, temperature: 0.1, threaded: false }
     );
     removeTyping(tid);
@@ -2285,7 +2260,9 @@ var WHITELIST_NO_ANON = [
 
 function isWhitelistedColumn(colName) {
   var s = String(colName).toLowerCase().trim();
-  return WHITELIST_NO_ANON.some(function (w) { return s === w; });
+  return WHITELIST_NO_ANON.some(function (w) { 
+    return s === String(w).toLowerCase().trim(); 
+  });
 }
 
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
@@ -2447,6 +2424,7 @@ async function runPython(code) {
   
   try {
     var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
+    jsonStr = jsonStr.replace(/\bNaN\b/g, "null");
     return JSON.parse(jsonStr);
   } catch (e) {
     var serMsg = e && e.message ? e.message : String(e);
@@ -2718,12 +2696,15 @@ function renderPlotlyInto(elId, jsonStr) {
     const layout = spec.layout || {};
     const config = spec.config || { displaylogo: false, responsive: true };
     config.responsive = true; 
-    const isMap = data.some(tr => {
+    
+    const isMapbox = data.some(tr => {
       const type = String(tr?.type || "");
-      return type.includes("mapbox") || type === "choropleth" || type === "scattergeo";
+      return type.includes("mapbox");
     });
 
-    if (isMap) beautifyMap(el, data, layout);
+    if (isMapbox) {
+      beautifyMap(el, data, layout);
+    }
     
     Plotly.newPlot(el, data, layout, config);
   } catch (e) {

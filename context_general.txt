@@ -473,6 +473,7 @@ resultado = pd.DataFrame({
 # MAPAS GEOGRÁFICOS INTERACTIVOS (PLOTLY MAPBOX)
 
 Cuando el usuario pida un **mapa**, **mapa de calor geográfico**, **dónde se concentran**, **por zonas/ciudades en el mapa** o similar, genera un gráfico geográfico de Plotly con la misma estructura `"__plotly__": True`. El front ya tiene Plotly cargado y renderiza mapas sin necesidad de token (usa un estilo limpio y corporativo `"carto-positron"`; el front además embellece el mapa automáticamente con halos en las burbujas y centrado en España).
+Si te piden un gráfico o mapa, debes asignar a la variable resultado un diccionario que obligatoriamente contenga la clave {"__plotly__": True, "data": [...], "layout": {...}}.
 
 ## Coordenadas disponibles (NO las inventes)
 Tienes en el entorno una función global y un diccionario para ubicar ciudades españolas:
