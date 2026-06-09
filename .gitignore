@@ -219,3 +219,5 @@ __marimo__/
 
 # Archivos de datos
 *.csv
+
+venv/
