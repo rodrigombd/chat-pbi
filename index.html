@@ -534,9 +534,12 @@ var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
 var STORAGE_CTX_KEY  = "resa_assistant_session_context";
 var STORAGE_TS_KEY   = "resa_assistant_session_ts";
 var STORAGE_HIST_KEY = "resa_assistant_turn_history";
+var STORAGE_SUMMARY_KEY = "resa_assistant_session_summary";
 var SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 var MAX_HISTORY_TURNS = 40;
 var HISTORY_INJECT_TURNS = 12;
+var SUMMARY_TRIGGER_TURNS = 6;
+var SUMMARY_KEEP_RECENT = 2;
 var conversationId   = null;
 var lastResponseId   = null;
 var supportsCacheRetention = true;
@@ -596,6 +599,8 @@ var lastUserQuery = null;
 var lastTurn = null;
 var sessionContext = {};
 var turnHistory = [];
+var sessionSummary = null;
+var summarizing = false;
 
 
 // ============================================================================
@@ -881,6 +886,63 @@ def __serialize_resultado__():
         return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)
         
     return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)
+
+
+def filtrar_datos(df=None, curso=None, ciudad=None, campana=None, fuente=None, tipo=None):
+    if df is None:
+        df = leads_contacts
+    out = df
+    if curso is not None:
+        out = out[out["Curso"] == curso]
+    if ciudad is not None:
+        _cols = [c for c in ("Ciudad_deinteres_corregido", "Ciudades de interés") if c in out.columns]
+        if _cols:
+            out = out[out[_cols[0]].astype(str).str.contains(str(ciudad), case=False, na=False)]
+    if campana is not None:
+        _cols = [c for c in ("Origen_Agrupado", "Origen/Campaña Posibles Clientes") if c in out.columns]
+        if _cols:
+            out = out[out[_cols[0]].astype(str).str.contains(str(campana), case=False, na=False)]
+    if fuente is not None:
+        _cols = [c for c in ("Fuente_Agrupada", "Fuente de Posible Cliente") if c in out.columns]
+        if _cols:
+            out = out[out[_cols[0]].astype(str).str.contains(str(fuente), case=False, na=False)]
+    if tipo is not None:
+        out = out[out["Tipo de registro"] == tipo]
+    return out
+
+
+def contar_leads(df=None, agrupar_por=None):
+    if df is None:
+        df = leads_contacts
+    _f = df[df["Tipo de registro"] == "Leads"]
+    if agrupar_por is None:
+        return int(len(_f))
+    return _f.groupby(agrupar_por).size().rename("leads")
+
+
+def contar_contactos(df=None, agrupar_por=None):
+    if df is None:
+        df = leads_contacts
+    _f = df[(df["Tipo de registro"] == "Contacts") & (df["Particular o Grupo"] == "Particular")]
+    if agrupar_por is None:
+        return int(len(_f))
+    return _f.groupby(agrupar_por).size().rename("contactos")
+
+
+def calcular_conversion(df=None, agrupar_por=None):
+    if df is None:
+        df = leads_contacts
+    if agrupar_por is None:
+        _c = int(len(df[(df["Tipo de registro"] == "Contacts") & (df["Particular o Grupo"] == "Particular")]))
+        _l = int(len(df[df["Tipo de registro"] == "Leads"]))
+        _denom = _c + _l
+        return (_c / _denom) if _denom > 0 else 0.0
+    _contacts = df[(df["Tipo de registro"] == "Contacts") & (df["Particular o Grupo"] == "Particular")].groupby(agrupar_por).size()
+    _leads = df[df["Tipo de registro"] == "Leads"].groupby(agrupar_por).size()
+    _g = _pd.DataFrame({"contactos": _contacts, "leads": _leads}).fillna(0)
+    _g["denominador"] = _g["contactos"] + _g["leads"]
+    _g["conversion"] = _np.where(_g["denominador"] > 0, _g["contactos"] / _g["denominador"], 0.0)
+    return _g.reset_index()
 `;
 
   await pyodide.runPythonAsync(helpers);
@@ -1072,7 +1134,7 @@ async function clearPyodideEnv() {
   if (!pyodide) return;
   
   var pyCode = `
-_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
+_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad', 'filtrar_datos', 'contar_leads', 'contar_contactos', 'calcular_conversion'}
 for k in list(globals().keys()):
     if k not in _keep and not k.startswith('_'):
         del globals()[k]
@@ -1355,6 +1417,10 @@ async function ensureConversation() {
       var rawHist = localStorage.getItem(STORAGE_HIST_KEY);
       if (rawHist) turnHistory = JSON.parse(rawHist) || [];
     } catch (e) { turnHistory = []; }
+    try {
+      var rawSummary = localStorage.getItem(STORAGE_SUMMARY_KEY);
+      if (rawSummary) sessionSummary = JSON.parse(rawSummary) || null;
+    } catch (e) { sessionSummary = null; }
     touchSession();
     return conversationId;
   }
@@ -1372,6 +1438,7 @@ function clearLocalSession() {
   lastResponseId = null;
   sessionContext = {};
   turnHistory = [];
+  sessionSummary = null;
   lastTurn = null;
   lastUserQuery = null;
   try {
@@ -1379,6 +1446,7 @@ function clearLocalSession() {
     localStorage.removeItem(STORAGE_CTX_KEY);
     localStorage.removeItem(STORAGE_TS_KEY);
     localStorage.removeItem(STORAGE_HIST_KEY);
+    localStorage.removeItem(STORAGE_SUMMARY_KEY);
   } catch (e) {}
 }
 
@@ -1724,11 +1792,12 @@ function recordTurnInHistory(userText, execResult) {
     turnHistory = turnHistory.slice(turnHistory.length - MAX_HISTORY_TURNS);
   }
   try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
+  maybeUpdateSessionSummary();
 }
 
 function buildHistoryContextText() {
   if (!turnHistory.length) return "";
-  var recent = turnHistory.slice(-HISTORY_INJECT_TURNS);
+  var recent = turnHistory.slice(-SUMMARY_KEEP_RECENT);
   return recent.map(function (t, i) {
     var line = (i + 1) + ". Pregunta: " + t.q;
     if (t.r) line += "\n   Resultado: " + t.r;
@@ -1736,13 +1805,98 @@ function buildHistoryContextText() {
   }).join("\n");
 }
 
+function buildSessionSummaryText() {
+  if (!sessionSummary) return "";
+  var s = sessionSummary;
+  var lines = [];
+  if (s.filtros_activos && typeof s.filtros_activos === "object") {
+    var fk = Object.keys(s.filtros_activos);
+    for (var i = 0; i < fk.length; i++) {
+      var v = s.filtros_activos[fk[i]];
+      if (v !== null && v !== undefined && String(v).trim() !== "") {
+        lines.push("- " + fk[i] + ": " + v);
+      }
+    }
+  }
+  var head = "RESUMEN DE LA SESIÓN HASTA AHORA (estado consolidado de turnos anteriores):";
+  var body = lines.length ? ("Filtros activos de la sesión:\n" + lines.join("\n")) : "";
+  if (s.resumen_narrativo && String(s.resumen_narrativo).trim()) {
+    body += (body ? "\n" : "") + "Contexto: " + String(s.resumen_narrativo).trim();
+  }
+  if (!body) return "";
+  return head + "\n" + body;
+}
+
 function buildFullMemoryText() {
   var parts = [];
   var ctx = buildSessionContextText();
   if (ctx) parts.push("CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n" + ctx);
+  var summary = buildSessionSummaryText();
+  if (summary) parts.push(summary);
   var hist = buildHistoryContextText();
-  if (hist) parts.push("HISTORIAL DE CONSULTAS Y RESULTADOS PREVIOS DE ESTA SESIÓN:\n" + hist);
+  if (hist) parts.push("ÚLTIMAS CONSULTAS DE ESTA SESIÓN:\n" + hist);
   return parts.join("\n\n");
+}
+
+function summaryDefaultFilters() {
+  return { curso: null, ciudad: null, campana: null, metrica: null };
+}
+
+async function maybeUpdateSessionSummary() {
+  if (summarizing) return;
+  var summarizedUpTo = sessionSummary && sessionSummary.__turns ? sessionSummary.__turns : 0;
+  var pending = turnHistory.length - summarizedUpTo;
+  if (turnHistory.length <= SUMMARY_TRIGGER_TURNS) return;
+  if (pending < SUMMARY_KEEP_RECENT + 1) return;
+
+  summarizing = true;
+  try {
+    var consolidatable = turnHistory.slice(0, turnHistory.length - SUMMARY_KEEP_RECENT);
+    var prevFilters = (sessionSummary && sessionSummary.filtros_activos) || summaryDefaultFilters();
+    var prevNarr = (sessionSummary && sessionSummary.resumen_narrativo) || "";
+
+    var turnsText = consolidatable.map(function (t, i) {
+      var line = (i + 1) + ". P: " + t.q;
+      if (t.r) line += " | R: " + t.r;
+      return line;
+    }).join("\n");
+
+    var payload =
+      "ESTADO PREVIO DE FILTROS (JSON):\n" + JSON.stringify(prevFilters) +
+      "\n\nRESUMEN NARRATIVO PREVIO:\n" + (prevNarr || "(ninguno)") +
+      "\n\nTURNOS A CONSOLIDAR:\n" + turnsText +
+      "\n\nDevuelve EXCLUSIVAMENTE un JSON con esta forma exacta, sin texto adicional ni bloques de código:\n" +
+      '{"filtros_activos":{"curso":<string|null>,"ciudad":<string|null>,"campana":<string|null>,"metrica":<string|null>},"resumen_narrativo":<string>}';
+
+    var systemPrompt =
+      "Eres un compresor de memoria conversacional para un asistente analítico de un CRM de residencias de estudiantes. " +
+      "Recibes el estado previo de filtros, un resumen narrativo previo y una lista de turnos recientes (pregunta y resumen de resultado). " +
+      "Tu trabajo es consolidar todo en un único estado estructurado. " +
+      "Reglas: actualiza los filtros con el ÚLTIMO valor mencionado por el usuario para cada dimensión (curso, ciudad, campaña, métrica); " +
+      "si una dimensión nunca se ha mencionado, déjala en null; NO inventes valores; conserva los nombres tal y como aparecen. " +
+      "El resumen_narrativo debe ser una sola frase breve (máx. 30 palabras) que capture el hilo analítico de la sesión, sin cifras concretas. " +
+      "Devuelve solo el JSON pedido.";
+
+    var reply = await callModel(
+      [{ role: "user", content: payload }],
+      systemPrompt,
+      { model: "gpt-4o-mini", maxTokens: 300, temperature: 0.1, threaded: false }
+    );
+
+    var parsed = extractJSON(reply);
+    if (parsed && parsed.filtros_activos) {
+      sessionSummary = {
+        filtros_activos: Object.assign(summaryDefaultFilters(), parsed.filtros_activos),
+        resumen_narrativo: typeof parsed.resumen_narrativo === "string" ? parsed.resumen_narrativo : prevNarr,
+        __turns: turnHistory.length - SUMMARY_KEEP_RECENT
+      };
+      try { localStorage.setItem(STORAGE_SUMMARY_KEY, JSON.stringify(sessionSummary)); } catch (e) {}
+    }
+  } catch (e) {
+    console.warn("[memoria] no se pudo generar el resumen incremental:", e);
+  } finally {
+    summarizing = false;
+  }
 }
 
 function askNextSlot() {
@@ -1900,12 +2054,16 @@ async function answerDataQuery(userText, answeredSlots) {
   touchSession();
 
   var codeForExplain = execResult.__codeUsed || code;
-  if (isResultEligibleForConclusion(execResult) && codeForExplain) {
-    await appendExplanationTo(resultEl, userText, codeForExplain);
-  }
+  var wantExplain = isResultEligibleForConclusion(execResult) && !!codeForExplain;
+  var wantConclusion = conclusionsEnabled() && isResultEligibleForConclusion(execResult);
 
-  if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
-    await appendConclusionTo(resultEl, userText, execResult);
+  var postTasks = [];
+  if (wantExplain) postTasks.push(appendExplanationTo(resultEl, userText, codeForExplain));
+  if (wantConclusion) postTasks.push(appendConclusionTo(resultEl, userText, execResult));
+
+  if (postTasks.length > 0) {
+    await Promise.allSettled(postTasks);
+    setExecutionStatus(execResult);
   }
 }
 

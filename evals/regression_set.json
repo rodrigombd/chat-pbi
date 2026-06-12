@@ -1,0 +1,85 @@
+[
+  {
+    "id": "datos_conversion_curso",
+    "query": "¿Cuál es la tasa de conversión del curso 2025/2026?",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": [["conversion", "conversión"], "2025/2026"]
+    }
+  },
+  {
+    "id": "datos_leads_ciudad_curso",
+    "query": "Dame el volumen de leads con ciudad de interés Madrid para el curso 2024/2025",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["leads", "madrid", "2024/2025"]
+    }
+  },
+  {
+    "id": "datos_comparacion_misma_metrica",
+    "query": "Compara la tasa de conversión entre Madrid y Barcelona para el curso 2025/2026",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": [["conversion", "conversión"], "madrid", "barcelona", "2025/2026"]
+    }
+  },
+  {
+    "id": "datos_dos_peticiones_distintas",
+    "query": "Dame el total de contactos del curso 2025/2026 y además un ranking de las 5 ciudades con mejor conversión",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 2,
+      "filtros_keywords": ["2025/2026"]
+    }
+  },
+  {
+    "id": "modelo_definicion_kpi",
+    "query": "¿Cómo se define la tasa de conversión en este modelo de datos?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "modelo_columnas",
+    "query": "¿Qué columnas tiene la tabla de leads y contactos?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "saludo",
+    "query": "Hola, ¿qué puedes hacer?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "clarify_falta_metrica",
+    "query": "Dame los datos del curso 2025/2026",
+    "expect": {
+      "tool": "solicitar_aclaracion",
+      "slot": "metrica"
+    }
+  },
+  {
+    "id": "clarify_falta_curso",
+    "query": "¿Cuál es la tasa de conversión?",
+    "expect": {
+      "tool": "solicitar_aclaracion",
+      "slot": "curso"
+    }
+  },
+  {
+    "id": "datos_contexto_resuelve_curso",
+    "query": "¿Y la tasa de conversión?",
+    "memory": "CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n- curso: 2025/2026\n- ciudad: Madrid",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": [["conversion", "conversión"]]
+    }
+  }
+]
