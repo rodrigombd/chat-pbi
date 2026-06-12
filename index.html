@@ -1151,9 +1151,6 @@ async function callModel(messages, systemPrompt, opts) {
     return { role: m.role || "user", content: String(m.content || "") };
   });
 
-  // La API de Anthropic es stateless: el "hilo" se reconstruye en el cliente.
-  // En llamadas con hilo (generación de datos), reenviamos el historial de
-  // mensajes acumulado para que el modelo conserve el modelo de datos inferido.
   var apiMessages;
   if (threaded) {
     var prior = threadMessages.slice(-THREAD_INJECT_MESSAGES);
@@ -1165,7 +1162,6 @@ async function callModel(messages, systemPrompt, opts) {
     apiMessages = turn;
   }
 
-  // Cache_control sobre el último bloque de usuario para reutilizar prefijo.
   var lastIdx = apiMessages.length - 1;
   apiMessages = apiMessages.map(function (m, i) {
     var block = { type: "text", text: String(m.content || "") };
@@ -1205,7 +1201,6 @@ async function callModel(messages, systemPrompt, opts) {
   var d = await r.json();
   var text = extractAnthropicText(d);
 
-  // Persistimos el turno en el hilo cliente solo para las llamadas con memoria.
   if (threaded) {
     pushThreadMessage("user", turn.length ? turn[turn.length - 1].content : "");
     pushThreadMessage("assistant", text);
@@ -1288,9 +1283,6 @@ function clearLocalSession() {
 }
 
 function createConversation() {
-  // Anthropic Messages API es stateless: no hay conversación server-side.
-  // Generamos un identificador local que ancla la persistencia del hilo
-  // reconstruido en el cliente (threadMessages) y del contexto de sesión.
   conversationId = "local-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
   threadMessages = [];
   try {
