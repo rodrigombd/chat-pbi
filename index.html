@@ -599,6 +599,76 @@ var turnHistory = [];
 
 
 // ============================================================================
+//  Definición de herramientas (OpenAI Responses API — function tools planas)
+// ============================================================================
+
+var TOOLS = [
+  {
+    type: "function",
+    name: "explicar_modelo_datos",
+    description: "Úsala cuando el usuario hace una pregunta teórica o conceptual sobre el modelo de datos: qué tablas existen, qué columnas hay, cómo se definen los KPIs (Leads, Contactos, Tasa de conversión), qué significa una columna o cómo se relacionan. NO ejecuta código ni consulta los datos reales; solo explica la estructura y las definiciones. También válida para saludos o preguntas sobre qué puede hacer el asistente.",
+    parameters: {
+      type: "object",
+      properties: {
+        consulta: {
+          type: "string",
+          description: "La pregunta del usuario sobre el modelo de datos, reformulada de forma clara y autocontenida."
+        }
+      },
+      required: ["consulta"],
+      additionalProperties: false
+    }
+  },
+  {
+    type: "function",
+    name: "solicitar_aclaracion",
+    description: "Úsala SOLO cuando el usuario pide un análisis de datos pero faltan parámetros críticos que impiden programar la consulta sin ambigüedad: el curso/periodo (p. ej. 2024/2025 o histórico), la métrica concreta (volumen de leads, volumen de contactos, tasa de conversión) o la dimensión de agrupación (ciudad, fuente, campaña, curso). No la uses si el contexto previo de la sesión ya resuelve el dato. Haz UNA sola pregunta por llamada; si faltan varios parámetros, pregunta primero por el más bloqueante.",
+    parameters: {
+      type: "object",
+      properties: {
+        slot: {
+          type: "string",
+          description: "Identificador corto del parámetro que falta. Uno de: curso, metrica, dimension, ciudad, otro."
+        },
+        pregunta: {
+          type: "string",
+          description: "La pregunta clara y breve que se le mostrará al usuario para desambiguar."
+        },
+        opciones: {
+          type: "array",
+          items: { type: "string" },
+          description: "Entre 2 y 4 opciones excluyentes y concretas que el usuario podrá pulsar. Deben ser respuestas válidas a la pregunta."
+        },
+        razon: {
+          type: "string",
+          description: "Frase breve opcional que explica por qué se necesita esta aclaración."
+        }
+      },
+      required: ["slot", "pregunta", "opciones"],
+      additionalProperties: false
+    }
+  },
+  {
+    type: "function",
+    name: "ejecutar_analisis_python",
+    description: "Úsala cuando la consulta de datos está clara y se puede programar en Pandas sin ambigüedad. Genera el análisis sobre el dataset real. Si el usuario pide comparar o calcular varias cosas independientes (distintas métricas o distintos tipos de salida), invócala varias veces en paralelo, una por cada petición independiente. Una comparación de la misma métrica entre varias categorías es UNA sola llamada.",
+    parameters: {
+      type: "object",
+      properties: {
+        instruccion_enriquecida: {
+          type: "string",
+          description: "Instrucción en lenguaje natural, clara y autocontenida, que describe exactamente el análisis a realizar (métrica, curso/periodo, dimensión de agrupación, filtros y tipo de salida deseado). A partir de ella se generará el script de Pandas."
+        }
+      },
+      required: ["instruccion_enriquecida"],
+      additionalProperties: false
+    }
+  }
+];
+
+
+
+// ============================================================================
 //  Mensajes de error
 // ============================================================================
 const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
@@ -1167,6 +1237,15 @@ async function callModel(messages, systemPrompt, opts) {
     body.temperature = opts.temperature;
   }
 
+  var wantsTools = Array.isArray(opts.tools) && opts.tools.length > 0;
+  if (wantsTools) {
+    body.tools = opts.tools;
+    if (opts.toolChoice) body.tool_choice = opts.toolChoice;
+    if (typeof opts.parallelToolCalls === "boolean") {
+      body.parallel_tool_calls = opts.parallelToolCalls;
+    }
+  }
+
   if (threaded) {
     if (conversationId) {
       body.conversation = conversationId;
@@ -1213,7 +1292,24 @@ async function callModel(messages, systemPrompt, opts) {
 
   if (threaded && d.id) lastResponseId = d.id;
 
+  if (wantsTools) {
+    return { text: extractOpenAIText(d), toolCalls: extractToolCalls(d) };
+  }
   return extractOpenAIText(d);
+}
+
+function extractToolCalls(d) {
+  var calls = [];
+  if (!Array.isArray(d.output)) return calls;
+  for (var i = 0; i < d.output.length; i++) {
+    var item = d.output[i];
+    if (item && item.type === "function_call") {
+      var args = {};
+      try { args = JSON.parse(item.arguments || "{}"); } catch (e) { args = {}; }
+      calls.push({ name: item.name, args: args, callId: item.call_id, raw: item.arguments });
+    }
+  }
+  return calls;
 }
 
 function extractOpenAIText(d) {
@@ -1327,21 +1423,7 @@ async function sendMessage(text) {
   setBusy(true);
 
   try {
-    // ----- Paso 1: enrutado -----
-    var decision = await routeMessage(userText);
-
-    if (decision.tipo === "saludo") {
-      appendAssistantText(decision.respuesta || fallbackGreeting(), "saludo");
-      setStatus("listo", "ok");
-      return;
-    }
-    if (decision.tipo === "modelo") {
-      await answerModelQuery(userText);
-      return;
-    }
-
-    // ----- Paso 2: planificación multi-consulta + clarify + generación -----
-    await runDataTurn(userText);
+    await orchestrate(userText);
   } catch (e) {
     clearStaleTypings();
     appendError(`Error en la consulta: ${e.message || String(e)}`);
@@ -1349,6 +1431,165 @@ async function sendMessage(text) {
   } finally {
     if (!pendingClarify) setBusy(false);
   }
+}
+
+// ----- Orquestador único basado en Tool Calling -----
+
+async function orchestrate(userText) {
+  var tid = appendTyping("interpretando consulta...");
+  setStatus("interpretando consulta...", "busy");
+
+  var memory = buildFullMemoryText();
+  var userContent = "";
+  if (memory) userContent += memory + "\n\n";
+  userContent += "MENSAJE DEL USUARIO:\n" + userText;
+
+  var result;
+  try {
+    result = await callModel(
+      [{ role: "user", content: userContent }],
+      orchestratorInstructions(),
+      {
+        model: "gpt-4o",
+        maxTokens: 700,
+        temperature: 0.2,
+        threaded: false,
+        tools: TOOLS,
+        toolChoice: "required",
+        parallelToolCalls: true
+      }
+    );
+  } catch (e) {
+    removeTyping(tid);
+    appendError(`Error de API: ${e.message || String(e)}`);
+    setStatus("error", "error");
+    return;
+  }
+  removeTyping(tid);
+
+  var toolCalls = (result && result.toolCalls) || [];
+  if (toolCalls.length === 0) {
+    var fallbackText = (result && result.text || "").trim();
+    if (fallbackText) {
+      appendAssistantText(fallbackText, "saludo");
+      setStatus("listo", "ok");
+    } else {
+      lastUserQuery = userText;
+      await answerDataQuery(userText, []);
+    }
+    return;
+  }
+
+  await dispatchToolCalls(userText, toolCalls);
+}
+
+function orchestratorInstructions() {
+  var base = prompts.router ||
+    "Eres el orquestador de un asistente analítico sobre datos de CRM de residencias de estudiantes. " +
+    "Decides qué herramienta invocar según el mensaje del usuario y el contexto de la sesión.";
+  return base +
+    "\n\nINSTRUCCIONES DE ORQUESTACIÓN (Tool Calling):" +
+    "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre." +
+    "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos." +
+    "\n- Consulta de datos con parámetros críticos ausentes que el contexto no resuelve → solicitar_aclaracion (una pregunta a la vez)." +
+    "\n- Consulta de datos clara y programable → ejecutar_analisis_python." +
+    "\n- Si el usuario pide varias cosas independientes (distintas métricas o salidas), invoca ejecutar_analisis_python varias veces en paralelo, una por petición. Una comparación de la misma métrica entre categorías es UNA sola llamada." +
+    "\n- Prioriza usar el contexto ya acotado de la sesión antes de pedir aclaraciones.";
+}
+
+async function dispatchToolCalls(userText, toolCalls) {
+  // Una aclaración tiene prioridad y detiene el turno hasta respuesta del usuario.
+  var clarifyCall = null;
+  for (var i = 0; i < toolCalls.length; i++) {
+    if (toolCalls[i].name === "solicitar_aclaracion") { clarifyCall = toolCalls[i]; break; }
+  }
+  if (clarifyCall) {
+    runClarifyTool(userText, clarifyCall);
+    return;
+  }
+
+  var modelCall = null;
+  var pythonCalls = [];
+  for (var j = 0; j < toolCalls.length; j++) {
+    var tc = toolCalls[j];
+    if (tc.name === "ejecutar_analisis_python") pythonCalls.push(tc);
+    else if (tc.name === "explicar_modelo_datos" && !modelCall) modelCall = tc;
+  }
+
+  if (pythonCalls.length > 0) {
+    await runBatchFromToolCalls(userText, pythonCalls);
+    return;
+  }
+
+  if (modelCall) {
+    var consulta = (modelCall.args && modelCall.args.consulta) || userText;
+    await answerModelQuery(consulta);
+    return;
+  }
+
+  // Sin coincidencias reconocibles: tratar como datos.
+  lastUserQuery = userText;
+  await answerDataQuery(userText, []);
+}
+
+function runClarifyTool(userText, toolCall) {
+  var a = toolCall.args || {};
+  var opciones = Array.isArray(a.opciones)
+    ? a.opciones.slice(0, 4).filter(Boolean).map(String)
+    : [];
+
+  if (!a.pregunta || opciones.length < 2) {
+    // Aclaración no utilizable: seguimos con la consulta de datos directamente.
+    lastUserQuery = userText;
+    answerDataQuery(userText, []);
+    return;
+  }
+
+  var slot = {
+    slot: a.slot || "slot_0",
+    pregunta: String(a.pregunta),
+    opciones: opciones,
+    razon: a.razon ? String(a.razon) : "",
+    permitirOtro: true
+  };
+
+  pendingClarify = {
+    userQuery: userText,
+    missing: [slot],
+    answered: [],
+    total: 1
+  };
+  lastUserQuery = userText;
+  askNextSlot();
+}
+
+async function runBatchFromToolCalls(userText, pythonCalls) {
+  function instrOf(tc) {
+    return (tc.args && tc.args.instruccion_enriquecida) || userText;
+  }
+
+  if (pythonCalls.length === 1) {
+    lastUserQuery = userText;
+    await answerDataQuery(instrOf(pythonCalls[0]), []);
+    setStatus("listo", "ok");
+    return;
+  }
+
+  var subRequests = pythonCalls.map(instrOf);
+  appendPlanNotice(subRequests);
+
+  for (var i = 0; i < subRequests.length; i++) {
+    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
+    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
+    try {
+      await answerDataQuery(subRequests[i], []);
+    } catch (e) {
+      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
+    }
+  }
+
+  lastUserQuery = userText;
+  setStatus("listo", "ok");
 }
 
 function resetInput(input) {
@@ -1370,39 +1611,6 @@ function setBusy(b) {
 
 function fallbackGreeting() {
   return "Hola. Soy un asistente analítico. Puedo responder dudas sobre el modelo de datos o ejecutar consultas. ¿En qué te ayudo?";
-}
-
-
-// ----- Paso 1: enrutado (usa context_router.txt) -----
-
-async function routeMessage(userText) {
-  if (!prompts.router) {
-    return { tipo: "datos", respuesta: "" };
-  }
-  var tid = appendTyping("interpretando consulta...");
-  setStatus("clasificando consulta...", "busy");
-  try {
-    var reply = await callModel(
-      [{ role: "user", content: userText }],
-      prompts.router,
-      { model: "gpt-4o", maxTokens: 400, temperature: 0.2, threaded: false }
-    );
-    removeTyping(tid);
-    var j = extractJSON(reply);
-    if (!j || !j.tipo) {
-      console.warn("[router] respuesta no parseable:", reply);
-      return { tipo: "datos", respuesta: "" };
-    }
-    var tipo = String(j.tipo).toLowerCase();
-    if (tipo !== "saludo" && tipo !== "modelo" && tipo !== "datos") {
-      return { tipo: "datos", respuesta: "" };
-    }
-    return { tipo: tipo, respuesta: j.respuesta || "" };
-  } catch (e) {
-    removeTyping(tid);
-    console.warn("[router] error:", e);
-    return { tipo: "datos", respuesta: "" };
-  }
 }
 
 
@@ -1540,64 +1748,6 @@ function buildFullMemoryText() {
   return parts.join("\n\n");
 }
 
-async function planSlots(text) {
-  if (!prompts.clarify) return { slots: [] };
-  var tid = appendTyping("comprobando si necesito aclaraciones...");
-  setStatus("planificando...", "busy");
-  
-  try {
-    var memory = buildFullMemoryText();
-    var userContent = "";
-
-    if (memory) {
-      userContent += memory + "\n\n";
-    }
-    userContent += `CONSULTA ACTUAL DEL USUARIO:\n${text}`;
-
-    var reply = await callModel(
-      [{ role: "user", content: userContent }],
-      prompts.clarify,
-      { model: "gpt-4o", maxTokens: 700, temperature: 0.5, threaded: false }
-    );
-
-    removeTyping(tid);
-    var j = extractJSON(reply);
-    if (!j || !Array.isArray(j.slots)) return { slots: [] };
-    
-    return { slots: sanitizeSlots(dropKnownSlots(j.slots)) };
-  } catch (e) {
-    removeTyping(tid);
-    return { slots: [] };
-  }
-}
-
-function dropKnownSlots(slots) {
-  return slots.filter(s => !(s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)));
-}
-
-function sanitizeSlots(raw) {
-  var clean = [];
-  for (var i = 0; i < raw.length && i < 4; i++) {
-    var s = raw[i];
-    if (!s || !s.pregunta) continue;
-    
-    var opciones = Array.isArray(s.opciones)
-      ? s.opciones.slice(0, 4).filter(Boolean).map(String)
-      : [];
-      
-    if (opciones.length < 2) continue;
-    
-    clean.push({
-      slot: s.slot || `slot_${i}`,
-      pregunta: String(s.pregunta),
-      opciones: opciones,
-      razon: s.razon ? String(s.razon) : "",
-      permitirOtro: s.permitirOtro !== false
-    });
-  }
-  return clean;
-}
-
 function askNextSlot() {
   if (!pendingClarify || pendingClarify.missing.length === 0) {
     finalizeClarify();
@@ -1667,67 +1817,6 @@ async function finalizeClarify() {
 }
 
 
-async function runDataTurn(userText) {
-  var subRequests = await planRequests(userText);
-  if (subRequests.length <= 1) {
-    await runDataPipeline(subRequests[0] || userText);
-    return;
-  }
-  await runDataBatch(userText, subRequests);
-}
-
-async function planRequests(userText) {
-  if (!prompts.router) return [userText];
-
-  var tid = appendTyping("planificando la consulta...");
-  setStatus("planificando la consulta...", "busy");
-  try {
-    var memory = buildFullMemoryText();
-    var userContent = "";
-    if (memory) userContent += memory + "\n\n";
-    userContent += "MENSAJE DEL USUARIO:\n" + userText;
-
-    var reply = await callModel(
-      [{ role: "user", content: userContent }],
-      prompts.planificador,
-      { model: "gpt-4o", maxTokens: 600, temperature: 0.1, threaded: false }
-    );
-    removeTyping(tid);
-
-    var j = extractJSON(reply);
-    if (!j || !Array.isArray(j.peticiones)) return [userText];
-
-    var limpio = j.peticiones
-      .filter(function (p) { return p && String(p).trim(); })
-      .map(function (p) { return String(p).trim(); })
-      .slice(0, 6);
-
-    if (limpio.length === 0) return [userText];
-    return limpio;
-  } catch (e) {
-    removeTyping(tid);
-    console.warn("[planificador] error:", e);
-    return [userText];
-  }
-}
-
-async function runDataBatch(originalText, subRequests) {
-  appendPlanNotice(subRequests);
-
-  for (var i = 0; i < subRequests.length; i++) {
-    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
-    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
-    try {
-      await answerDataQuery(subRequests[i], []);
-    } catch (e) {
-      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
-    }
-  }
-
-  lastUserQuery = originalText;
-  setStatus("listo", "ok");
-}
-
 function appendPlanNotice(subRequests) {
   var box = document.getElementById("messages");
   var d = document.createElement("div");
@@ -1757,25 +1846,6 @@ function appendBatchStepHeader(step, total, text) {
   box.appendChild(d);
   scrollToBottom();
 }
-
-async function runDataPipeline(userText) {
-  var plan = await planSlots(userText);
-  if (plan && plan.slots && plan.slots.length > 0) {
-    pendingClarify = {
-      userQuery: userText,
-      missing: plan.slots.slice(),
-      answered: [],
-      total: plan.slots.length
-    };
-    lastUserQuery = userText;
-    askNextSlot();
-    return;
-  }
-  
-  lastUserQuery = userText;
-  await answerDataQuery(userText, []);
-}
-
 
 // ----- Paso 3: generación de código y ejecución (usa context_general.txt) -----
 
