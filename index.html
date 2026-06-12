@@ -1498,7 +1498,6 @@ function orchestratorInstructions() {
 }
 
 async function dispatchToolCalls(userText, toolCalls) {
-  // Una aclaración tiene prioridad y detiene el turno hasta respuesta del usuario.
   var clarifyCall = null;
   for (var i = 0; i < toolCalls.length; i++) {
     if (toolCalls[i].name === "solicitar_aclaracion") { clarifyCall = toolCalls[i]; break; }
@@ -1527,7 +1526,6 @@ async function dispatchToolCalls(userText, toolCalls) {
     return;
   }
 
-  // Sin coincidencias reconocibles: tratar como datos.
   lastUserQuery = userText;
   await answerDataQuery(userText, []);
 }
@@ -1539,7 +1537,6 @@ function runClarifyTool(userText, toolCall) {
     : [];
 
   if (!a.pregunta || opciones.length < 2) {
-    // Aclaración no utilizable: seguimos con la consulta de datos directamente.
     lastUserQuery = userText;
     answerDataQuery(userText, []);
     return;
