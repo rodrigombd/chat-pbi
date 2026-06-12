@@ -7,6 +7,9 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -40,8 +43,16 @@ header {
   display: flex; align-items: center; gap: 14px; flex-shrink: 0;
 }
 .header-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.new-chat-btn {
+  font-size: 12px; color: #fff; cursor: pointer;
+  background: var(--accent); border: 1px solid var(--accent-dk);
+  border-radius: 20px; padding: 4px 12px; font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+.new-chat-btn:hover { background: var(--accent-dk); border-color: var(--accent-dk); }
 .header-model {
-  margin-left: auto; font-size: 12px; color: var(--text3);
+  font-size: 12px; color: var(--text3);
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 20px; padding: 2px 10px;
 }
@@ -206,37 +217,56 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
 /* ---- Typing dots ---- */
 .typing-dots { display:flex; gap:4px; align-items:center; padding-top:5px; }
-.typing-dots span { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
+.typing-dots span:not(.typing-label) { width:6px; height:6px; border-radius:50%; background: var(--border2); animation: tpulse 1.2s ease-in-out infinite; }
 .typing-dots span:nth-child(2) { animation-delay:0.2s; }
 .typing-dots span:nth-child(3) { animation-delay:0.4s; }
 @keyframes tpulse { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
 .typing-label { font-size: 12px; color: var(--text3); margin-left: 6px; }
 
 /* ---- Quick questions ---- */
-#quick-questions { padding: 2px 18px 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+#quick-questions { padding: 4px 18px 14px; display: flex; gap: 9px; flex-wrap: wrap; }
 .quick-btn {
-  background: var(--bg); border: 1px solid var(--border2); border-radius: 20px;
-  color: var(--text2); font-family: inherit; font-size: 13px;
-  padding: 5px 13px; cursor: pointer; transition: all 0.12s; white-space: nowrap;
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, var(--accent-lt) 100%);
+  border: 1px solid #c5e8b3;
+  border-radius: 22px;
+  color: var(--accent-dk);
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 16px; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(74,158,46,0.08);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
-.quick-btn:hover { border-color: var(--accent-dk); color: var(--accent-dk); background: var(--accent-lt); }
+.quick-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(74,158,46,0.22);
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent-lt) 0%, #d4f3c3 100%);
+}
+.quick-btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(74,158,46,0.12); }
 
-/* ---- Actions bar (Generar conclusiones) ---- */
-#actions-bar {
-  padding: 0 18px 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+/* ---- Plan multi-consulta ---- */
+.plan-box {
+  background: var(--accent-lt); border: 1px solid #c5e8b3;
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  padding: 12px 16px; font-size: 14px; color: var(--text);
 }
-.action-btn {
-  background: var(--insight-lt); border: 1px solid #b8cdf7; border-radius: 20px;
-  color: var(--insight-dk); font-family: inherit;
-  font-size: 13px; font-weight: 600; padding: 6px 14px; cursor: pointer;
-  transition: all 0.12s; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 6px;
+.plan-box-title { font-weight: 600; color: var(--accent-dk); margin-bottom: 8px; }
+.plan-box-list { margin: 0 0 0 20px; padding: 0; }
+.plan-box-list li { margin-bottom: 4px; line-height: 1.5; }
+.plan-box-list li:last-child { margin-bottom: 0; }
+.batch-step-header {
+  display: flex; align-items: center; gap: 10px;
+  margin: 4px 0 -4px; padding: 4px 2px;
 }
-.action-btn:hover:not(:disabled) {
-  background: var(--insight); color: #fff; border-color: var(--insight);
+.batch-step-num {
+  flex-shrink: 0; font-size: 11px; font-weight: 700; color: #fff;
+  background: var(--accent); border-radius: 10px; padding: 2px 9px;
+  letter-spacing: 0.03em;
 }
-.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.action-hint { font-size: 12px; color: var(--text3); }
+.batch-step-text {
+  font-size: 12px; color: var(--text2); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ---- Input ---- */
 #input-area {
@@ -389,23 +419,58 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   border-radius: var(--radius-sm); font-size: 13px; color: var(--text3);
   font-style: italic;
 }
+
+/* ---- Explicación de consulta (perfiles no-tech) ---- */
+.explain-details {
+  margin-top: 12px;
+  background: var(--accent-lt); border: 1px solid #c5e8b3;
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  font-size: 14px; color: var(--text); overflow: hidden;
+}
+.explain-details > summary {
+  cursor: pointer; user-select: none; list-style: none;
+  padding: 10px 14px; font-size: 13px; font-weight: 600; color: var(--accent-dk);
+  display: flex; align-items: center; gap: 7px;
+}
+.explain-details > summary::-webkit-details-marker { display: none; }
+.explain-details > summary::before {
+  content: "▶"; display: inline-block; font-size: 10px;
+  transition: transform 0.15s; color: var(--accent-dk);
+}
+.explain-details[open] > summary::before { transform: rotate(90deg); }
+.explain-body {
+  padding: 0 14px 12px; line-height: 1.65; color: var(--text);
+}
+.explain-body p { margin-bottom: 6px; }
+.explain-body p:last-child { margin-bottom: 0; }
+.explain-body ul { margin: 4px 0 4px 20px; }
+.explain-body li { margin-bottom: 3px; }
+.explain-loading {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--accent-lt); border: 1px solid #c5e8b3;
+  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--accent-dk); display: flex; align-items: center; gap: 8px;
+}
 </style>
 </head>
 <body>
 
 <header>
   <span class="header-title">Analytics Assistant — RESA</span>
-  <span class="header-model" id="header-model">claude · pyodide · plotly</span>
+  <span class="header-right">
+    <button id="new-chat-btn" class="new-chat-btn" onclick="startNewChat()" title="Empieza una conversación nueva y olvida el contexto anterior" style="display:none;">Limpiar memoria</button>
+    <span class="header-model" id="header-model">claude &middot; pyodide &middot; plotly</span>
+  </span>
 </header>
 
 <div id="setup-panel">
   <div class="setup-card">
-    <h2>Iniciar sesi&oacute;n</h2>
+    <h2>Iniciar sesión</h2>
     <p class="setup-sub">Introduce tu API key para conectar con el asistente.</p>
     <div class="field-group">
       <label>API Key</label>
       <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
-      <p class="hint">Solo se usa durante esta sesi&oacute;n. No se almacena en ning&uacute;n servidor.</p>
+      <p class="hint">Solo se usa durante esta sesión. No se almacena en ningún servidor.</p>
     </div>
     <button class="btn-primary" id="connect-btn" onclick="initChat()">Conectar &rarr;</button>
     <div class="boot-progress" id="boot-progress">
@@ -413,9 +478,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <div class="step" id="step-pyodide"><span class="dot"></span><span>Inicializando Pyodide</span></div>
       <div class="step" id="step-pkgs"><span class="dot"></span><span>Cargando pandas, numpy</span></div>
       <div class="step" id="step-csv"><span class="dot"></span><span>Cargando datos principales</span></div>
-      <!-- [Generar conclusiones desactivado] paso de carga del script de análisis:
-      <div class="step" id="step-insights"><span class="dot"></span><span>Cargando script de an&aacute;lisis</span></div>
-      -->
     </div>
   </div>
 </div>
@@ -423,36 +485,27 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 <div id="chat-panel">
   <div id="messages">
     <div class="welcome-area" id="welcome">
-      <h3>&iquest;En qu&eacute; puedo ayudarte?</h3>
-      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera c&oacute;digo Python que se ejecuta en tu navegador y produce un gr&aacute;fico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente a&ntilde;ada una lectura breve del resultado tras cada consulta.</p>
+      <h3>¿En qué puedo ayudarte?</h3>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo. Activa el interruptor <strong>Conclusiones</strong> si quieres que el asistente añada una lectura breve del resultado tras cada consulta.</p>
     </div>
   </div>
 
   <div id="quick-questions">
-    <button class="quick-btn" onclick="quickAsk('&iquest;Qu&eacute; tablas hay en el modelo?')">&iquest;qu&eacute; tablas hay?</button>
-    <button class="quick-btn" onclick="quickAsk('&iquest;Qu&eacute; significa Curso_corregido?')">qu&eacute; es Curso_corregido</button>
-    <button class="quick-btn" onclick="quickAsk('&iquest;Cu&aacute;ntos leads hay en el curso 2025/2026?')">leads 2025/2026</button>
-    <button class="quick-btn" onclick="quickAsk('Gr&aacute;fico de evoluci&oacute;n mensual de leads en 2025')">evoluci&oacute;n mensual</button>
-    <button class="quick-btn" onclick="quickAsk('Compara la conversi&oacute;n entre Madrid y Valencia en 2025/2026')">comparar conversi&oacute;n</button>
+    <button class="quick-btn" onclick="quickAsk('¿Qué tablas hay en el modelo?')">¿Qué tablas hay?</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cómo se calcula el CR?')">¿Cómo se calcula el CR?</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cuántas solicitudes de leads hay para el curso 2025/2026?')"> Solicitudes de leads 2025/2026</button>
+    <button class="quick-btn" onclick="quickAsk('Gráfico de evolución mensual de leads para curso 2024/2025')">Evolución de solicitudes para 2024/2025</button>
+    <button class="quick-btn" onclick="quickAsk('Compara la conversión entre Madrid y Valencia')">Comparar conversión Madrid vs Valencia</button>
+    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de interés en España')">Mapa de calor de leads por ciudad</button>
   </div>
-
-
-  <!--
-  <div id="actions-bar">
-    <button class="action-btn" id="insight-btn" onclick="generateInsights()" disabled title="Explica a qu&eacute; se debe la variaci&oacute;n entre los dos elementos de la consulta">
-      &#128202; Generar conclusiones
-    </button>
-    <span class="action-hint" id="insight-hint">Haz una consulta comparativa para activar el an&aacute;lisis.</span>
-  </div>
-  -->
 
   <div id="conclusions-bar">
-    <label class="toggle-switch" title="Si est&aacute; activo, tras cada consulta de datos el asistente generar&aacute; una conclusi&oacute;n breve del resultado.">
+    <label class="toggle-switch" title="Si está activo, tras cada consulta de datos el asistente generará una conclusión breve del resultado.">
       <input type="checkbox" id="conclusions-toggle">
       <span class="toggle-track"></span>
       <span class="toggle-label-text">Conclusiones</span>
     </label>
-    <span class="toggle-hint">a&ntilde;ade una lectura breve del resultado tras cada consulta de datos</span>
+    <span class="toggle-hint">Añade una lectura breve del resultado tras cada consulta de datos</span>
   </div>
 
   <div id="input-area">
@@ -474,57 +527,88 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 </div>
 
 <script>
-// ============================================================================
-//  Configuración general
-// ============================================================================
 
-var MODEL_ID    = "claude-haiku-4-5-20251001";
-var API_URL     = "https://api.anthropic.com/v1/messages";
-var API_VERSION = "2023-06-01";
-var MAX_HISTORY = 12;
+
+
+var MODEL_ID     = "claude-haiku-4-5-20251001";
+var MODEL_AUX    = "claude-sonnet-4-6";
+var API_URL      = "https://api.anthropic.com/v1/messages";
+var API_VERSION  = "2023-06-01";
+
+var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
+var STORAGE_CTX_KEY  = "resa_assistant_session_context";
+var STORAGE_TS_KEY   = "resa_assistant_session_ts";
+var STORAGE_HIST_KEY = "resa_assistant_turn_history";
+var STORAGE_THREAD_KEY = "resa_assistant_thread_messages";
+var SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+var MAX_HISTORY_TURNS = 40;
+var HISTORY_INJECT_TURNS = 12;
+var THREAD_INJECT_MESSAGES = 24;
+var conversationId   = null;
+var threadMessages   = [];
 
 var PROMPT_FILES = {
-  router:          "context_router.txt",
-  clarify:         "context_clarify.txt",
-  modelo_datos:    "context_modelo_datos.txt",
-  general:         "context_general.txt",
-  conclusiones:    "context_conclusiones.txt"
-  // , insights_parser: "context_insights_parser.txt"
+  router: "context_router.txt",
+  clarify: "context_clarify.txt",
+  modelo_datos: "context_modelo_datos.txt",
+  general: "context_general.txt",
+  conclusiones: "context_conclusiones.txt",
+  explicacion: "context_explicacion.txt",
+  planificador: "context_planificador.txt" //,
+  //insights_parser: "context_insights_parser.txt"
 };
 
 var CSV_TABLES = {
-  "leads_contacts":             "Leads_Contacts.csv"
+  "leads_contacts": "Leads_Contacts.csv"
 };
-var PRIMARY_CSV          = "leads_contacts";
+var PRIMARY_CSV = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
-
-var SENSITIVE_COLUMNS = [
-  "Correo electrónico", "Correo electronico", "correo electrónico", "correo electronico",
-  "Email", "email", "E-mail", "e-mail",
-  "Nombre", "nombre",
-  "Apellidos", "apellidos",
-  "Nombre completo", "nombre completo"
-];
-
-var CONCLUSION_MAX_ROWS = 40;
+var CONCLUSION_MAX_ROWS = 300;
 
 marked.use({ breaks: true, gfm: true });
+
+function renderRich(text) {
+  var html = marked.parse(text || "");
+  var tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(tmp, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "$", right: "$", display: false }
+        ],
+        throwOnError: false
+      });
+    } catch (e) {}
+  }
+  return tmp.innerHTML;
+}
 
 
 // ============================================================================
 //  Estado
 // ============================================================================
 
-var apiKey         = "";
-var prompts        = {};
-// var insightsScript = "";              // contenido de insights_script.py
-var pyodide        = null;
-var loadedCsvs     = new Set();
-var busy           = false;
-var chatHistory    = [];
+var apiKey = "";
+var prompts = {};
+var pyodide = null;
+var loadedCsvs = new Set();
+var busy = false;
 var pendingClarify = null;
-var lastUserQuery  = null;
-var lastTurn       = null;
+var lastUserQuery = null;
+var lastTurn = null;
+var sessionContext = {};
+var turnHistory = [];
+
+
+// ============================================================================
+//  Mensajes de error
+// ============================================================================
+const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
+const ERR_MSG_PROMPTS = "⚠️ <strong>Faltan archivos de contexto:</strong> {archivos}.<br>Asegúrate de que están en la misma carpeta que <code>index.html</code>.";
 
 
 // ============================================================================
@@ -541,40 +625,36 @@ async function initChat() {
   document.getElementById("boot-progress").classList.add("active");
 
   try {
-    await loadPrompts();
-    await initPyodide();
-    await loadPyodidePackages();
-    await installRuntimeHelpers();
-    var csvOk = await loadPrimaryCsv();
-    // await loadInsightsScript();
     apiKey = key;
+    var promptsTask = loadPrompts();
+    var conversationTask = ensureConversation();
+    
+    var pyodideTask = (async function() {
+      await initPyodide();
+      await loadPyodidePackages();
+      await installRuntimeHelpers();
+      await installCityCoords();
+      return await loadPrimaryCsv();
+    })();
+
+    var results = await Promise.all([promptsTask, conversationTask, pyodideTask]);
+    var csvOk = results[2];
+
+    if (csvOk) {
+      await injectColumnValuesIntoContext();
+    }
+    await injectCityListIntoContext();
     revealChatPanel();
     if (!csvOk) {
-      appendDevBanner(
-        "⚠️ <strong>El CSV principal no se cargó.</strong> " +
-        "Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>" +
-        "Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). " +
-        "Desde la carpeta: <code>python -m http.server 8000</code> " +
-        "y luego ve a <code>http://localhost:8000</code>. " +
-        "Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>."
-      );
+      appendDevBanner(ERR_MSG_CSV);
     }
+    
     var missing = [];
     for (var k in PROMPT_FILES) { if (!prompts[k]) missing.push(PROMPT_FILES[k]); }
     if (missing.length > 0) {
-      appendDevBanner(
-        "⚠️ <strong>Faltan archivos de contexto:</strong> <code>" +
-        missing.join("</code>, <code>") + "</code>.<br>" +
-        "Asegúrate de que están en la misma carpeta que <code>index.html</code>."
-      );
+      appendDevBanner(ERR_MSG_PROMPTS.replace("{archivos}", "<code>" + missing.join("</code>, <code>") + "</code>"));
     }
-    // [Generar conclusiones desactivado].
-    // if (!insightsScript) {
-    //   appendDevBanner(
-    //     "⚠️ <strong>No se cargó <code>insights_script.py</code>.</strong> " +
-    //     "El botón \"Generar conclusiones\" no estará disponible."
-    //   );
-    // }
+
   } catch (e) {
     console.error(e);
     alert("Error inicializando: " + e.message);
@@ -586,8 +666,8 @@ async function initChat() {
 async function loadPrompts() {
   setStep("step-prompts", "active");
   var keys = Object.keys(PROMPT_FILES);
-  for (var i = 0; i < keys.length; i++) {
-    var key = keys[i];
+
+  var fetchPromises = keys.map(async function(key) {
     try {
       var r = await fetch(PROMPT_FILES[key] + "?v=" + Date.now());
       if (r.ok) {
@@ -599,9 +679,17 @@ async function loadPrompts() {
     } catch (e) {
       console.warn("Error cargando " + PROMPT_FILES[key], e);
     }
-  }
+  });
+
+  await Promise.all(fetchPromises);
   var allOk = true;
-  for (var k in PROMPT_FILES) { if (!prompts[k]) { allOk = false; break; } }
+  for (var k in PROMPT_FILES) { 
+    if (!prompts[k]) { 
+      allOk = false; 
+      break; 
+    } 
+  }
+  
   setStep("step-prompts", allOk ? "done" : "error");
 }
 
@@ -617,93 +705,199 @@ async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
   // [Generar conclusiones desactivado] Sin scikit-learn.
   await pyodide.loadPackage(["pandas", "numpy"]);
-  await pyodide.runPythonAsync(
-    "import pandas as pd\n" +
-    "import numpy as np\n" +
-    "import io, json, traceback\n"
-  );
+  const pythonInitScript = `
+import pandas as pd
+import numpy as np
+import io, json, traceback
+  `;
+
+  await pyodide.runPythonAsync(pythonInitScript);
   setStep("step-pkgs", "done");
 }
 
 async function installRuntimeHelpers() {
-  var helpers =
-    "import re as _re\n" +
-    "_MES_ES_MAP = {\n" +
-    "    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,\n" +
-    "    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10,\n" +
-    "    'noviembre': 11, 'diciembre': 12,\n" +
-    "}\n" +
-    "_RE_FECHA_ES = _re.compile(r'(\\d{1,2})\\s+de\\s+([a-záéíóúñ]+)\\s+de\\s+(\\d{4})', _re.IGNORECASE)\n" +
-    "\n" +
-    "def __parse_fecha_es__(s):\n" +
-    "    if not isinstance(s, str):\n" +
-    "        return pd.NaT\n" +
-    "    m = _RE_FECHA_ES.search(s.lower())\n" +
-    "    if not m:\n" +
-    "        try:\n" +
-    "            return pd.to_datetime(s, errors='coerce', dayfirst=True)\n" +
-    "        except Exception:\n" +
-    "            return pd.NaT\n" +
-    "    d, mes, y = m.group(1), m.group(2), m.group(3)\n" +
-    "    mes_num = _MES_ES_MAP.get(mes)\n" +
-    "    if not mes_num:\n" +
-    "        return pd.NaT\n" +
-    "    try:\n" +
-    "        return pd.Timestamp(year=int(y), month=mes_num, day=int(d))\n" +
-    "    except Exception:\n" +
-    "        return pd.NaT\n" +
-    "\n" +
-    "def __parse_fechas_es__(df, cols):\n" +
-    "    for c in cols:\n" +
-    "        if c in df.columns:\n" +
-    "            df[c] = df[c].apply(__parse_fecha_es__)\n" +
-    "    return df\n" +
-    "\n" +
-    "def __reset_resultado__():\n" +
-    "    if 'resultado' in globals():\n" +
-    "        del globals()['resultado']\n" +
-    "\n" +
-    "def _default_json(o):\n" +
-    "    import numpy as _np\n" +
-    "    import pandas as _pd\n" +
-    "    if isinstance(o, (_np.integer,)): return int(o)\n" +
-    "    if isinstance(o, (_np.floating,)): return float(o)\n" +
-    "    if isinstance(o, _np.ndarray): return o.tolist()\n" +
-    "    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()\n" +
-    "    return str(o)\n" +
-    "\n" +
-    "def __serialize_resultado__():\n" +
-    "    import json as _j\n" +
-    "    import pandas as _pd\n" +
-    "    import numpy as _np\n" +
-    "    if 'resultado' not in globals():\n" +
-    "        return _j.dumps({'kind':'none','value':None})\n" +
-    "    _r = globals()['resultado']\n" +
-    "    # Plotly: dict con clave __plotly__\n" +
-    "    if isinstance(_r, dict) and _r.get('__plotly__') is True:\n" +
-    "        spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}\n" +
-    "        _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}\n" +
-    "        if isinstance(_r.get('__data__'), _pd.DataFrame):\n" +
-    "            _payload['data_df'] = _r['__data__'].to_json(orient='split', date_format='iso', force_ascii=False)\n" +
-    "        return _j.dumps(_payload, ensure_ascii=False)\n" +
-    "    if isinstance(_r, _pd.DataFrame):\n" +
-    "        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)\n" +
-    "    if isinstance(_r, _pd.Series):\n" +
-    "        _df = _r.reset_index()\n" +
-    "        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)\n" +
-    "    if isinstance(_r, dict):\n" +
-    "        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)\n" +
-    "    if isinstance(_r, bool):\n" +
-    "        return _j.dumps({'kind':'text','value':str(_r)})\n" +
-    "    if isinstance(_r, (int, _np.integer)):\n" +
-    "        return _j.dumps({'kind':'number','value':int(_r)})\n" +
-    "    if isinstance(_r, (float, _np.floating)):\n" +
-    "        return _j.dumps({'kind':'number','value':float(_r)})\n" +
-    "    if isinstance(_r, str):\n" +
-    "        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)\n" +
-    "    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)\n";
+  const helpers = `
+import re as _re
+import json as _j
+import pandas as _pd
+import numpy as _np
+import io as _io
+
+_MES_ES_MAP = {
+    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10,
+    'noviembre': 11, 'diciembre': 12,
+}
+_RE_FECHA_ES = _re.compile(r'(\\d{1,2})\\s+de\\s+([a-záéíóúñ]+)\\s+de\\s+(\\d{4})', _re.IGNORECASE)
+
+def __parse_fecha_es__(s):
+    if not isinstance(s, str):
+        return _pd.NaT
+    m = _RE_FECHA_ES.search(s.lower())
+    if not m:
+        try:
+            return _pd.to_datetime(s, errors='coerce', dayfirst=True)
+        except Exception:
+            return _pd.NaT
+    d, mes, y = m.group(1), m.group(2), m.group(3)
+    mes_num = _MES_ES_MAP.get(mes)
+    if not mes_num:
+        return _pd.NaT
+    try:
+        return _pd.Timestamp(year=int(y), month=mes_num, day=int(d))
+    except Exception:
+        return _pd.NaT
+
+def __parse_fechas_es__(df, cols):
+    for c in cols:
+        if c in df.columns:
+            df[c] = df[c].apply(__parse_fecha_es__)
+    return df
+
+def __reset_resultado__():
+    if 'resultado' in globals():
+        del globals()['resultado']
+
+def _default_json(o):
+    if isinstance(o, (_np.integer,)): return int(o)
+    if isinstance(o, (_np.floating,)): return float(o)
+    if isinstance(o, _np.ndarray): return o.tolist()
+    if isinstance(o, _pd.Series): return o.tolist()
+    if isinstance(o, _pd.Index):
+        if type(o).__name__ == 'PeriodIndex': return o.astype(str).tolist()
+        return o.tolist()
+    if type(o).__name__ == 'Period': return str(o)
+    if isinstance(o, (_pd.Timestamp,)): return o.isoformat()
+    return str(o)
+
+def __serialize_resultado__():
+    if 'resultado' not in globals():
+        return _j.dumps({'kind':'none','value':None})
+    
+    _r = globals()['resultado']
+    
+    if isinstance(_r, dict) and _r.get('__plotly__') is True:
+        spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}
+        _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}
+        if isinstance(_r.get('__data__'), _pd.DataFrame):
+            _payload['data_df'] = _r['__data__'].to_json(orient='split', date_format='iso', force_ascii=False)
+        return _j.dumps(_payload, ensure_ascii=False)
+        
+    if isinstance(_r, _pd.DataFrame):
+        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)
+        
+    if isinstance(_r, _pd.Series):
+        _df = _r.reset_index()
+        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)
+        
+    if isinstance(_r, dict):
+        return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)
+        
+    if isinstance(_r, bool):
+        return _j.dumps({'kind':'text','value':str(_r)})
+        
+    if isinstance(_r, (int, _np.integer)):
+        return _j.dumps({'kind':'number','value':int(_r)})
+        
+    if isinstance(_r, (float, _np.floating)):
+        return _j.dumps({'kind':'number','value':float(_r)})
+        
+    if isinstance(_r, str):
+        _lines = [l for l in _r.split('\\n') if l.strip()]
+        _looks_tabular = len(_lines) >= 2 and (('|' in _r and _r.count('|') >= 2) or all(len(l.split()) >= 2 for l in _lines[:3]))
+        if _looks_tabular:
+            for _sep in (r'\\s*\\|\\s*', r'\\s{2,}', r'\\t'):
+                try:
+                    _df2 = _pd.read_csv(_io.StringIO(_r), sep=_sep, engine='python')
+                    _df2 = _df2.loc[:, ~_df2.columns.astype(str).str.match(r'^Unnamed')]
+                    if _df2.shape[1] >= 2 and _df2.shape[0] >= 1:
+                        return _j.dumps({'kind':'dataframe','value':_df2.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df2.shape)}, ensure_ascii=False)
+                except Exception:
+                    pass
+        return _j.dumps({'kind':'text','value':_r}, ensure_ascii=False)
+        
+    return _j.dumps({'kind':'text','value':str(_r)}, ensure_ascii=False)
+`;
+
   await pyodide.runPythonAsync(helpers);
 }
+
+async function installCityCoords() {
+  if (!pyodide) return;
+  
+  const pythonCode = `
+import unicodedata as _ud
+
+CIUDADES_ES_COORDS = {
+    "Alcalá de Henares": (40.4818, -3.3643),
+    "Almería": (36.8340, -2.4637),
+    "Barcelona": (41.3851, 2.1734),
+    "Bilbao": (43.2630, -2.9350),
+    "Castelldefels": (41.2800, 1.9764),
+    "Galicia": (42.5751, -8.1339),
+    "Girona": (41.9794, 2.8214),
+    "Granada": (37.1773, -3.5986),
+    "La Coruña": (43.3623, -8.4115),
+    "Madrid": (40.4168, -3.7038),
+    "Málaga": (36.7213, -4.4214),
+    "Ourense": (42.3358, -7.8639),
+    "Pamplona": (42.8125, -1.6458),
+    "Salamanca": (40.9701, -5.6635),
+    "San Sebastian": (43.3183, -1.9812),
+    "San Cugat del Valles": (41.4684, 2.0844),
+    "Sevilla": (37.3891, -5.9845),
+    "Tarragona": (41.1189, 1.2445),
+    "Terrasa": (41.5610, 2.0089),
+    "Valencia": (39.4699, -0.3763),
+    "Valladolid": (41.6523, -4.7245),
+    "Vigo": (42.2406, -8.7207),
+    "Vitoria": (42.8467, -2.6716)
+}
+
+def _norm_ciudad(s):
+    if not isinstance(s, str):
+        return ''
+    s = s.strip().lower()
+    s = ''.join(c for c in _ud.normalize('NFD', s) if _ud.category(c) != 'Mn')
+    return s
+
+_COORDS_NORM = { _norm_ciudad(k): v for k, v in CIUDADES_ES_COORDS.items() }
+
+def coords_ciudad(nombre):
+    """Devuelve (lat, lon) de una ciudad española o None si no se conoce.
+    Tolerante a tildes y mayúsculas."""
+    if nombre in CIUDADES_ES_COORDS:
+        return CIUDADES_ES_COORDS[nombre]
+    return _COORDS_NORM.get(_norm_ciudad(nombre))
+`;
+
+  try {
+    await pyodide.runPythonAsync(pythonCode);
+  } catch (e) {
+    console.warn("[coords] no se pudieron cargar las coordenadas:", e);
+  }
+}
+
+async function injectCityListIntoContext() {
+  if (!pyodide || !prompts.general) return;
+  if (prompts.general.indexOf("# CIUDADES CON COORDENADAS") >= 0) return;
+  
+  try {
+    const names = await pyodide.runPythonAsync(
+      "', '.join(sorted(CIUDADES_ES_COORDS.keys()))"
+    );   
+    if (names && String(names).trim()) {
+      prompts.general += `
+
+# CIUDADES CON COORDENADAS (para mapas)
+Solo estas ciudades tienen coordenadas conocidas vía \`coords_ciudad(...)\`. Si una ciudad del resultado no está aquí, \`coords_ciudad\` devolverá \`None\` y debes excluirla del mapa:
+${String(names)}`;
+    }
+  } catch (e) {
+    console.warn("[coords] no se pudo inyectar la lista de ciudades:", e);
+  }
+}
+
 
 async function loadPrimaryCsv() {
   setStep("step-csv", "active");
@@ -712,28 +906,138 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
-// [Generar conclusiones desactivado]
-/*
-async function loadInsightsScript() {
-  setStep("step-insights", "active");
+async function injectColumnValuesIntoContext() {
+  if (!pyodide || !prompts.general) return;
+  if (prompts.general.indexOf("# VALORES REALES DE LAS COLUMNAS") >= 0) return;
+
   try {
-    var r = await fetch("insights_script.py?v=" + Date.now());
-    if (r.ok) {
-      insightsScript = await r.text();
-    } else {
-      console.warn("insights_script.py no disponible (HTTP " + r.status + ")");
+    const pyCode = `
+import json as _json
+from pandas.api.types import is_string_dtype as _pd_is_string_dtype
+
+def __collect_unique_values__():
+    _total_rows = len(leads_contacts)
+    
+    # CÁLCULO DINÁMICO: 5% de las filas, con un mínimo de 10 y un máximo de seguridad de 80.
+    _dynamic_max = min(80, max(10, int(_total_rows * 0.05)))
+    
+    _out = {}
+    for _col in leads_contacts.columns:
+        _name = str(_col)
+        _low = _name.strip().lower()
+        
+        if ('correo' in _low) or ('email' in _low) or ('e-mail' in _low):
+            continue
+        if ('nombre' in _low) or ('apellido' in _low):
+            continue
+            
+        _ser = leads_contacts[_col]
+        _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)
+        if not _is_text:
+            continue
+            
+        _vals = _ser.dropna().astype(str).str.strip()
+        _vals = _vals[_vals != '']
+        _uniques = sorted(_vals.unique().tolist())
+        
+        if len(_uniques) == 0:
+            continue
+            
+        # Usamos el límite dinámico en lugar de un número fijo
+        if len(_uniques) > _dynamic_max:
+            _out[_name] = {'alta_cardinalidad': True, 'n': len(_uniques)}
+        else:
+            _out[_name] = {'alta_cardinalidad': False, 'valores': _uniques}
+            
+    return _json.dumps(_out, ensure_ascii=False)
+
+__collect_unique_values__()
+`;
+
+    var jsonStr = await pyodide.runPythonAsync(pyCode);
+    var colsInfo = JSON.parse(jsonStr);
+    var section = buildColumnValuesSection(colsInfo);
+    
+    if (section) {
+      prompts.general += `\n\n${section}`;
     }
   } catch (e) {
-    console.warn("Error cargando insights_script.py:", e);
+    console.warn("[valores únicos] no se pudieron extraer:", e);
   }
-  setStep("step-insights", insightsScript ? "done" : "error");
 }
-*/
+
+function buildColumnValuesSection(colsInfo) {
+  var cols = Object.keys(colsInfo || {});
+  if (cols.length === 0) return "";
+  const header = `
+# VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)
+
+Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`leads_contacts\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
+
+Reglas de filtrado por estos valores:
+1. Filtra SIEMPRE usando uno de los valores literales de la lista de la columna correspondiente. No uses cadenas que no aparezcan aquí.
+2. El texto del usuario puede venir sin tildes, en otra capitalización o con pequeñas variaciones (p. ej. "alcala de henares" o "ALCALA DE HENARES"). Identifica a qué valor real corresponde ("Alcalá de Henares") y filtra por ESE valor exacto. Si dudas entre varios, elige el más parecido ignorando tildes y mayúsculas/minúsculas.
+3. Si el usuario menciona un valor que no se corresponde con ninguno de la lista de esa columna, asigna a \`resultado\` un string corto explicando que ese valor no existe en los datos y, si procede, sugiere los valores disponibles más parecidos.
+4. Para columnas marcadas como de ALTA CARDINALIDAD no se lista el detalle: trátalas con \`.str.contains(..., case=False, na=False)\` en lugar de igualdad exacta.
+`;
+  const columnLines = cols.map(function(name) {
+    var info = colsInfo[name];
+    if (info.alta_cardinalidad) {
+      return `- \`${name}\`: alta cardinalidad (${info.n} valores distintos), no se enumera; usa coincidencia parcial.`;
+    } else {
+      var vals = info.valores.map(function(v) { return `"${v}"`; }).join(", ");
+      return `- \`${name}\`: ${vals}`;
+    }
+  });
+  return header + "\n" + columnLines.join("\n");
+}
+
 
 function revealChatPanel() {
+  var hm = document.getElementById("header-model");
+  if (hm) hm.textContent = "claude · pyodide · plotly";
   document.getElementById("setup-panel").style.display = "none";
   document.getElementById("chat-panel").style.display = "flex";
+  var nc = document.getElementById("new-chat-btn");
+  if (nc) nc.style.display = "";
   setStatus("conectado · listo", "ok");
+  document.getElementById("user-input").focus();
+}
+
+async function clearPyodideEnv() {
+  if (!pyodide) return;
+  
+  var pyCode = `
+_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
+for k in list(globals().keys()):
+    if k not in _keep and not k.startswith('_'):
+        del globals()[k]
+  `;
+  
+  try {
+    await pyodide.runPythonAsync(pyCode);
+  } catch (e) {
+    console.warn("Error limpiando el entorno de Pyodide:", e);
+  }
+}
+
+async function startNewChat() {
+  if (busy) return;
+  clearLocalSession();
+  await clearPyodideEnv();
+  pendingClarify = null;
+  var box = document.getElementById("messages");
+  box.innerHTML = `
+    <div class="welcome-area" id="welcome">
+      <h3>¿En qué puedo ayudarte?</h3>
+      <p>Pregunta sobre el modelo de datos o pide una consulta. El asistente decide el flujo y, si la consulta lo requiere, genera código Python que se ejecuta en tu navegador y produce un gráfico interactivo.</p>
+    </div>
+  `;
+  var quicks = document.getElementById("quick-questions");
+  if (quicks) quicks.style.display = "";
+  
+  setStatus("nuevo chat · listo", "ok");
+  await createConversation();
   document.getElementById("user-input").focus();
 }
 
@@ -753,59 +1057,73 @@ async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) return true;
   var file = CSV_TABLES[varName];
   if (!file) {
-    showDevAlert("loadCsv: «" + varName + "» no existe en CSV_TABLES.");
+    showDevAlert(`loadCsv: «${varName}» no existe en CSV_TABLES.`);
     return false;
   }
+  
   try {
-    var r = await fetch(file + "?v=" + Date.now());
+    var r = await fetch(`${file}?v=${Date.now()}`);
     if (!r.ok) {
-      showDevAlert(
-        "<strong>No se pudo cargar " + esc(file) + "</strong><br>" +
-        "HTTP " + r.status + " " + esc(r.statusText) + "<br><br>" +
-        "Comprueba que el fichero está en la carpeta del proyecto y que estás " +
-        "abriendo el HTML con un servidor HTTP local."
-      );
+      showDevAlert(`
+        <strong>No se pudo cargar ${esc(file)}</strong><br>
+        HTTP ${r.status} ${esc(r.statusText)}<br><br>
+        Comprueba que el fichero está en la carpeta del proyecto y que estás abriendo el HTML con un servidor HTTP local.
+      `);
       return false;
     }
     var text = await r.text();
     if (!text || !text.trim()) {
-      showDevAlert("<strong>El fichero " + esc(file) + " está vacío.</strong>");
+      showDevAlert(`<strong>El fichero ${esc(file)} está vacío.</strong>`);
       return false;
     }
+    
     pyodide.globals.set("__csv_buffer__", text);
     var isPrimary = (varName === PRIMARY_CSV);
-    var pyCode =
-      "from io import StringIO as _SIO\n" +
-      "import traceback as _tb\n" +
-      "try:\n" +
-      "    " + varName + " = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)\n" +
-      "    " + varName + " = " + varName + ".drop_duplicates()\n" +
-      (isPrimary
-        ? "    " + varName + " = __parse_fechas_es__(" + varName + ", " + JSON.stringify(PRIMARY_DATE_COLUMNS) + ")\n"
-        : "") +
-      "    __csv_load_ok__ = True\n" +
-      "    __csv_error__   = ''\n" +
-      "except Exception as _e:\n" +
-      "    __csv_load_ok__ = False\n" +
-      "    __csv_error__   = _tb.format_exc()\n" +
-      "del __csv_buffer__\n";
+    var pyCode = `
+from io import StringIO as _SIO
+import traceback as _tb
+
+try:
+    ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)
+    ${varName} = ${varName}.drop_duplicates()
+    ${isPrimary ? `${varName} = __parse_fechas_es__(${varName}, ${JSON.stringify(PRIMARY_DATE_COLUMNS)})` : ""}
+    
+    __csv_load_ok__ = True
+    __csv_error__   = ''
+except Exception as _e:
+    __csv_load_ok__ = False
+    __csv_error__   = _tb.format_exc()
+
+del __csv_buffer__
+`;
+
     await pyodide.runPythonAsync(pyCode);
+    
     var ok = pyodide.globals.get("__csv_load_ok__");
     var errTxt = pyodide.globals.get("__csv_error__") || "";
-    if (!ok) {
-      showDevAlert(
-        "<strong>pd.read_csv falló parseando " + esc(file) + "</strong>" +
-        "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(String(errTxt)) + "</pre>"
+
+    try {
+      await pyodide.runPythonAsync(
+        "for _k in ('__csv_load_ok__', '__csv_error__'):\n    globals().pop(_k, None)"
       );
+    } catch (e) {}
+
+    if (!ok) {
+      showDevAlert(`
+        <strong>pd.read_csv falló parseando ${esc(file)}</strong>
+        <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(String(errTxt))}</pre>
+      `);
       return false;
     }
+    
     loadedCsvs.add(varName);
     return true;
+    
   } catch (e) {
-    showDevAlert(
-      "<strong>Error inesperado cargando " + esc(file) + "</strong>" +
-      "<pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>" + esc(e.message || String(e)) + "</pre>"
-    );
+    showDevAlert(`
+      <strong>Error inesperado cargando ${esc(file)}</strong>
+      <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(e.message || String(e))}</pre>
+    `);
     return false;
   }
 }
@@ -827,36 +1145,46 @@ async function ensureTablesLoaded(pythonCode) {
 
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  
-  var apiMessages = messages.map(function(msg) {
-    return { role: msg.role, content: msg.content };
+  var threaded = opts.threaded !== false;
+
+  var turn = messages.map(function (m) {
+    return { role: m.role || "user", content: String(m.content || "") };
   });
 
-  if (apiMessages.length > 0) {
-    var lastMsg = apiMessages[apiMessages.length - 1];
-    if (typeof lastMsg.content === "string") {
-      lastMsg.content = [
-        {
-          "type": "text",
-          "text": lastMsg.content,
-          "cache_control": {"type": "ephemeral"}
-        }
-      ];
+  // La API de Anthropic es stateless: el "hilo" se reconstruye en el cliente.
+  // En llamadas con hilo (generación de datos), reenviamos el historial de
+  // mensajes acumulado para que el modelo conserve el modelo de datos inferido.
+  var apiMessages;
+  if (threaded) {
+    var prior = threadMessages.slice(-THREAD_INJECT_MESSAGES);
+    while (prior.length && prior[0].role !== "user") {
+      prior = prior.slice(1);
     }
+    apiMessages = prior.concat(turn);
+  } else {
+    apiMessages = turn;
   }
+
+  // Cache_control sobre el último bloque de usuario para reutilizar prefijo.
+  var lastIdx = apiMessages.length - 1;
+  apiMessages = apiMessages.map(function (m, i) {
+    var block = { type: "text", text: String(m.content || "") };
+    if (i === lastIdx) block.cache_control = { type: "ephemeral" };
+    return { role: m.role, content: [block] };
+  });
 
   var body = {
     model: opts.model || MODEL_ID,
     max_tokens: opts.maxTokens || 1500,
     system: [
-      {
-        "type": "text",
-        "text": systemPrompt,
-        "cache_control": {"type": "ephemeral"}
-      }
+      { type: "text", text: systemPrompt || "", cache_control: { type: "ephemeral" } }
     ],
     messages: apiMessages
   };
+
+  if (typeof opts.temperature === "number") {
+    body.temperature = opts.temperature;
+  }
 
   var r = await fetch(API_URL, {
     method: "POST",
@@ -871,29 +1199,108 @@ async function callModel(messages, systemPrompt, opts) {
 
   if (!r.ok) {
     var errData = await r.json().catch(function () { return {}; });
-    throw new Error((errData.error && errData.error.message) || "HTTP " + r.status);
+    throw new Error((errData.error && errData.error.message) || ("HTTP " + r.status));
   }
-  
+
   var d = await r.json();
-  return (d.content && d.content[0] && d.content[0].text) || "";
+  var text = extractAnthropicText(d);
+
+  // Persistimos el turno en el hilo cliente solo para las llamadas con memoria.
+  if (threaded) {
+    pushThreadMessage("user", turn.length ? turn[turn.length - 1].content : "");
+    pushThreadMessage("assistant", text);
+  }
+
+  return text;
 }
 
-// ============================================================================
-//  Pipeline principal SECUENCIAL
-//
-//   router  →  saludo  ────────────────────────────────────────────────────────►
-//          \─►  modelo  → respuesta texto ──────────────────────────────────────►
-//          \─►  datos   → clarify  → (slots?) → ejecutar python  →  result
-//                                                                      │
-//                                                             (¿Toggle Activo?)
-//                                                                      ▼
-//                                                            context_conclusiones
-//                                                                      │
-//                                                                      ▼
-//                                                                  conclusión
-//
-//  Cada paso usa SU PROPIO system prompt (context_*.txt) para minimizar tokens en cada llamada a la API.
-// ============================================================================
+function pushThreadMessage(role, content) {
+  threadMessages.push({ role: role, content: String(content || "") });
+  if (threadMessages.length > MAX_HISTORY_TURNS * 2) {
+    threadMessages = threadMessages.slice(threadMessages.length - MAX_HISTORY_TURNS * 2);
+  }
+  try { localStorage.setItem(STORAGE_THREAD_KEY, JSON.stringify(threadMessages)); } catch (e) {}
+}
+
+function extractAnthropicText(d) {
+  var out = "";
+  if (d && Array.isArray(d.content)) {
+    for (var i = 0; i < d.content.length; i++) {
+      var c = d.content[i];
+      if (c && c.type === "text" && c.text) out += c.text;
+    }
+  }
+  return out;
+}
+
+
+async function ensureConversation() {
+  if (conversationId) return conversationId;
+
+  var stored = null;
+  var storedTs = 0;
+  try {
+    stored = localStorage.getItem(STORAGE_CONV_KEY);
+    storedTs = parseInt(localStorage.getItem(STORAGE_TS_KEY) || "0", 10) || 0;
+  } catch (e) {}
+
+  var fresh = stored && (Date.now() - storedTs) < SESSION_MAX_AGE_MS;
+  if (fresh) {
+    conversationId = stored;
+    try {
+      var rawCtx = localStorage.getItem(STORAGE_CTX_KEY);
+      if (rawCtx) sessionContext = JSON.parse(rawCtx) || {};
+    } catch (e) { sessionContext = {}; }
+    try {
+      var rawHist = localStorage.getItem(STORAGE_HIST_KEY);
+      if (rawHist) turnHistory = JSON.parse(rawHist) || [];
+    } catch (e) { turnHistory = []; }
+    try {
+      var rawThread = localStorage.getItem(STORAGE_THREAD_KEY);
+      if (rawThread) threadMessages = JSON.parse(rawThread) || [];
+    } catch (e) { threadMessages = []; }
+    touchSession();
+    return conversationId;
+  }
+
+  clearLocalSession();
+  return createConversation();
+}
+
+function touchSession() {
+  try { localStorage.setItem(STORAGE_TS_KEY, String(Date.now())); } catch (e) {}
+}
+
+function clearLocalSession() {
+  conversationId = null;
+  threadMessages = [];
+  sessionContext = {};
+  turnHistory = [];
+  lastTurn = null;
+  lastUserQuery = null;
+  try {
+    localStorage.removeItem(STORAGE_CONV_KEY);
+    localStorage.removeItem(STORAGE_CTX_KEY);
+    localStorage.removeItem(STORAGE_TS_KEY);
+    localStorage.removeItem(STORAGE_HIST_KEY);
+    localStorage.removeItem(STORAGE_THREAD_KEY);
+  } catch (e) {}
+}
+
+function createConversation() {
+  // Anthropic Messages API es stateless: no hay conversación server-side.
+  // Generamos un identificador local que ancla la persistencia del hilo
+  // reconstruido en el cliente (threadMessages) y del contexto de sesión.
+  conversationId = "local-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+  threadMessages = [];
+  try {
+    localStorage.setItem(STORAGE_CONV_KEY, conversationId);
+    localStorage.setItem(STORAGE_THREAD_KEY, JSON.stringify(threadMessages));
+  } catch (e) {}
+  touchSession();
+  return conversationId;
+}
+
 
 async function sendMessage(text) {
   if (busy) return;
@@ -904,6 +1311,7 @@ async function sendMessage(text) {
   resetInput(input);
   hideWelcomeAndQuicks();
   appendMsg("user", userText);
+
   pendingClarify = null;
   setBusy(true);
 
@@ -921,26 +1329,11 @@ async function sendMessage(text) {
       return;
     }
 
-    // ----- Paso 2: clarify (solo para tipo "datos") -----
-    var plan = await planSlots(userText);
-    if (plan && plan.slots && plan.slots.length > 0) {
-      pendingClarify = {
-        userQuery: userText,
-        missing: plan.slots.slice(),
-        answered: [],
-        total: plan.slots.length
-      };
-      lastUserQuery = userText;
-      askNextSlot();
-      return;
-    }
-
-    // ----- Paso 3: ir directo a generación si no hay slots -----
-    lastUserQuery = userText;
-    await answerDataQuery(userText, []);
+    // ----- Paso 2: planificación multi-consulta + clarify + generación -----
+    await runDataTurn(userText);
   } catch (e) {
     clearStaleTypings();
-    appendError("Error en la consulta: " + (e.message || String(e)));
+    appendError(`Error en la consulta: ${e.message || String(e)}`);
     setStatus("error", "error");
   } finally {
     if (!pendingClarify) setBusy(false);
@@ -962,9 +1355,6 @@ function hideWelcomeAndQuicks() {
 function setBusy(b) {
   busy = b;
   document.getElementById("send-btn").disabled = b;
-  // [Generar conclusiones desactivado]
-  // if (b) document.getElementById("insight-btn").disabled = true;
-  // else updateInsightButton();
 }
 
 function fallbackGreeting() {
@@ -984,7 +1374,7 @@ async function routeMessage(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.router,
-      { maxTokens: 300 }
+      { model: MODEL_ID, maxTokens: 400, temperature: 0.2, threaded: false }
     );
     removeTyping(tid);
     var j = extractJSON(reply);
@@ -1014,39 +1404,164 @@ async function answerModelQuery(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.modelo_datos,
-      { maxTokens: 1200 }
+      { model: MODEL_AUX, maxTokens: 1500, temperature: 0.5 }
     );
     removeTyping(tid);
     appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
     setStatus("listo", "ok");
   } catch (e) {
     removeTyping(tid);
-    appendError("Error al consultar el modelo: " + e.message);
+    appendError(`Error al consultar el modelo: ${e.message}`);
     setStatus("error", "error");
   }
 }
 
 
 // ----- Paso 2b: planificación de clarify (usa context_clarify.txt) -----
+function rememberAnsweredSlots(answeredSlots) {
+  if (!answeredSlots) return;
+  for (var i = 0; i < answeredSlots.length; i++) {
+    var a = answeredSlots[i];
+    if (!a || !a.slot || !a.answer) continue;
+    sessionContext[a.slot] = String(a.answer);
+  }
+  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
+}
+
+function rememberQueryParams(queryText) {
+  if (!queryText) return;
+  var t = String(queryText);
+
+  var mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
+  if (mCurso) {
+    sessionContext.curso = `${mCurso[1]}/${mCurso[2]}`;
+  } else if (/\bhist[oó]ric|\btodos los cursos\b/i.test(t)) {
+    sessionContext.curso = "Histórico (todos los cursos)";
+  }
+
+  if (/\bconversi[oó]n\b|\btasa de conversi[oó]n\b|\bCR\b/i.test(t)) {
+    sessionContext.metrica = "Tasa de conversión";
+  } else if (/\bcontactos?\b|\bfirmas?\b|\breservas?\b/i.test(t) && !/\bleads?\b/i.test(t)) {
+    sessionContext.metrica = "Volumen de contactos";
+  } else if (/\bleads?\b/i.test(t) && !/\bcontactos?\b/i.test(t)) {
+    sessionContext.metrica = "Volumen de leads";
+  }
+
+  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
+}
+
+function buildSessionContextText() {
+  var keys = Object.keys(sessionContext);
+  if (keys.length === 0) return "";
+  
+  return keys.map(k => `- ${k}: ${sessionContext[k]}`).join("\n");
+}
+
+function summarizeResultForMemory(execResult) {
+  if (!execResult) return "";
+
+  function tablePreview(table, shapeNote) {
+    if (!table) return "";
+    var cols = Array.isArray(table.columns) ? table.columns : [];
+    var rows = Array.isArray(table.rows) ? table.rows : [];
+    var head = (shapeNote ? shapeNote + ". " : "");
+    if (cols.length) head += "columnas: " + cols.join(", ") + ". ";
+    var preview = rows.slice(0, 6).map(function (r) {
+      return (Array.isArray(r) ? r : Object.values(r)).join(" | ");
+    }).join(" ; ");
+    return (head + preview).slice(0, 700);
+  }
+
+  if (execResult.kind === "number") {
+    return "Valor numérico: " + String(execResult.value);
+  }
+  if (execResult.kind === "text") {
+    return String(execResult.value || "").slice(0, 400);
+  }
+  if (execResult.kind === "dict") {
+    return tablePreview(tableFromDict(execResult.value), null);
+  }
+  if (execResult.kind === "dataframe") {
+    var df = tableFromDataFrame(execResult);
+    return tablePreview(df.table, df.shapeNote);
+  }
+  if (execResult.kind === "plotly") {
+    var table;
+    if (execResult.data_df) {
+      table = tableFromDataFrame({ value: execResult.data_df, shape: null }).table;
+    } else {
+      table = tableFromPlotlySpec(execResult.value);
+    }
+    return "Gráfico generado. " + tablePreview(table, null);
+  }
+  return "";
+}
+
+function recordTurnInHistory(userText, execResult) {
+  var resumen = summarizeResultForMemory(execResult);
+  turnHistory.push({
+    q: String(userText || "").slice(0, 500),
+    r: resumen,
+    ts: Date.now()
+  });
+  if (turnHistory.length > MAX_HISTORY_TURNS) {
+    turnHistory = turnHistory.slice(turnHistory.length - MAX_HISTORY_TURNS);
+  }
+  try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
+}
+
+function buildHistoryContextText() {
+  if (!turnHistory.length) return "";
+  var recent = turnHistory.slice(-HISTORY_INJECT_TURNS);
+  return recent.map(function (t, i) {
+    var line = (i + 1) + ". Pregunta: " + t.q;
+    if (t.r) line += "\n   Resultado: " + t.r;
+    return line;
+  }).join("\n");
+}
+
+function buildFullMemoryText() {
+  var parts = [];
+  var ctx = buildSessionContextText();
+  if (ctx) parts.push("CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n" + ctx);
+  var hist = buildHistoryContextText();
+  if (hist) parts.push("HISTORIAL DE CONSULTAS Y RESULTADOS PREVIOS DE ESTA SESIÓN:\n" + hist);
+  return parts.join("\n\n");
+}
 
 async function planSlots(text) {
   if (!prompts.clarify) return { slots: [] };
   var tid = appendTyping("comprobando si necesito aclaraciones...");
   setStatus("planificando...", "busy");
+  
   try {
+    var memory = buildFullMemoryText();
+    var userContent = "";
+
+    if (memory) {
+      userContent += memory + "\n\n";
+    }
+    userContent += `CONSULTA ACTUAL DEL USUARIO:\n${text}`;
+
     var reply = await callModel(
-      [{ role: "user", content: text }],
+      [{ role: "user", content: userContent }],
       prompts.clarify,
-      { maxTokens: 600 }
+      { model: MODEL_ID, maxTokens: 700, temperature: 0.5, threaded: false }
     );
+
     removeTyping(tid);
     var j = extractJSON(reply);
     if (!j || !Array.isArray(j.slots)) return { slots: [] };
-    return { slots: sanitizeSlots(j.slots) };
+    
+    return { slots: sanitizeSlots(dropKnownSlots(j.slots)) };
   } catch (e) {
     removeTyping(tid);
     return { slots: [] };
   }
+}
+
+function dropKnownSlots(slots) {
+  return slots.filter(s => !(s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)));
 }
 
 function sanitizeSlots(raw) {
@@ -1054,12 +1569,15 @@ function sanitizeSlots(raw) {
   for (var i = 0; i < raw.length && i < 4; i++) {
     var s = raw[i];
     if (!s || !s.pregunta) continue;
+    
     var opciones = Array.isArray(s.opciones)
       ? s.opciones.slice(0, 4).filter(Boolean).map(String)
       : [];
+      
     if (opciones.length < 2) continue;
+    
     clean.push({
-      slot: s.slot || ("slot_" + i),
+      slot: s.slot || `slot_${i}`,
       pregunta: String(s.pregunta),
       opciones: opciones,
       razon: s.razon ? String(s.razon) : "",
@@ -1077,20 +1595,24 @@ function askNextSlot() {
   var slot = pendingClarify.missing[0];
   var idx = pendingClarify.answered.length + 1;
   var total = pendingClarify.total;
+  
   appendClarify(slot, idx, total);
-  setStatus("esperando aclaración (" + idx + "/" + total + ")...", "busy");
+  setStatus(`esperando aclaración (${idx}/${total})...`, "busy");
 }
 
 async function answerClarify(answerText) {
   if (!pendingClarify) return;
   var slot = pendingClarify.missing.shift();
   if (!slot) return;
+  
   markClarifyAnswered(answerText);
+  
   pendingClarify.answered.push({
     slot: slot.slot,
     pregunta: slot.pregunta,
     answer: answerText
   });
+  
   if (pendingClarify.missing.length > 0) {
     askNextSlot();
     return;
@@ -1102,13 +1624,16 @@ function markClarifyAnswered(answerText) {
   var lastBox = document.querySelector(".clarify-box:not(.answered)");
   if (!lastBox) return;
   lastBox.classList.add("answered");
+  
   var btns = lastBox.querySelectorAll(".clarify-option");
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].disabled = true;
-    if (btns[i].textContent === answerText) btns[i].classList.add("selected");
-  }
+  btns.forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === answerText) btn.classList.add("selected");
+  });
+  
   var inp = lastBox.querySelector(".clarify-other-input");
   if (inp) inp.disabled = true;
+  
   var ob = lastBox.querySelector(".clarify-other-btn");
   if (ob) ob.disabled = true;
 }
@@ -1118,10 +1643,12 @@ async function finalizeClarify() {
   var pipe = pendingClarify;
   pendingClarify = null;
   setBusy(true);
+  
   try {
+    rememberAnsweredSlots(pipe.answered);
     await answerDataQuery(pipe.userQuery, pipe.answered);
   } catch (e) {
-    appendError("Error en la consulta: " + e.message);
+    appendError(`Error en la consulta: ${e.message}`);
     setStatus("error", "error");
   } finally {
     setBusy(false);
@@ -1129,31 +1656,141 @@ async function finalizeClarify() {
 }
 
 
+async function runDataTurn(userText) {
+  var subRequests = await planRequests(userText);
+  if (subRequests.length <= 1) {
+    await runDataPipeline(subRequests[0] || userText);
+    return;
+  }
+  await runDataBatch(userText, subRequests);
+}
+
+async function planRequests(userText) {
+  if (!prompts.router) return [userText];
+
+  var tid = appendTyping("planificando la consulta...");
+  setStatus("planificando la consulta...", "busy");
+  try {
+    var memory = buildFullMemoryText();
+    var userContent = "";
+    if (memory) userContent += memory + "\n\n";
+    userContent += "MENSAJE DEL USUARIO:\n" + userText;
+
+    var reply = await callModel(
+      [{ role: "user", content: userContent }],
+      prompts.planificador,
+      { model: MODEL_ID, maxTokens: 600, temperature: 0.1, threaded: false }
+    );
+    removeTyping(tid);
+
+    var j = extractJSON(reply);
+    if (!j || !Array.isArray(j.peticiones)) return [userText];
+
+    var limpio = j.peticiones
+      .filter(function (p) { return p && String(p).trim(); })
+      .map(function (p) { return String(p).trim(); })
+      .slice(0, 6);
+
+    if (limpio.length === 0) return [userText];
+    return limpio;
+  } catch (e) {
+    removeTyping(tid);
+    console.warn("[planificador] error:", e);
+    return [userText];
+  }
+}
+
+async function runDataBatch(originalText, subRequests) {
+  appendPlanNotice(subRequests);
+
+  for (var i = 0; i < subRequests.length; i++) {
+    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
+    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
+    try {
+      await answerDataQuery(subRequests[i], []);
+    } catch (e) {
+      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
+    }
+  }
+
+  lastUserQuery = originalText;
+  setStatus("listo", "ok");
+}
+
+function appendPlanNotice(subRequests) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var items = subRequests.map(function (s, i) {
+    return '<li>' + esc(s) + '</li>';
+  }).join("");
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente<span class="route-badge datos">plan</span></div>'
+    + '<div class="msg-text"><div class="plan-box">'
+    + '<div class="plan-box-title">He detectado ' + subRequests.length
+    + ' peticiones. Las resuelvo una a una:</div>'
+    + '<ol class="plan-box-list">' + items + '</ol>'
+    + '</div></div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+function appendBatchStepHeader(step, total, text) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "batch-step-header";
+  d.innerHTML = '<span class="batch-step-num">' + step + '/' + total + '</span>'
+    + '<span class="batch-step-text">' + esc(text) + '</span>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+async function runDataPipeline(userText) {
+  var plan = await planSlots(userText);
+  if (plan && plan.slots && plan.slots.length > 0) {
+    pendingClarify = {
+      userQuery: userText,
+      missing: plan.slots.slice(),
+      answered: [],
+      total: plan.slots.length
+    };
+    lastUserQuery = userText;
+    askNextSlot();
+    return;
+  }
+  
+  lastUserQuery = userText;
+  await answerDataQuery(userText, []);
+}
+
+
 // ----- Paso 3: generación de código y ejecución (usa context_general.txt) -----
 
 async function answerDataQuery(userText, answeredSlots) {
   var enriched = buildEnrichedQuery(userText, answeredSlots);
-  trimHistory();
-  chatHistory.push({ role: "user", content: enriched });
+  var currentMessage = [{ role: "user", content: enriched }];
 
   var tid = appendTyping("generando código...");
   setStatus("llamando a la API...", "busy");
   var reply;
+  
   try {
-    reply = await callModel(chatHistory, prompts.general, { maxTokens: 1800 });
+    reply = await callModel(currentMessage, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
   } catch (e) {
     removeTyping(tid);
-    appendError("Error de API: " + e.message);
+    appendError(`Error de API: ${e.message}`);
     setStatus("error", "error");
     return;
   }
-  chatHistory.push({ role: "assistant", content: reply });
+  
   removeTyping(tid);
 
   var code = extractPythonCode(reply);
   if (!code) {
     appendAssistantText(
-      "El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n" + reply,
+      `El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n${reply}`,
       "datos"
     );
     setStatus("respuesta sin código", "error");
@@ -1162,6 +1799,7 @@ async function answerDataQuery(userText, answeredSlots) {
 
   setStatus("ejecutando código...", "busy");
   await ensureTablesLoaded(code);
+  
   var execResult = await runPython(code);
   if (execResult.kind === "error") {
     execResult = await retryWithModelFix(code, execResult);
@@ -1176,24 +1814,37 @@ async function answerDataQuery(userText, answeredSlots) {
     answeredSlots: answeredSlots.slice()
   };
 
+  if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
+    rememberQueryParams(enriched);
+    recordTurnInHistory(userText, execResult);
+  }
+  rememberAnsweredSlots(answeredSlots);
+  touchSession();
+
+  var codeForExplain = execResult.__codeUsed || code;
+  if (isResultEligibleForConclusion(execResult) && codeForExplain) {
+    await appendExplanationTo(resultEl, userText, codeForExplain);
+  }
+
   if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
     await appendConclusionTo(resultEl, userText, execResult);
   }
 }
 
 function buildEnrichedQuery(userText, answeredSlots) {
-  if (!answeredSlots || answeredSlots.length === 0) return userText;
-  var out = userText + "\n\nContexto adicional ya acotado por el usuario:\n";
-  for (var i = 0; i < answeredSlots.length; i++) {
-    out += "- " + answeredSlots[i].pregunta + " → " + answeredSlots[i].answer + "\n";
-  }
-  return out;
-}
+  var sections = [];
+  var memory = buildFullMemoryText();
+  if (memory) sections.push(memory);
 
-function trimHistory() {
-  if (chatHistory.length > MAX_HISTORY) {
-    chatHistory = chatHistory.slice(chatHistory.length - MAX_HISTORY);
+  sections.push("CONSULTA ACTUAL:\n" + userText);
+
+  if (answeredSlots && answeredSlots.length > 0) {
+    var slotsText = answeredSlots.map(a => `- ${a.pregunta} → ${a.answer}`).join("\n");
+    sections.push("Contexto adicional ya acotado por el usuario:\n" + slotsText);
   }
+
+  if (sections.length === 1) return userText;
+  return sections.join("\n\n");
 }
 
 function setExecutionStatus(execResult) {
@@ -1201,35 +1852,38 @@ function setExecutionStatus(execResult) {
   setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
 }
 
-
-// ============================================================================
-//  Reintento ante fallo de ejecución
-// ============================================================================
-
 async function retryWithModelFix(originalCode, firstError) {
   appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
   var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
-  var fixMessages = chatHistory.slice();
-  fixMessages.push({
+  var fixMessages = [{
     role: "user",
-    content:
-      "El código que has generado ha fallado al ejecutarse en Pyodide.\n\n" +
-      "CÓDIGO QUE FALLÓ:\n```python\n" + originalCode + "\n```\n\n" +
-      "ERROR (Python):\n```\n" + (firstError.trace || firstError.value || "") + "\n```\n\n" +
-      "Devuelve EXCLUSIVAMENTE un nuevo bloque ```python ... ``` con el código " +
-      "corregido. Asegúrate de que la variable `resultado` queda asignada al " +
-      "final. NO escribas explicaciones."
-  });
+    content: `El código que has generado ha fallado al ejecutarse en Pyodide.
+
+CÓDIGO QUE FALLÓ:
+\`\`\`python
+${originalCode}
+\`\`\`
+
+ERROR (Python):
+\`\`\`
+${firstError.trace || firstError.value || ""}
+\`\`\`
+
+Devuelve EXCLUSIVAMENTE un nuevo bloque \`\`\`python ... \`\`\` con el código corregido. Asegúrate de que la variable \`resultado\` queda asignada al final. NO escribas explicaciones.`
+  }];
+  
   try {
-    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800 });
+    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
     var code = extractPythonCode(reply);
+    
     if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
     if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
+    
     await ensureTablesLoaded(code);
     var second = await runPython(code);
+    
     if (second.kind === "error") return friendlyError(second, code, firstErrorPack);
     second.__codeUsed = code;
-    chatHistory.push({ role: "assistant", content: reply });
     return second;
   } catch (e) {
     return friendlyError(firstError, originalCode, firstErrorPack);
@@ -1239,18 +1893,13 @@ async function retryWithModelFix(originalCode, firstError) {
 function friendlyError(execError, code, firstError) {
   return {
     kind: "error_friendly",
-    value: "No he podido obtener una respuesta esta vez. " +
-           "Prueba a reformular tu pregunta con más detalle " +
-           "(por ejemplo, indicando el curso, la métrica concreta o las " +
-           "categorías exactas que quieres comparar).",
+    value: "No he podido obtener una respuesta esta vez. Prueba a reformular tu pregunta con más detalle (por ejemplo, indicando el curso, la métrica concreta o las categorías exactas que quieres comparar).",
     technical: execError.value || "",
     trace: execError.trace || "",
     firstError: firstError || null,
     __codeUsed: code
   };
 }
-
-
 
 function conclusionsEnabled() {
   var t = document.getElementById("conclusions-toggle");
@@ -1264,6 +1913,69 @@ function isResultEligibleForConclusion(r) {
   return true;
 }
 
+async function appendExplanationTo(resultEl, userQuery, code) {
+  if (!resultEl || !code) return;
+  if (!prompts.explicacion) {
+    console.warn("[explicación] context_explicacion.txt no está cargado.");
+    return;
+  }
+  var textBody = resultEl.querySelector(".msg-text");
+  if (!textBody) return;
+
+  var loadingEl = document.createElement("div");
+  loadingEl.className = "explain-loading";
+  loadingEl.innerHTML = `
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+    <span>preparando explicación...</span>
+  `;
+  
+  var codeToggle = textBody.querySelector(".code-toggle");
+  if (codeToggle) textBody.insertBefore(loadingEl, codeToggle);
+  else textBody.appendChild(loadingEl);
+  scrollToBottom();
+
+  setStatus("generando explicación...", "busy");
+  try {
+    var payload = `PREGUNTA ORIGINAL DEL USUARIO:\n${userQuery}\n\nCÓDIGO QUE SE HA EJECUTADO:\n\`\`\`python\n${code}\n\`\`\`\n\nExplica en lenguaje sencillo y de negocio qué hace este código, siguiendo las reglas del system prompt.`;
+    
+    var reply = await callModel(
+      [{ role: "user", content: payload }],
+      prompts.explicacion,
+      { model: MODEL_AUX, maxTokens: 700, temperature: 0.3 }
+    );
+    
+    var text = (reply || "").trim();
+    if (!text) {
+      removeExplanationPlaceholder(loadingEl);
+    } else {
+      replaceExplanationPlaceholder(loadingEl, text);
+    }
+    setStatus("listo", "ok");
+  } catch (e) {
+    console.warn("[explicación] error:", e);
+    removeExplanationPlaceholder(loadingEl);
+    setStatus("listo", "ok");
+  }
+}
+
+function replaceExplanationPlaceholder(loadingEl, text) {
+  if (!loadingEl || !loadingEl.parentNode) return;
+  var details = document.createElement("details");
+  details.className = "explain-details";
+  details.innerHTML = `
+    <summary>Explicación de código ejecutado</summary>
+    <div class="explain-body">${renderRich(text)}</div>
+  `;
+  loadingEl.parentNode.replaceChild(details, loadingEl);
+  scrollToBottom();
+}
+
+function removeExplanationPlaceholder(loadingEl) {
+  if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+}
+
+// ----- Conclusiones analíticas -----
+
 async function appendConclusionTo(resultEl, userQuery, execResult) {
   if (!resultEl) return;
   if (!prompts.conclusiones) {
@@ -1275,9 +1987,11 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
 
   var loadingEl = document.createElement("div");
   loadingEl.className = "conclusion-loading";
-  loadingEl.innerHTML =
-    '<div class="typing-dots"><span></span><span></span><span></span></div>' +
-    '<span>generando conclusión...</span>';
+  loadingEl.innerHTML = `
+    <div class="typing-dots"><span></span><span></span><span></span></div>
+    <span>generando conclusión...</span>
+  `;
+  
   var codeToggle = textBody.querySelector(".code-toggle");
   if (codeToggle) textBody.insertBefore(loadingEl, codeToggle);
   else textBody.appendChild(loadingEl);
@@ -1286,11 +2000,13 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
   setStatus("generando conclusión...", "busy");
   try {
     var built = buildConclusionPayload(userQuery, execResult);
+    
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { maxTokens: 500 }
+      { model: MODEL_AUX, maxTokens: 700, temperature: 0.6, threaded: false }
     );
+    
     var text = (reply || "").trim();
     if (!text) {
       replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
@@ -1300,7 +2016,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     }
     setStatus("listo", "ok");
   } catch (e) {
-    replaceConclusionPlaceholder(loadingEl, null, "No se pudo generar la conclusión: " + (e.message || String(e)));
+    replaceConclusionPlaceholder(loadingEl, null, `No se pudo generar la conclusión: ${e.message || String(e)}`);
     setStatus("error generando conclusión", "error");
   }
 }
@@ -1308,15 +2024,18 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
 function replaceConclusionPlaceholder(loadingEl, text, errorMsg) {
   if (!loadingEl || !loadingEl.parentNode) return;
   var newEl = document.createElement("div");
+  
   if (text) {
     newEl.className = "conclusion-block";
-    newEl.innerHTML =
-      '<div class="conclusion-label">conclusi&oacute;n</div>' +
-      marked.parse(text);
+    newEl.innerHTML = `
+      <div class="conclusion-label">conclusión</div>
+      ${renderRich(text)}
+    `;
   } else {
     newEl.className = "conclusion-error";
     newEl.textContent = errorMsg || "No se pudo generar la conclusión.";
   }
+  
   loadingEl.parentNode.replaceChild(newEl, loadingEl);
   scrollToBottom();
 }
@@ -1327,6 +2046,7 @@ function appendConclusionError(resultEl, msg) {
   var el = document.createElement("div");
   el.className = "conclusion-error";
   el.textContent = msg;
+  
   var codeToggle = textBody.querySelector(".code-toggle");
   if (codeToggle) textBody.insertBefore(el, codeToggle);
   else textBody.appendChild(el);
@@ -1335,91 +2055,99 @@ function appendConclusionError(resultEl, msg) {
 function buildConclusionPayload(userQuery, r) {
   var aliasMap = {};
   var serialized = serializeResultForLLM(r, aliasMap);
-  var payload =
-    "PREGUNTA ORIGINAL DEL USUARIO:\n" +
-    userQuery + "\n\n" +
-    "RESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto " +
-    "se han sustituido por alias genéricos tipo \"Ciudad A\", \"Residencia B\", " +
-    "etc.; los números son reales):\n" +
-    serialized + "\n\n" +
-    "Redacta la conclusión refiriéndote a las categorías por su alias EXACTO " +
-    "(p. ej. \"Ciudad A\"). NO inventes nombres reales. Sigue las reglas del system prompt.";
+  
+  var payload = `PREGUNTA ORIGINAL DEL USUARIO:\n${userQuery}\n\nRESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto se han sustituido por alias genéricos tipo "Ciudad A", "Residencia B", etc.; los números son reales):\n${serialized}\n\nRedacta la conclusión refiriéndote a las categorías por su alias EXACTO (p. ej. "Ciudad A"). NO inventes nombres reales. Sigue las reglas del system prompt.`;
+  
   return { payload: payload, aliasMap: aliasMap };
 }
+
 
 function serializeResultForLLM(r, aliasMap) {
   if (!r) return "(sin resultado)";
 
   if (r.kind === "number") {
-    return "Valor numérico (real): " + String(r.value);
+    var num = r.value;
+    var hint = "";
+    if (typeof num === "number" && num > 0 && num < 1) {
+      hint = ` (es una fracción entre 0 y 1; probablemente una tasa/proporción: ${Math.round(num * 1000) / 10} %)`;
+    } else if (typeof num === "number" && Number.isInteger(num)) {
+      hint = " (conteo entero de registros/solicitudes)";
+    }
+    return `Valor numérico (real): ${num}${hint}\nNOTA: esta es la única cifra del resultado; contextualiza su magnitud respecto a la pregunta, sin inventar comparaciones que no estén en los datos.`;
   }
+  
   if (r.kind === "text") {
-    return "Texto devuelto por el script: " + String(r.value);
+    return `Texto devuelto por el script (es lo que ve el usuario):\n${r.value}`;
   }
+  
   if (r.kind === "dict") {
     var dictTable = tableFromDict(r.value);
     return tableToAnonymizedText(dictTable, aliasMap, null);
   }
+  
   if (r.kind === "dataframe") {
     var dfTable = tableFromDataFrame(r);
     return tableToAnonymizedText(dfTable.table, aliasMap, dfTable.shapeNote);
   }
+  
   if (r.kind === "plotly") {
     var plotTable;
+    var fuente;
+    
     if (r.data_df) {
       var dfWrap = tableFromDataFrame({ value: r.data_df, shape: null });
       plotTable = dfWrap.table;
+      fuente = "Estos son los datos EXACTOS que sostienen el gráfico que ve el usuario.";
     } else {
       plotTable = tableFromPlotlySpec(r.value);
+      fuente = "Estos datos se han reconstruido a partir de las series del gráfico (el script no adjuntó la tabla original), pueden estar incompletos: razona solo sobre lo que aparece.";
     }
+    
     if (!plotTable || plotTable.columns.length === 0) {
       return "El resultado es un gráfico, pero no se pudieron extraer datos tabulares de sus series.";
     }
-    return "Datos subyacentes del gráfico:\n" +
-           tableToAnonymizedText(plotTable, aliasMap, null);
+    return `Datos subyacentes del gráfico (lo que el usuario ve representado). ${fuente}\n${tableToAnonymizedText(plotTable, aliasMap, null)}`;
   }
-  return "Resultado no estructurado: " + JSON.stringify(r);
+  
+  return `Resultado no estructurado: ${JSON.stringify(r)}`;
 }
-
 
 function tableFromDataFrame(r) {
   var parsed;
-  try { parsed = JSON.parse(r.value); }
-  catch (e) { return { table: { columns: ["error"], rows: [["DataFrame no parseable"]] }, shapeNote: null }; }
+  try { 
+    parsed = JSON.parse(r.value); 
+  } catch (e) { 
+    return { table: { columns: ["error"], rows: [["DataFrame no parseable"]] }, shapeNote: null }; 
+  }
 
   var cols = Array.isArray(parsed.columns) ? parsed.columns.slice() : [];
   var data = Array.isArray(parsed.data) ? parsed.data : [];
-
   var dropIdx = {};
-  for (var i = 0; i < cols.length; i++) {
-    if (isSensitiveColumn(cols[i])) dropIdx[i] = true;
-  }
-  var keepCols = [];
-  for (var c = 0; c < cols.length; c++) {
-    if (!dropIdx[c]) keepCols.push(String(cols[c]));
-  }
+  cols.forEach(function(col, i) {
+    if (isSensitiveColumn(col)) dropIdx[i] = true;
+  });
+  
+  var keepCols = cols.filter(function(_, i) { return !dropIdx[i]; }).map(String);
 
   var totalRows = data.length;
   var maxRows = Math.min(totalRows, CONCLUSION_MAX_ROWS);
-  var rows = [];
-  for (var rIdx = 0; rIdx < maxRows; rIdx++) {
-    var row = data[rIdx] || [];
-    var keepRow = [];
-    for (var k = 0; k < row.length; k++) {
-      if (!dropIdx[k]) keepRow.push(row[k]);
-    }
-    rows.push(keepRow);
-  }
+  
+  var rows = data.slice(0, maxRows).map(function(row) {
+    return row.filter(function(_, i) { return !dropIdx[i]; });
+  });
 
   var shapeNote = null;
   var sensibleEliminadas = Object.keys(dropIdx).length;
   var parts = [];
+  
   var origShape = (r.shape && r.shape.length === 2)
-    ? (r.shape[0] + " filas × " + r.shape[1] + " columnas (original)")
-    : (totalRows + " filas × " + cols.length + " columnas");
-  parts.push("Shape: " + origShape);
-  if (sensibleEliminadas > 0) parts.push("columnas con datos personales eliminadas: " + sensibleEliminadas);
-  if (totalRows > maxRows) parts.push("mostrando las primeras " + maxRows + " de " + totalRows + " filas");
+    ? `${r.shape[0]} filas × ${r.shape[1]} columnas (original)`
+    : `${totalRows} filas × ${cols.length} columnas`;
+    
+  parts.push(`Shape: ${origShape}`);
+  if (sensibleEliminadas > 0) parts.push(`columnas con datos personales eliminadas: ${sensibleEliminadas}`);
+  if (totalRows > maxRows) parts.push(`mostrando las primeras ${maxRows} de ${totalRows} filas`);
+  
   shapeNote = parts.join(" | ");
 
   return { table: { columns: keepCols, rows: rows }, shapeNote: shapeNote };
@@ -1432,12 +2160,8 @@ function tableFromDict(maybeJsonString) {
   } catch (e) {
     return { columns: ["valor"], rows: [[String(maybeJsonString)]] };
   }
-  var rows = [];
-  for (var k in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, k)) {
-      rows.push([k, obj[k]]);
-    }
-  }
+  
+  var rows = Object.entries(obj).map(function(entry) { return [entry[0], entry[1]]; });
   return { columns: ["KPI", "Valor"], rows: rows };
 }
 
@@ -1445,6 +2169,7 @@ function tableFromPlotlySpec(jsonStr) {
   var spec;
   try { spec = JSON.parse(jsonStr); }
   catch (e) { return { columns: [], rows: [] }; }
+  
   var traces = Array.isArray(spec.data) ? spec.data : [];
   if (traces.length === 0) return { columns: [], rows: [] };
 
@@ -1455,7 +2180,7 @@ function tableFromPlotlySpec(jsonStr) {
 
   for (var t = 0; t < traces.length; t++) {
     var tr = traces[t] || {};
-    var serieName = tr.name || ("Serie " + (t + 1));
+    var serieName = tr.name || `Serie ${t + 1}`;
     if (seriesNames.indexOf(serieName) < 0) seriesNames.push(serieName);
 
     var keys, vals;
@@ -1467,6 +2192,7 @@ function tableFromPlotlySpec(jsonStr) {
       keys = horizontal ? (tr.y || []) : (tr.x || []);
       vals = horizontal ? (tr.x || []) : (tr.y || []);
     }
+    
     var n = Math.min(keys.length, vals.length);
     for (var i = 0; i < n; i++) {
       var cat = String(keys[i]);
@@ -1496,6 +2222,7 @@ function tableFromPlotlySpec(jsonStr) {
   var columns = [axisTitle].concat(seriesNames);
   var rows = [];
   var limit = Math.min(catOrder.length, CONCLUSION_MAX_ROWS);
+  
   for (var c = 0; c < limit; c++) {
     var category = catOrder[c];
     var rowArr = [category];
@@ -1512,33 +2239,48 @@ function tableFromPlotlySpec(jsonStr) {
 // ---------------------------------------------------------------------------
 //  Pseudonimización reversible + render a texto
 // ---------------------------------------------------------------------------
+
+// Columnas cuyo contenido NO se anonimiza (se pasan en claro al LLM de conclusiones).
+var WHITELIST_NO_ANON = [
+  'Origen/Campaña Posibles Clientes', 'Fuente de Posible Cliente', 'Curso', 'Curso_corregido', 
+  'Ciudades de interés', 'Ciudad_deinteres_corregido', 'Tipo de registro', 'Ciudad actual', 'Ciudad_actual_corregido', 
+  'Fecha creación', 'Origen_Agrupado', 'Fuente_Agrupada', 
+];
+
+function isWhitelistedColumn(colName) {
+  var s = String(colName).toLowerCase().trim();
+  return WHITELIST_NO_ANON.some(function (w) { 
+    return s === String(w).toLowerCase().trim(); 
+  });
+}
+
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
   var columns = table.columns || [];
   var rows = table.rows || [];
-
   var anonState = { counters: {}, valueToAlias: {} };
-
-  var outRows = [];
-  for (var r = 0; r < rows.length; r++) {
-    var row = rows[r] || [];
-    var outRow = [];
-    for (var c = 0; c < row.length; c++) {
-      var colName = columns[c] !== undefined ? String(columns[c]) : ("col_" + c);
-      outRow.push(anonymizeCell(row[c], colName, anonState, aliasMap));
-    }
-    outRows.push(outRow);
-  }
+  var outRows = rows.map(function(row) {
+    return row.map(function(cell, c) {
+      var colName = columns[c] !== undefined ? String(columns[c]) : `col_${c}`;
+      return anonymizeCell(cell, colName, anonState, aliasMap);
+    });
+  });
 
   var lines = [];
-  if (shapeNote) lines.push(shapeNote);
-  if (shapeNote) lines.push("");
-  lines.push(columns.map(function (x) { return String(x); }).join(" | "));
-  lines.push(columns.map(function () { return "---"; }).join(" | "));
-  for (var i = 0; i < outRows.length; i++) {
-    lines.push(outRows[i].join(" | "));
+  if (shapeNote) {
+    lines.push(shapeNote);
+    lines.push("");
   }
+  
+  lines.push(columns.map(String).join(" | "));
+  lines.push(columns.map(function() { return "---"; }).join(" | "));
+  
+  outRows.forEach(function(outRow) {
+    lines.push(outRow.join(" | "));
+  });
+  
   return lines.join("\n");
 }
+
 
 function anonymizeCell(val, colName, anonState, aliasMap) {
   if (val === null || val === undefined) return "—";
@@ -1547,28 +2289,28 @@ function anonymizeCell(val, colName, anonState, aliasMap) {
   var asStr = String(val).trim();
   if (asStr === "") return "—";
   if (isNumericLike(asStr)) return asStr;
-
   if (isTemporalColumn(colName)) return asStr;
+  if (isWhitelistedColumn(colName)) return asStr;
 
   return aliasFor(asStr, colName, anonState, aliasMap);
 }
 
 function isTemporalColumn(colName) {
   var s = String(colName).toLowerCase();
-  if (s.indexOf("mes") >= 0)   return true;
-  if (s.indexOf("fecha") >= 0) return true;
-  if (s.indexOf("año") >= 0 || s.indexOf("anio") >= 0 || s.indexOf("year") >= 0) return true;
-  return false;
+  return s.includes("mes") || s.includes("fecha") || s.includes("año") || s.includes("anio") || s.includes("year");
 }
 
 function aliasFor(realValue, colName, anonState, aliasMap) {
-  if (Object.prototype.hasOwnProperty.call(anonState.valueToAlias, realValue)) {
+  if (realValue in anonState.valueToAlias) {
     return anonState.valueToAlias[realValue];
   }
+  
   var prefix = aliasPrefixForColumn(colName);
   if (!anonState.counters[prefix]) anonState.counters[prefix] = 0;
+  
   var idx = anonState.counters[prefix]++;
-  var alias = prefix + " " + indexToLetters(idx);
+  var alias = `${prefix} ${indexToLetters(idx)}`;
+  
   anonState.valueToAlias[realValue] = alias;
   aliasMap[alias] = realValue;
   return alias;
@@ -1576,22 +2318,22 @@ function aliasFor(realValue, colName, anonState, aliasMap) {
 
 function aliasPrefixForColumn(colName) {
   var s = String(colName).toLowerCase();
-  if (s.indexOf("ciudad") >= 0)     return "Ciudad";
-  if (s.indexOf("residencia") >= 0) return "Residencia";
-  if (s.indexOf("curso") >= 0)      return "Curso";
-  if (s.indexOf("origen") >= 0)     return "Origen";
-  if (s.indexOf("fuente") >= 0)     return "Fuente";
-  if (s.indexOf("campaña") >= 0 || s.indexOf("campana") >= 0) return "Campaña";
-  if (s.indexOf("tipo") >= 0)       return "Tipo";
-  if (s.indexOf("particular") >= 0 || s.indexOf("grupo") >= 0 || s.indexOf("segmento") >= 0) return "Segmento";
-  if (s.indexOf("mes") >= 0)        return "Mes";
-  if (s.indexOf("kpi") >= 0 || s.indexOf("métrica") >= 0 || s.indexOf("metrica") >= 0) return "Métrica";
+  if (s.includes("ciudad")) return "Ciudad";
+  if (s.includes("residencia")) return "Residencia";
+  if (s.includes("curso")) return "Curso";
+  if (s.includes("origen")) return "Origen";
+  if (s.includes("fuente")) return "Fuente";
+  if (s.includes("campaña") || s.includes("campana")) return "Campaña";
+  if (s.includes("tipo")) return "Tipo";
+  if (s.includes("particular") || s.includes("grupo") || s.includes("segmento")) return "Segmento";
+  if (s.includes("mes")) return "Mes";
+  if (s.includes("kpi") || s.includes("métrica") || s.includes("metrica")) return "Métrica";
   return "Categoría";
 }
 
 function indexToLetters(n) {
   var s = "";
-  n = n + 1; // 1-based
+  n = n + 1;
   while (n > 0) {
     var rem = (n - 1) % 26;
     s = String.fromCharCode(65 + rem) + s;
@@ -1603,15 +2345,23 @@ function indexToLetters(n) {
 function deanonymizeText(text, aliasMap) {
   if (!text || !aliasMap) return text;
   var aliases = Object.keys(aliasMap);
+  if (aliases.length === 0) return text;
+  
   aliases.sort(function (a, b) { return b.length - a.length; });
-  var out = text;
-  for (var i = 0; i < aliases.length; i++) {
-    var alias = aliases[i];
-    var real = aliasMap[alias];
-    var pattern = new RegExp("(^|[^\\wÀ-ÿ])(" + escapeRegExp(alias) + ")(?![\\wÀ-ÿ])", "g");
-    out = out.replace(pattern, function (m, pre) { return pre + real; });
-  }
-  return out;
+
+  var lowerAliasMap = {};
+  aliases.forEach(function(alias) {
+    lowerAliasMap[alias.toLowerCase()] = aliasMap[alias];
+  });
+
+  var alternation = aliases.map(escapeRegExp).join("|");
+  
+  var pattern = new RegExp(`(^|[^0-9A-Za-zÀ-ÿ])(${alternation})(?![0-9A-Za-zÀ-ÿ])`, "gi");
+  
+  return text.replace(pattern, function (m, pre, matchedAlias) {
+    var real = lowerAliasMap[matchedAlias.toLowerCase()];
+    return (real === undefined || real === null) ? m : (pre + real);
+  });
 }
 
 function escapeRegExp(s) {
@@ -1628,192 +2378,17 @@ function formatNumberForLLM(val) {
 }
 
 function isSensitiveColumn(colName) {
-  if (colName === null || colName === undefined) return false;
+  if (!colName) return false;
   var s = String(colName).trim().toLowerCase();
-  for (var i = 0; i < SENSITIVE_COLUMNS.length; i++) {
-    if (s === SENSITIVE_COLUMNS[i].toLowerCase()) return true;
-  }
-  if (s.indexOf("correo") >= 0) return true;
-  if (s.indexOf("email") >= 0 || s.indexOf("e-mail") >= 0) return true;
-  if (s.indexOf("nombre") >= 0) return true;
-  if (s.indexOf("apellido") >= 0) return true;
-  return false;
+  
+  return s.includes("correo") || 
+         s.includes("email") || 
+         s.includes("e-mail") || 
+         s.includes("nombre") || 
+         s.includes("apellido");
 }
 
 
-// ============================================================================
-//  Generar conclusiones (insights_script.py + parser LLM fallback)
-//  [DESACTIVADO]
-// ============================================================================
-/*
-async function generateInsights() {
-  if ((!lastUserQuery && !lastTurn) || busy) return;
-  if (!insightsScript) {
-    appendError("El script de análisis (insights_script.py) no se ha cargado correctamente.");
-    return;
-  }
-
-  setBusy(true);
-  // El script de insights solo necesita `leads_contacts` (la tabla de hechos),
-  // que ya se carga en el arranque. Las antiguas tablas de dimensiones se
-  // eliminaron de `CSV_TABLES`: intentar cargarlas aquí fallaba con 404 porque
-  // los ficheros no están en el despliegue.
-
-  var queryForInsights = (lastTurn && lastTurn.enrichedQuery) || lastUserQuery;
-  appendMsg("user", "Generar conclusiones sobre: \"" + (lastUserQuery || queryForInsights) + "\"");
-
-  var tid = appendTyping("analizando variaciones...");
-  setStatus("calculando drivers...", "busy");
-
-  try {
-    var prelimFilters = deriveFiltersFromTurn(lastTurn);
-    setInsightsContext(queryForInsights, null, prelimFilters);
-    var execResult = await runPython(insightsScript);
-    execResult = await maybeReparseAndRerun(execResult, queryForInsights, prelimFilters, tid);
-    removeTyping(tid);
-    appendResult(execResult, insightsScript, "insight");
-    setStatus("análisis completado", "ok");
-  } catch (e) {
-    removeTyping(tid);
-    appendError("Error en el análisis: " + e.message);
-    setStatus("error", "error");
-  } finally {
-    setBusy(false);
-  }
-}
-
-function setInsightsContext(query, cohorts, filters) {
-  pyodide.globals.set("last_user_query", query);
-  pyodide.globals.set("llm_parsed_cohorts", cohorts);
-  pyodide.globals.set("llm_extra_filters", pyodide.toPy(filters || []));
-}
-
-// Si el script Python pide ayuda al LLM (devuelve "__NEEDS_LLM_PARSING__..."),
-// invocamos context_insights_parser.txt para que el LLM extraiga las cohortes
-// y los filtros, y volvemos a ejecutar el script con esos hints.
-async function maybeReparseAndRerun(execResult, query, prelimFilters, tid) {
-  if (execResult.kind !== "text" ||
-      typeof execResult.value !== "string" ||
-      !execResult.value.startsWith("__NEEDS_LLM_PARSING__")) {
-    return execResult;
-  }
-  removeTyping(tid);
-  var newTid = appendTyping("interpretando consulta...");
-  setStatus("interpretando consulta...", "busy");
-  var parsed = await parseQueryForInsights(query);
-  removeTyping(newTid);
-  if (!parsed) {
-    execResult.value = execResult.value.replace("__NEEDS_LLM_PARSING__\n", "");
-    return execResult;
-  }
-  var allFilters = mergeFilters(prelimFilters, parsed.filters || []);
-  setInsightsContext(query, parsed.cohorts, allFilters);
-  return await runPython(insightsScript);
-}
-
-function mergeFilters(base, extra) {
-  var merged = base.slice();
-  for (var i = 0; i < extra.length; i++) {
-    if (!filterByColumn(merged, extra[i].columna)) merged.push(extra[i]);
-  }
-  return merged;
-}
-
-function filterByColumn(list, columna) {
-  for (var i = 0; i < list.length; i++) {
-    if (list[i].columna === columna) return true;
-  }
-  return false;
-}
-
-function deriveFiltersFromTurn(turn) {
-  var out = [];
-  if (!turn || !turn.answeredSlots) return out;
-  for (var i = 0; i < turn.answeredSlots.length; i++) {
-    var f = deriveFilterFromSlot(turn.answeredSlots[i]);
-    if (f) out.push(f);
-  }
-  return out;
-}
-
-function deriveFilterFromSlot(slotAnswer) {
-  var ans = (slotAnswer.answer || "").trim();
-  var slot = (slotAnswer.slot || "").toLowerCase();
-  var preg = (slotAnswer.pregunta || "").toLowerCase();
-  if (slot.indexOf("curso") >= 0 || preg.indexOf("curso") >= 0) {
-    var m = ans.match(/(20\d{2})\s*\/\s*(20\d{2})/);
-    if (m) return { columna: "Curso", valor: m[1] + "/" + m[2] };
-    return null;
-  }
-  if (slot.indexOf("tipo") >= 0 || preg.indexOf("tipo de registro") >= 0) {
-    if (/solo leads/i.test(ans)) return { columna: "Tipo de registro", valor: "Leads" };
-    if (/solo contactos|solo contacts/i.test(ans)) return { columna: "Tipo de registro", valor: "Contacts" };
-    return null;
-  }
-  return null;
-}
-
-// Llamada al LLM con context_insights_parser.txt (system prompt corto, dedicado).
-async function parseQueryForInsights(query) {
-  if (!prompts.insights_parser) return null;
-  try {
-    var reply = await callModel(
-      [{ role: "user", content: query }],
-      prompts.insights_parser,
-      { maxTokens: 400 }
-    );
-    var j = extractJSON(reply);
-    if (!j) return null;
-    var cohorts = parseCohortsField(j.cohorts);
-    if (!cohorts) return null;
-    return { cohorts: cohorts, filters: parseFiltersField(j.filters) };
-  } catch (e) {
-    return null;
-  }
-}
-
-function parseCohortsField(c) {
-  if (!c || !c.dimension || !c.valor_a || !c.valor_b) return null;
-  return {
-    dimension: String(c.dimension),
-    valor_a: String(c.valor_a),
-    valor_b: String(c.valor_b),
-    metrica: c.metrica ? String(c.metrica) : "auto"
-  };
-}
-
-function parseFiltersField(arr) {
-  var out = [];
-  if (!Array.isArray(arr)) return out;
-  for (var i = 0; i < arr.length; i++) {
-    var f = arr[i];
-    if (f && f.columna && f.valor) {
-      out.push({ columna: String(f.columna), valor: String(f.valor) });
-    }
-  }
-  return out;
-}
-
-function updateInsightButton() {
-  var btn = document.getElementById("insight-btn");
-  var hint = document.getElementById("insight-hint");
-  if (lastUserQuery && !busy && insightsScript) {
-    btn.disabled = false;
-    var truncated = lastUserQuery.length > 60 ? lastUserQuery.substring(0, 60) + "…" : lastUserQuery;
-    hint.textContent = "Explicar variación de: \"" + truncated + "\"";
-  } else if (!insightsScript) {
-    btn.disabled = true;
-    hint.textContent = "Script de análisis no cargado.";
-  } else if (!lastUserQuery) {
-    btn.disabled = true;
-    hint.textContent = "Haz una consulta comparativa para activar el análisis.";
-  } else {
-    btn.disabled = true;
-    hint.textContent = "Procesando...";
-  }
-}
-*/
-// [Fin del bloque Generar conclusiones desactivado]
 
 
 // ============================================================================
@@ -1822,16 +2397,23 @@ function updateInsightButton() {
 
 async function runPython(code) {
   if (!code) return { kind: "error", value: "Código vacío" };
+  
   var normalized = normalizeCode(code);
-  try { await pyodide.runPythonAsync("__reset_resultado__()"); } catch (e) {}
+  
+  try { 
+    await pyodide.runPythonAsync("__reset_resultado__()"); 
+  } catch (e) {}
+  
   try {
     await pyodide.runPythonAsync(normalized);
   } catch (e) {
     var msg = e && e.message ? e.message : String(e);
     return { kind: "error", value: extractPyErrorMessage(msg), trace: msg };
   }
+  
   try {
     var jsonStr = await pyodide.runPythonAsync("__serialize_resultado__()");
+    jsonStr = jsonStr.replace(/\bNaN\b/g, "null");
     return JSON.parse(jsonStr);
   } catch (e) {
     var serMsg = e && e.message ? e.message : String(e);
@@ -1840,20 +2422,18 @@ async function runPython(code) {
       var diag = await pyodide.runPythonAsync(
         "(type(resultado).__name__ + ' => ' + repr(resultado)[:400]) if 'resultado' in globals() else 'resultado no asignado'"
       );
-      diagnostic = "Tipo de resultado: " + String(diag) + "\n\n" + serMsg;
+      diagnostic = `Tipo de resultado: ${String(diag)}\n\n${serMsg}`;
     } catch (e2) {}
+    
     return { kind: "error", value: "No se pudo serializar el resultado", trace: diagnostic };
   }
 }
 
 function extractPyErrorMessage(traceback) {
   if (!traceback) return "Error desconocido";
-  var lines = traceback.split("\n").filter(function (l) { return l.trim(); });
-  for (var i = lines.length - 1; i >= 0; i--) {
-    var line = lines[i];
-    if (/^[A-Z]\w*Error:/.test(line) || /^[A-Z]\w*Warning:/.test(line)) return line;
-  }
-  return lines[lines.length - 1] || "Error en la ejecución";
+  var lines = traceback.split("\n").filter(l => l.trim());
+  var errLine = lines.reverse().find(line => /^[A-Z]\w*(Error|Warning):/.test(line));
+  return errLine || lines[0] || "Error en la ejecución";
 }
 
 
@@ -1892,64 +2472,54 @@ function extractPythonCode(reply) {
 }
 
 function normalizeCode(code) {
-  code = code.replace(/^\uFEFF/, "")
-             .replace(/\r\n/g, "\n")
-             .replace(/\r/g, "\n");
+  code = code.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   code = stripCommonLeadingWhitespace(code);
   return code.trim();
 }
 
 function stripCommonLeadingWhitespace(code) {
-  var lines = code.split("\n");
-  var minLead = Infinity;
-  for (var i = 0; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    var lead = lines[i].match(/^[ \t]*/)[0].length;
-    if (lead < minLead) minLead = lead;
-    if (minLead === 0) break;
-  }
-  if (minLead === Infinity || minLead === 0) return code;
-  for (var j = 0; j < lines.length; j++) {
-    if (lines[j].length >= minLead) lines[j] = lines[j].substring(minLead);
-  }
-  return lines.join("\n");
+  const lines = code.split("\n");
+  const indents = lines
+    .filter(line => line.trim().length > 0)
+    .map(line => line.match(/^[ \t]*/)[0].length);
+  const minLead = indents.length > 0 ? Math.min(...indents) : 0;
+  
+  if (minLead === 0) return code;
+  return lines.map(line => line.length >= minLead ? line.substring(minLead) : line).join("\n");
 }
 
 
 // ============================================================================
-//  Render del chat
+//  Renderizado de mensajes (UI)
 // ============================================================================
 
-function appendMsg(role, text) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg " + role;
-  var av = role === "user" ? "U" : "A";
-  var rl = role === "user" ? "Tú" : "Asistente";
-  var formattedText = role === "user" ? esc(text) : marked.parse(text);
-  d.innerHTML = '<div class="msg-avatar">' + av + '</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">' + rl + '</div>'
-    + '<div class="msg-text">' + formattedText + '</div>'
-    + '</div>';
+function appendMsg(role, text, route = null) {
+  const box = document.getElementById("messages");
+  const d = document.createElement("div");
+  d.className = `msg ${role}`;
+
+  const isUser = role === "user";
+  const avatar = isUser ? "U" : "A";
+  const roleName = isUser ? "Tú" : "Asistente";
+  const formattedText = isUser ? esc(text) : renderRich(text);
+  const badgeHtml = route 
+    ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
+    : '';
+
+  d.innerHTML = `
+    <div class="msg-avatar">${avatar}</div>
+    <div class="msg-body">
+      <div class="msg-role">${roleName}${badgeHtml}</div>
+      <div class="msg-text">${formattedText}</div>
+    </div>
+  `;
+
   box.appendChild(d);
   scrollToBottom();
 }
 
 function appendAssistantText(text, route) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  var badge = route
-    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
-    : '';
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + badge + '</div>'
-    + '<div class="msg-text">' + marked.parse(text || "") + '</div>'
-    + '</div>';
-  box.appendChild(d);
-  scrollToBottom();
+  appendMsg("assistant", text, route);
 }
 
 function routeLabel(route) {
@@ -1961,154 +2531,290 @@ function routeLabel(route) {
 }
 
 function appendResult(result, code, route) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
+  const box = document.getElementById("messages");
+  const d = document.createElement("div");
   d.className = "msg assistant";
-  var boxCls = (route === "insight") ? "result-box insight" : "result-box";
-  var inner = (result.kind === "error" || result.kind === "error_friendly")
-    ? renderError(result)
-    : '<div class="' + boxCls + '">' + renderResult(result) + '</div>';
-  inner += renderCodeToggle(code, route === "insight");
-  var badge = route
-    ? '<span class="route-badge ' + route + '">' + routeLabel(route) + '</span>'
+  const isError = result.kind === "error" || result.kind === "error_friendly";
+  const boxCls = route === "insight" ? "result-box insight" : "result-box";
+  
+  const resultContent = isError 
+    ? renderError(result) 
+    : `<div class="${boxCls}">${renderResult(result)}</div>`;
+
+  const codeHtml = renderCodeToggle(code, route === "insight");
+  const badgeHtml = route 
+    ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
     : '';
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente' + badge + '</div>'
-    + '<div class="msg-text">' + inner + '</div>'
-    + '</div>';
+
+  d.innerHTML = `
+    <div class="msg-avatar">A</div>
+    <div class="msg-body">
+      <div class="msg-role">Asistente${badgeHtml}</div>
+      <div class="msg-text">
+        ${resultContent}
+        ${codeHtml}
+      </div>
+    </div>
+  `;
+
   box.appendChild(d);
   attachCodeToggle(d);
   if (result.kind === "plotly" && result.__plotElId) {
     renderPlotlyInto(result.__plotElId, result.value);
   }
+  
   scrollToBottom();
   return d;
 }
 
 function attachCodeToggle(container) {
-  var toggle = container.querySelector(".code-toggle");
+  const toggle = container.querySelector(".code-toggle");
   if (!toggle) return;
-  toggle.addEventListener("click", function () {
-    this.classList.toggle("expanded");
-    var blk = this.nextElementSibling;
-    if (blk) blk.classList.toggle("expanded");
+  toggle.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    btn.classList.toggle("expanded");
+    const codeBlock = btn.nextElementSibling;
+    if (codeBlock) {
+      codeBlock.classList.toggle("expanded");
+    }
   });
 }
 
 function renderResult(r) {
-  if (r.kind === "number")    return renderNumber(r);
-  if (r.kind === "text")      return '<div class="text-result">' + marked.parse(r.value) + '</div>';
-  if (r.kind === "dict")      return renderDict(r);
-  if (r.kind === "dataframe") return renderDataFrame(JSON.parse(r.value), r.shape);
-  if (r.kind === "plotly") {
-    var id = "plot_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
-    r.__plotElId = id;
-    return '<div class="plot-container" id="' + id + '"></div>';
+  switch (r.kind) {
+    case "number":    return renderNumber(r);
+    case "text":      return `<div class="text-result">${renderRich(r.value)}</div>`;
+    case "dict":      return renderDict(r);
+    case "dataframe": return renderDataFrame(JSON.parse(r.value), r.shape);
+    case "plotly":
+      const id = `plot_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      r.__plotElId = id;
+      return `<div class="plot-container" id="${id}"></div>`;
+    case "none":      return `<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>`;
+    default:          return `<div class="text-result">${esc(JSON.stringify(r))}</div>`;
   }
-  if (r.kind === "none") return '<div class="text-result"><em>El script no asignó nada a <code>resultado</code>.</em></div>';
-  return '<div class="text-result">' + esc(JSON.stringify(r)) + '</div>';
 }
 
 function renderNumber(r) {
-  var formatted = (typeof r.value === "number" && !Number.isInteger(r.value))
-    ? r.value.toFixed(4).replace(/\.?0+$/, "")
-    : new Intl.NumberFormat("es-ES").format(r.value);
-  return '<div class="scalar-label">resultado</div><div class="scalar">' + esc(formatted) + '</div>';
+  const val = r.value;
+  const formatted = (typeof val === "number" && !Number.isInteger(val))
+    ? val.toFixed(4).replace(/\.?0+$/, "")
+    : new Intl.NumberFormat("es-ES").format(val);
+    
+  return `<div class="scalar-label">resultado</div><div class="scalar">${esc(formatted)}</div>`;
 }
 
 function renderDict(r) {
-  var obj;
-  try { obj = JSON.parse(r.value); } catch (e) { return '<div class="text-result">' + esc(r.value) + '</div>'; }
-  var rows = '';
-  for (var k in obj) {
-    var v = obj[k];
-    if (typeof v === "number") v = new Intl.NumberFormat("es-ES").format(v);
-    rows += '<tr><td><strong>' + esc(k) + '</strong></td><td class="num">' + esc(String(v)) + '</td></tr>';
+  try {
+    const obj = JSON.parse(r.value);
+    const rowsHtml = Object.entries(obj).map(([k, v]) => {
+      const displayVal = typeof v === "number" ? new Intl.NumberFormat("es-ES").format(v) : String(v);
+      return `<tr><td><strong>${esc(k)}</strong></td><td class="num">${esc(displayVal)}</td></tr>`;
+    }).join("");
+    return `<table>${rowsHtml}</table>`;
+  } catch (e) {
+    return `<div class="text-result">${esc(r.value)}</div>`;
   }
-  return '<table>' + rows + '</table>';
 }
 
 function renderDataFrame(df, shape) {
-  var cols = df.columns || [];
-  var rows = df.data || [];
+  const cols = df.columns || [];
+  const rows = df.data || [];
+  
   if (rows.length === 0) return '<div class="text-result"><em>Sin resultados.</em></div>';
-  var html = '<table><thead><tr>';
-  for (var i = 0; i < cols.length; i++) html += '<th>' + esc(String(cols[i])) + '</th>';
-  html += '</tr></thead><tbody>';
-  var maxRows = Math.min(rows.length, 100);
-  for (var r = 0; r < maxRows; r++) {
-    html += '<tr>';
-    for (var c = 0; c < rows[r].length; c++) html += renderCell(rows[r][c]);
-    html += '</tr>';
-  }
-  html += '</tbody></table>';
+
+  const thead = `<tr>${cols.map(c => `<th>${esc(String(c))}</th>`).join("")}</tr>`;
+  
+  const maxRows = Math.min(rows.length, 100);
+  const tbody = rows.slice(0, maxRows).map(row => 
+    `<tr>${row.map(cell => renderCell(cell)).join("")}</tr>`
+  ).join("");
+
+  let html = `<table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+  
   if (shape && shape[0] > maxRows) {
-    html += '<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ' + maxRows + ' de ' + shape[0] + ' filas.</div>';
+    html += `<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ${maxRows} de ${shape[0]} filas.</div>`;
   }
   return html;
 }
 
+function formatCellScalar(v) {
+  if (v == null) return "—";
+  if (typeof v === "number") {
+    return Number.isInteger(v) 
+      ? new Intl.NumberFormat("es-ES").format(v) 
+      : v.toFixed(4).replace(/\.?0+$/, "");
+  }
+  if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
+  if (typeof v === "object") {
+    return Object.entries(v).map(([k, val]) => `${k}: ${formatCellScalar(val)}`).join(", ");
+  }
+  return String(v);
+}
+
 function renderCell(val) {
-  var isNum = typeof val === "number";
-  var display;
-  if (val === null || val === undefined) display = "—";
-  else if (isNum) display = Number.isInteger(val)
-    ? new Intl.NumberFormat("es-ES").format(val)
-    : val.toFixed(4).replace(/\.?0+$/, "");
-  else display = String(val);
-  return '<td' + (isNum ? ' class="num"' : '') + '>' + esc(display) + '</td>';
+  const isNum = typeof val === "number";
+  const display = formatCellScalar(val);
+  return `<td${isNum ? ' class="num"' : ''}>${esc(display)}</td>`;
+}
+
+function formatCellScalar(v) {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "number") {
+    return Number.isInteger(v)
+      ? new Intl.NumberFormat("es-ES").format(v)
+      : v.toFixed(4).replace(/\.?0+$/, "");
+  }
+  if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
 }
 
 function renderPlotlyInto(elId, jsonStr) {
-  var el = document.getElementById(elId);
+  const el = document.getElementById(elId);
   if (!el) return;
+  
   if (typeof Plotly === "undefined") {
     el.innerHTML = '<div class="error-box">Plotly no está cargado en la página.</div>';
     return;
   }
+  
   try {
-    var spec = JSON.parse(jsonStr);
-    var data    = spec.data    || [];
-    var layout  = spec.layout  || {};
-    var config  = spec.config  || { displaylogo: false, responsive: true };
-    if (!config.responsive) config.responsive = true;
+    const spec = JSON.parse(jsonStr);
+    const data = spec.data || [];
+    const layout = spec.layout || {};
+    const config = spec.config || { displaylogo: false, responsive: true };
+    config.responsive = true; 
+    
+    const isMapbox = data.some(tr => {
+      const type = String(tr?.type || "");
+      return type.includes("mapbox");
+    });
+
+    if (isMapbox) {
+      beautifyMap(el, data, layout);
+    }
+    
     Plotly.newPlot(el, data, layout, config);
   } catch (e) {
-    el.innerHTML = '<div class="error-box">Error renderizando el gráfico: ' + esc(e.message || String(e)) + '</div>';
+    el.innerHTML = `<div class="error-box">Error renderizando el gráfico: ${esc(e.message || String(e))}</div>`;
+  }
+}
+
+function beautifyMap(el, data, layout) {
+  el.style.minHeight = "560px";
+  layout.height ??= 560;
+  layout.mapbox ??= {};
+  layout.mapbox.style = "carto-positron";
+  layout.mapbox.center ??= { lat: 40.0, lon: -3.7 };
+  layout.mapbox.zoom ??= 4.7;
+
+  layout.paper_bgcolor = "rgba(0,0,0,0)";
+  layout.plot_bgcolor  = "rgba(0,0,0,0)";
+  
+  layout.margin ??= {};
+  layout.margin.l ??= 0;
+  layout.margin.r ??= 0;
+  layout.margin.b ??= 0;
+  layout.margin.t ??= 54;
+  
+  layout.font ??= {};
+  layout.font.family ??= "Arial, Helvetica, sans-serif";
+  layout.font.color ??= "#1a1a1a";
+
+  if (layout.title && typeof layout.title === "object") {
+    layout.title.x ??= 0.02;
+    layout.title.xanchor ??= "left";
+    layout.title.font ??= {};
+    layout.title.font.size ??= 16;
+  }
+
+  for (let i = 0; i < data.length; i++) {
+    const tr = data[i];
+    if (!tr) continue;
+    
+    const type = String(tr.type || "");
+
+    if (type === "scattermapbox") {
+      tr.mode ??= "markers";
+      tr.marker ??= {};
+      tr.marker.colorscale ??= [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
+      tr.marker.opacity ??= 0.9;
+      tr.marker.sizemode ??= "diameter";
+      
+      const halo = makeHaloTrace(tr);
+      if (halo) { 
+        data.splice(i, 1, halo, tr); 
+        i++;
+      }
+    } else if (type === "densitymapbox") {
+      tr.colorscale ??= [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
+      tr.radius ??= 38;
+      tr.opacity ??= 0.85;
+    }
+  }
+}
+
+function makeHaloTrace(tr) {
+  try {
+    const size = tr.marker?.size;
+    let haloSize = 24;
+    
+    if (Array.isArray(size)) {
+      haloSize = size.map(s => (Number(s) || 10) + 14);
+    } else if (typeof size === "number") {
+      haloSize = size + 14;
+    }
+
+    return {
+      type: "scattermapbox",
+      lat: [...(tr.lat || [])],
+      lon: [...(tr.lon || [])],
+      mode: "markers",
+      hoverinfo: "skip",
+      showlegend: false,
+      marker: {
+        size: haloSize,
+        color: "rgba(112,213,73,0.22)",
+        sizemode: tr.marker?.sizemode || "diameter"
+      }
+    };
+  } catch (e) {
+    return null;
   }
 }
 
 function renderError(r) {
-  var techParts = [];
-  var summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
-  if (summary) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(summary) + '</div>');
-  if (r.trace) techParts.push('<pre>' + esc(r.trace) + '</pre>');
+  const techParts = [];
+  const summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
+  
+  if (summary) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(summary)}</div>`);
+  if (r.trace) techParts.push(`<pre>${esc(r.trace)}</pre>`);
+  
   if (r.firstError) {
-    techParts.push('<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>');
-    if (r.firstError.value) techParts.push('<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">' + esc(r.firstError.value) + '</div>');
-    if (r.firstError.trace) techParts.push('<pre>' + esc(r.firstError.trace) + '</pre>');
-    if (r.firstError.code)  techParts.push('<pre>' + esc(r.firstError.code) + '</pre>');
+    techParts.push(`<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>`);
+    if (r.firstError.value) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(r.firstError.value)}</div>`);
+    if (r.firstError.trace) techParts.push(`<pre>${esc(r.firstError.trace)}</pre>`);
+    if (r.firstError.code)  techParts.push(`<pre>${esc(r.firstError.code)}</pre>`);
   }
-  var techHtml = techParts.join("");
-  var details = techHtml
-    ? '<details class="err-details"><summary>ver detalles técnicos del error</summary>' + techHtml + '</details>'
+  
+  const techHtml = techParts.join("");
+  const details = techHtml 
+    ? `<details class="err-details"><summary>ver detalles técnicos del error</summary>${techHtml}</details>` 
     : "";
-  if (r.kind === "error_friendly") {
-    return '<div class="error-box">' +
-      '<strong>No he podido responder.</strong> ' + esc(r.value) +
-      details + '</div>';
-  }
-  return '<div class="error-box">' +
-    '<strong>Error al ejecutar el código:</strong> ' + esc(r.value) +
-    details + '</div>';
+    
+  const prefix = r.kind === "error_friendly" ? "No he podido responder." : "Error al ejecutar el código:";
+  
+  return `<div class="error-box"><strong>${prefix}</strong> ${esc(r.value)}${details}</div>`;
 }
 
 function renderCodeToggle(code, isInsight) {
-  if (!code) return '';
-  var label = isInsight ? "ver script de análisis" : "ver código ejecutado";
-  return '<span class="code-toggle"><span class="arrow">▶</span> ' + label + '</span>' +
-    '<div class="code-block"><pre>' + esc(code) + '</pre></div>';
+  if (!code) return "";
+  const label = isInsight ? "ver script de análisis" : "ver código ejecutado";
+  return `
+    <span class="code-toggle"><span class="arrow">▶</span> ${label}</span>
+    <div class="code-block"><pre>${esc(code)}</pre></div>
+  `;
 }
 
 
