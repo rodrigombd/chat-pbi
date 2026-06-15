@@ -1271,7 +1271,13 @@ async function ensureTablesLoaded(pythonCode) {
 
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  var threaded = opts.threaded !== false;
+  // 'isolated' fuerza una llamada totalmente desconectada del hilo persistente:
+  // nada de store, conversation ni previous_response_id. Es OBLIGATORIO para
+  // cualquier llamada con tool-calling: si un function_call entra en el hilo y
+  // luego no se devuelve su function_call_output, la API falla en la siguiente
+  // llamada threaded con "No tool output found for function call ...".
+  var isolated = opts.isolated === true || (Array.isArray(opts.tools) && opts.tools.length > 0);
+  var threaded = !isolated && opts.threaded !== false;
 
   var input = messages.map(function (m) {
     var role = m.role || "user";
@@ -1329,8 +1335,46 @@ async function callModel(messages, systemPrompt, opts) {
     var errData = await r.json().catch(function () { return {}; });
     var errMsg = (errData.error && errData.error.message) || ("HTTP " + r.status);
     var param = errData.error && errData.error.param;
-    
-    if (param && Object.prototype.hasOwnProperty.call(body, param)) {
+
+    // Recuperación de hilo envenenado: si una conversación quedó con un
+    // function_call huérfano (sin su function_call_output), la API responde
+    // "No tool output found for function call ...". En ese caso descartamos la
+    // conversación/encadenado y reintentamos en un hilo limpio.
+    if (threaded && /no tool output found|tool output|function call/i.test(errMsg)) {
+      resetPoisonedThread();
+      delete body.conversation;
+      delete body.previous_response_id;
+      r = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": "Bearer " + apiKey
+        },
+        body: JSON.stringify(body)
+      });
+      if (r.ok) {
+        var dRetry = await r.json();
+        if (threaded && !isolated && dRetry.id) lastResponseId = dRetry.id;
+        if (wantsTools) return { text: extractOpenAIText(dRetry), toolCalls: extractToolCalls(dRetry) };
+        return extractOpenAIText(dRetry);
+      }
+      var e3 = await r.json().catch(function () { return {}; });
+      throw new Error((e3.error && e3.error.message) || ("HTTP " + r.status));
+    }
+
+    // Solo reintentamos eliminando parámetros OPCIONALES que esta cuenta/modelo
+    // pueda no soportar. NUNCA borramos parámetros imprescindibles (p. ej. input,
+    // model, instructions): hacerlo provocaría un segundo error confuso del tipo
+    // "Missing required parameter: 'input'".
+    var REMOVABLE_PARAMS = {
+      prompt_cache_retention: true,
+      parallel_tool_calls: true,
+      truncation: true,
+      prompt_cache_key: true,
+      temperature: true
+    };
+
+    if (param && REMOVABLE_PARAMS[param] && Object.prototype.hasOwnProperty.call(body, param)) {
       if (param === "prompt_cache_retention") supportsCacheRetention = false;
       delete body[param];
       r = await fetch("https://api.openai.com/v1/responses", {
@@ -1352,7 +1396,7 @@ async function callModel(messages, systemPrompt, opts) {
 
   var d = await r.json();
 
-  if (threaded && d.id) lastResponseId = d.id;
+  if (threaded && !isolated && d.id) lastResponseId = d.id;
 
   if (wantsTools) {
     return { text: extractOpenAIText(d), toolCalls: extractToolCalls(d) };
@@ -1450,6 +1494,20 @@ function clearLocalSession() {
   } catch (e) {}
 }
 
+// Descarta SOLO el estado de hilo de la API (conversación encadenada), pero
+// conserva la memoria local (contexto acotado, historial y resumen): el hilo
+// se reconstruye con esa memoria en la siguiente llamada. Se usa cuando una
+// conversación queda inservible por un function_call huérfano.
+function resetPoisonedThread() {
+  console.warn("[thread] conversación envenenada detectada; se descarta y se reinicia el hilo.");
+  conversationId = null;
+  lastResponseId = null;
+  try {
+    localStorage.removeItem(STORAGE_CONV_KEY);
+    localStorage.removeItem(STORAGE_TS_KEY);
+  } catch (e) {}
+}
+
 async function createConversation() {
   try {
     var r = await fetch("https://api.openai.com/v1/conversations", {
@@ -1521,7 +1579,7 @@ async function orchestrate(userText) {
         model: "gpt-4o",
         maxTokens: 700,
         temperature: 0.2,
-        threaded: true,
+        threaded: false,
         tools: TOOLS,
         toolChoice: "required",
         parallelToolCalls: true
@@ -1690,7 +1748,7 @@ async function answerModelQuery(userText) {
     var reply = await callModel(
       [{ role: "user", content: userText }],
       prompts.modelo_datos,
-      { model: "gpt-4o", maxTokens: 1500, temperature: 0.5 }
+      { model: "gpt-4o", maxTokens: 1500, temperature: 0.5, isolated: true }
     );
     removeTyping(tid);
     appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
@@ -2184,7 +2242,7 @@ async function appendExplanationTo(resultEl, userQuery, code) {
     var reply = await callModel(
       [{ role: "user", content: payload }],
       prompts.explicacion,
-      { model: "gpt-4o", maxTokens: 700, temperature: 0.3 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.3, isolated: true }
     );
     
     var text = (reply || "").trim();
@@ -2247,7 +2305,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { model: "gpt-4o", maxTokens: 700, temperature: 0.6 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.6, isolated: true }
     );
     
     var text = (reply || "").trim();
