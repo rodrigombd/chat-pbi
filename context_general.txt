@@ -65,6 +65,15 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 
 14. **Filtra SIEMPRE por los valores reales de las columnas.** Al final de este documento hay (o se añade en tiempo de ejecución) una sección titulada **"VALORES REALES DE LAS COLUMNAS"** con la lista cerrada de valores que existen en cada columna categórica, escritos tal cual están en los datos (con tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría, traduce lo que escriba al valor EXACTO de esa lista antes de filtrar (p. ej. "alcala de henares" → `"Alcalá de Henares"`), ignorando tildes y mayúsculas para emparejar. Nunca filtres por una cadena que no aparezca en esa lista; si no hay correspondencia, devuelve un `resultado` de texto avisando de que ese valor no existe.
 15. **Siempre que se pueda mostrar la información en un gráfico y el usuario no pida lo contrario, muestra un gráfico.**
+16. Si el resultado es un gráfico Plotly y devuelves la clave __data__, esta debe contener ÚNICAMENTE un DataFrame con los datos ya agrupados y resumidos que se usan en la gráfica. NUNCA devuelvas el DataFrame crudo completo en __data__.
+> **REGLA ESTRICTA PARA GRÁFICOS Y `__data__**`
+> Cuando devuelvas un gráfico de Plotly y añadas la clave `__data__` al diccionario `resultado`, **ESTÁ TOTALMENTE PROHIBIDO pasar el DataFrame original o crudo**.
+> * **INCORRECTO:** `"__data__": df_clean`
+> * **CORRECTO:** `"__data__": df_agrupado`
+> 
+> 
+> Debes crear un nuevo DataFrame (`df_agrupado`) que contenga ÚNICAMENTE las filas y columnas resumidas que se están representando en la gráfica (por ejemplo, los meses y los conteos por curso). Si no vas a agrupar los datos, es preferible que NO devuelvas la clave `__data__`.
+
 </reglas_negocio>
 <entorno_ejecucion>
 # ENTORNO DE EJECUCIÓN
