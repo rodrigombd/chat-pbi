@@ -19,6 +19,27 @@ PROMPT_FILES = {
 }
 
 
+def extract_orchestrator_suffix():
+    """Lee la constante JS ORCHESTRATOR_SUFFIX de index.html (concatenación de
+    literales con +) y la reconstruye como string, para que run_evals.py use
+    EXACTAMENTE la misma instrucción que el front sin duplicarla."""
+    html = INDEX.read_text(encoding="utf-8")
+    m = re.search(r"var\s+ORCHESTRATOR_SUFFIX\s*=\s*(.*?);", html, re.DOTALL)
+    if not m:
+        return None
+    expr = m.group(1)
+    # Captura cada literal entre comillas dobles, respetando escapes.
+    pieces = re.findall(r'"((?:\\.|[^"\\])*)"', expr)
+    if not pieces:
+        return None
+    decoded = []
+    for p in pieces:
+        decoded.append(
+            p.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+        )
+    return "".join(decoded)
+
+
 def build_prompts():
     out = {}
     missing = []
@@ -28,6 +49,9 @@ def build_prompts():
             missing.append(fname)
             continue
         out[key] = path.read_text(encoding="utf-8")
+    suffix = extract_orchestrator_suffix()
+    if suffix:
+        out["__orchestrator_suffix__"] = suffix
     PROMPTS_OUT.write_text(
         json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8"
     )

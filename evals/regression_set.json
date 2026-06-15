@@ -81,5 +81,181 @@
       "n_calls": 1,
       "filtros_keywords": [["conversion", "conversión"]]
     }
+  },
+
+  {
+    "id": "modelo_grano_solicitud_vs_persona",
+    "query": "¿Cada fila de leads_contacts es una persona o una solicitud?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "modelo_curso_vs_fecha",
+    "query": "¿Qué diferencia hay entre la columna Curso y la Fecha de creación?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "modelo_medida_powerbi",
+    "query": "¿Qué calcula la medida CR ConversionRate 2025 del informe de PowerBI?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "modelo_particular_o_grupo",
+    "query": "¿Por qué para los contactos solo se cuentan los Particular y no los Grupo?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "modelo_origen_agrupado_valores",
+    "query": "¿Qué valores puede tomar la columna Origen_Agrupado?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "modelo_geolocalizacion_residencias",
+    "query": "Si quiero saber en qué ciudad está físicamente una residencia, ¿qué columna debo usar?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+
+  {
+    "id": "datos_anio_natural_no_curso",
+    "query": "¿En qué año natural se han hecho más solicitudes?",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": [["año", "anio", "year"], ["solicitud", "fecha"]]
+    }
+  },
+  {
+    "id": "datos_evolucion_mensual_curso",
+    "query": "Dame la evolución mes a mes de los leads del curso 2024/2025",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["leads", "2024/2025", ["mes", "mensual", "evolución", "evolucion"]]
+    }
+  },
+  {
+    "id": "datos_personas_unicas_explicito",
+    "query": "¿Cuántas personas únicas (correos distintos) han hecho solicitudes de leads en 2025/2026?",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["leads", "2025/2026", ["únic", "unic", "correo", "persona"]]
+    }
+  },
+  {
+    "id": "datos_mapa_calor_ciudades",
+    "query": "Muéstrame un mapa de calor de los leads por ciudad de interés en 2025/2026",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["leads", "2025/2026", ["mapa", "calor", "ciudad"]]
+    }
+  },
+  {
+    "id": "datos_top_residencias_conversion",
+    "query": "Top 10 residencias de interés por tasa de conversión en el curso 2026/2027",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": [["conversion", "conversión"], "residencia", "2026/2027"]
+    }
+  },
+  {
+    "id": "datos_incremento_entre_cursos",
+    "query": "¿Cuánto han crecido los leads del curso 2025/2026 respecto al 2024/2025?",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["leads", "2024/2025", "2025/2026"]
+    }
+  },
+  {
+    "id": "datos_distribucion_origen",
+    "query": "Reparto de contactos por canal de origen en 2025/2026",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["contactos", "2025/2026", ["origen", "canal"]]
+    }
+  },
+  {
+    "id": "datos_tres_peticiones_distintas",
+    "query": "Para 2025/2026 dame: el total de leads, un mapa de leads por ciudad de interés y la evolución mensual de contactos",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 3,
+      "filtros_keywords": ["2025/2026"]
+    }
+  },
+  {
+    "id": "datos_comparacion_evolucion_dos_ciudades",
+    "query": "Compara la evolución histórica de solicitudes con ciudad de interés Madrid vs Barcelona",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["madrid", "barcelona"]
+    }
+  },
+  {
+    "id": "clarify_dimension_ciudad_ambigua",
+    "query": "Dame el top 5 de ciudades por leads en 2025/2026",
+    "expect": {
+      "tool": "solicitar_aclaracion",
+      "slot": "dimension"
+    }
+  },
+  {
+    "id": "clarify_tipo_registro_usuarios",
+    "query": "Evolución mensual de los usuarios en el curso 2025/2026",
+    "expect": {
+      "tool": "solicitar_aclaracion"
+    }
+  },
+  {
+    "id": "datos_contexto_override_curso",
+    "query": "Ahora dámela pero para el curso 2024/2025",
+    "memory": "CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n- curso: 2025/2026\n- metrica: Tasa de conversión\n- ciudad: Madrid",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["2024/2025"]
+    }
+  },
+  {
+    "id": "datos_contexto_resuelve_todo_comparacion",
+    "query": "y ahora compárame Madrid con Valencia",
+    "memory": "CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n- curso: 2025/2026\n- metrica: Tasa de conversión",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["madrid", "valencia"]
+    }
+  },
+  {
+    "id": "modelo_que_tablas_hay",
+    "query": "¿Qué tablas tengo disponibles para consultar?",
+    "expect": {
+      "tool": "explicar_modelo_datos"
+    }
+  },
+  {
+    "id": "datos_global_sin_curso",
+    "query": "¿Cuál es el volumen total de registros (leads más contactos particulares) en todo el histórico?",
+    "expect": {
+      "tool": "ejecutar_analisis_python",
+      "n_calls": 1,
+      "filtros_keywords": ["leads", "contactos"]
+    }
   }
 ]

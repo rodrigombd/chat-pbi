@@ -1507,7 +1507,7 @@ async function orchestrate(userText) {
   var tid = appendTyping("interpretando consulta...");
   setStatus("interpretando consulta...", "busy");
 
-  var memory = buildFullMemoryText();
+  var memory = buildFullMemoryText({ light: true });
   var userContent = "";
   if (memory) userContent += memory + "\n\n";
   userContent += "MENSAJE DEL USUARIO:\n" + userText;
@@ -1521,7 +1521,7 @@ async function orchestrate(userText) {
         model: "gpt-4o",
         maxTokens: 700,
         temperature: 0.2,
-        threaded: false,
+        threaded: true,
         tools: TOOLS,
         toolChoice: "required",
         parallelToolCalls: true
@@ -1551,11 +1551,7 @@ async function orchestrate(userText) {
   await dispatchToolCalls(userText, toolCalls);
 }
 
-function orchestratorInstructions() {
-  var base = prompts.router ||
-    "Eres el orquestador de un asistente analítico sobre datos de CRM de residencias de estudiantes. " +
-    "Decides qué herramienta invocar según el mensaje del usuario y el contexto de la sesión.";
-  return base +
+var ORCHESTRATOR_SUFFIX =
     "\n\nINSTRUCCIONES DE ORQUESTACIÓN (Tool Calling):" +
     "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre." +
     "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos." +
@@ -1563,6 +1559,12 @@ function orchestratorInstructions() {
     "\n- Consulta de datos clara y programable → ejecutar_analisis_python." +
     "\n- Si el usuario pide varias cosas independientes (distintas métricas o salidas), invoca ejecutar_analisis_python varias veces en paralelo, una por petición. Una comparación de la misma métrica entre categorías es UNA sola llamada." +
     "\n- Prioriza usar el contexto ya acotado de la sesión antes de pedir aclaraciones.";
+
+function orchestratorInstructions() {
+  var base = prompts.router ||
+    "Eres el orquestador de un asistente analítico sobre datos de CRM de residencias de estudiantes. " +
+    "Decides qué herramienta invocar según el mensaje del usuario y el contexto de la sesión.";
+  return base + ORCHESTRATOR_SUFFIX;
 }
 
 async function dispatchToolCalls(userText, toolCalls) {
@@ -1712,28 +1714,6 @@ function rememberAnsweredSlots(answeredSlots) {
   try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
 }
 
-function rememberQueryParams(queryText) {
-  if (!queryText) return;
-  var t = String(queryText);
-
-  var mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
-  if (mCurso) {
-    sessionContext.curso = `${mCurso[1]}/${mCurso[2]}`;
-  } else if (/\bhist[oó]ric|\btodos los cursos\b/i.test(t)) {
-    sessionContext.curso = "Histórico (todos los cursos)";
-  }
-
-  if (/\bconversi[oó]n\b|\btasa de conversi[oó]n\b|\bCR\b/i.test(t)) {
-    sessionContext.metrica = "Tasa de conversión";
-  } else if (/\bcontactos?\b|\bfirmas?\b|\breservas?\b/i.test(t) && !/\bleads?\b/i.test(t)) {
-    sessionContext.metrica = "Volumen de contactos";
-  } else if (/\bleads?\b/i.test(t) && !/\bcontactos?\b/i.test(t)) {
-    sessionContext.metrica = "Volumen de leads";
-  }
-
-  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
-}
-
 function buildSessionContextText() {
   var keys = Object.keys(sessionContext);
   if (keys.length === 0) return "";
@@ -1819,7 +1799,7 @@ function buildSessionSummaryText() {
     }
   }
   var head = "RESUMEN DE LA SESIÓN HASTA AHORA (estado consolidado de turnos anteriores):";
-  var body = lines.length ? ("Filtros activos de la sesión:\n" + lines.join("\n")) : "";
+  var body = lines.length ? ("Dimensiones/filtros activos de la sesión:\n" + lines.join("\n")) : "";
   if (s.resumen_narrativo && String(s.resumen_narrativo).trim()) {
     body += (body ? "\n" : "") + "Contexto: " + String(s.resumen_narrativo).trim();
   }
@@ -1827,19 +1807,42 @@ function buildSessionSummaryText() {
   return head + "\n" + body;
 }
 
-function buildFullMemoryText() {
+function buildFullMemoryText(opts) {
+  opts = opts || {};
   var parts = [];
   var ctx = buildSessionContextText();
   if (ctx) parts.push("CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n" + ctx);
   var summary = buildSessionSummaryText();
   if (summary) parts.push(summary);
-  var hist = buildHistoryContextText();
-  if (hist) parts.push("ÚLTIMAS CONSULTAS DE ESTA SESIÓN:\n" + hist);
+  if (!opts.light) {
+    var hist = buildHistoryContextText();
+    if (hist) parts.push("ÚLTIMAS CONSULTAS DE ESTA SESIÓN:\n" + hist);
+  }
   return parts.join("\n\n");
 }
 
 function summaryDefaultFilters() {
-  return { curso: null, ciudad: null, campana: null, metrica: null };
+  return {};
+}
+
+function mergeFilterMaps(prev, next) {
+  var out = {};
+  var k;
+  if (prev && typeof prev === "object") {
+    for (k in prev) {
+      if (prev[k] !== null && prev[k] !== undefined && String(prev[k]).trim() !== "") {
+        out[k] = prev[k];
+      }
+    }
+  }
+  if (next && typeof next === "object") {
+    for (k in next) {
+      var v = next[k];
+      if (v === null || v === undefined || String(v).trim() === "") continue;
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 async function maybeUpdateSessionSummary() {
@@ -1862,20 +1865,25 @@ async function maybeUpdateSessionSummary() {
     }).join("\n");
 
     var payload =
-      "ESTADO PREVIO DE FILTROS (JSON):\n" + JSON.stringify(prevFilters) +
+      "ESTADO PREVIO DE FILTROS (JSON, dimensiones arbitrarias):\n" + JSON.stringify(prevFilters) +
       "\n\nRESUMEN NARRATIVO PREVIO:\n" + (prevNarr || "(ninguno)") +
       "\n\nTURNOS A CONSOLIDAR:\n" + turnsText +
       "\n\nDevuelve EXCLUSIVAMENTE un JSON con esta forma exacta, sin texto adicional ni bloques de código:\n" +
-      '{"filtros_activos":{"curso":<string|null>,"ciudad":<string|null>,"campana":<string|null>,"metrica":<string|null>},"resumen_narrativo":<string>}';
+      '{"filtros_activos":{"<nombre_dimension>":"<valor>", ...},"resumen_narrativo":"<string>"}';
 
     var systemPrompt =
-      "Eres un compresor de memoria conversacional para un asistente analítico de un CRM de residencias de estudiantes. " +
-      "Recibes el estado previo de filtros, un resumen narrativo previo y una lista de turnos recientes (pregunta y resumen de resultado). " +
-      "Tu trabajo es consolidar todo en un único estado estructurado. " +
-      "Reglas: actualiza los filtros con el ÚLTIMO valor mencionado por el usuario para cada dimensión (curso, ciudad, campaña, métrica); " +
-      "si una dimensión nunca se ha mencionado, déjala en null; NO inventes valores; conserva los nombres tal y como aparecen. " +
-      "El resumen_narrativo debe ser una sola frase breve (máx. 30 palabras) que capture el hilo analítico de la sesión, sin cifras concretas. " +
-      "Devuelve solo el JSON pedido.";
+      "Eres un compresor de memoria conversacional para un asistente analítico de datos. " +
+      "Recibes el estado previo de filtros (un objeto JSON con dimensiones ARBITRARIAS, no fijas), " +
+      "un resumen narrativo previo y una lista de turnos recientes (pregunta y resumen de resultado). " +
+      "Tu trabajo es consolidar todo en un único estado estructurado, sin asumir qué dimensiones existen. " +
+      "Reglas: el objeto \"filtros_activos\" puede contener cualquier clave que represente un eje de análisis " +
+      "que el usuario haya fijado (por ejemplo un periodo, una categoría, una métrica, un segmento, etc.); " +
+      "usa como clave un nombre corto en minúsculas que describa la dimensión y como valor el ÚLTIMO valor " +
+      "que el usuario mencionó para ella. Conserva del estado previo las dimensiones que sigan vigentes y " +
+      "actualiza o añade las nuevas. No incluyas una dimensión si el usuario nunca la ha fijado. " +
+      "NO inventes valores; conserva los nombres tal y como aparecen. " +
+      "El \"resumen_narrativo\" debe ser una sola frase breve (máx. 30 palabras) que capture el hilo analítico " +
+      "de la sesión, sin cifras concretas. Devuelve solo el JSON pedido.";
 
     var reply = await callModel(
       [{ role: "user", content: payload }],
@@ -1884,9 +1892,9 @@ async function maybeUpdateSessionSummary() {
     );
 
     var parsed = extractJSON(reply);
-    if (parsed && parsed.filtros_activos) {
+    if (parsed && parsed.filtros_activos && typeof parsed.filtros_activos === "object") {
       sessionSummary = {
-        filtros_activos: Object.assign(summaryDefaultFilters(), parsed.filtros_activos),
+        filtros_activos: mergeFilterMaps(prevFilters, parsed.filtros_activos),
         resumen_narrativo: typeof parsed.resumen_narrativo === "string" ? parsed.resumen_narrativo : prevNarr,
         __turns: turnHistory.length - SUMMARY_KEEP_RECENT
       };
@@ -2047,7 +2055,6 @@ async function answerDataQuery(userText, answeredSlots) {
   };
 
   if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
-    rememberQueryParams(enriched);
     recordTurnInHistory(userText, execResult);
   }
   rememberAnsweredSlots(answeredSlots);
@@ -2477,17 +2484,23 @@ function tableFromPlotlySpec(jsonStr) {
 // ---------------------------------------------------------------------------
 
 // Columnas cuyo contenido NO se anonimiza (se pasan en claro al LLM de conclusiones).
+// Configuración por modelo de datos: lista las columnas categóricas NO sensibles.
 var WHITELIST_NO_ANON = [
   'Origen/Campaña Posibles Clientes', 'Fuente de Posible Cliente', 'Curso', 'Curso_corregido', 
   'Ciudades de interés', 'Ciudad_deinteres_corregido', 'Tipo de registro', 'Ciudad actual', 'Ciudad_actual_corregido', 
   'Fecha creación', 'Origen_Agrupado', 'Fuente_Agrupada', 
 ];
 
+var WHITELIST_NO_ANON_SET = (function () {
+  var s = Object.create(null);
+  for (var i = 0; i < WHITELIST_NO_ANON.length; i++) {
+    s[String(WHITELIST_NO_ANON[i]).toLowerCase().trim()] = true;
+  }
+  return s;
+})();
+
 function isWhitelistedColumn(colName) {
-  var s = String(colName).toLowerCase().trim();
-  return WHITELIST_NO_ANON.some(function (w) { 
-    return s === String(w).toLowerCase().trim(); 
-  });
+  return WHITELIST_NO_ANON_SET[String(colName).toLowerCase().trim()] === true;
 }
 
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
@@ -2872,20 +2885,6 @@ function renderDataFrame(df, shape) {
     html += `<div style="font-size:12px;color:var(--text3);margin-top:6px;">Mostrando ${maxRows} de ${shape[0]} filas.</div>`;
   }
   return html;
-}
-
-function formatCellScalar(v) {
-  if (v == null) return "—";
-  if (typeof v === "number") {
-    return Number.isInteger(v) 
-      ? new Intl.NumberFormat("es-ES").format(v) 
-      : v.toFixed(4).replace(/\.?0+$/, "");
-  }
-  if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
-  if (typeof v === "object") {
-    return Object.entries(v).map(([k, val]) => `${k}: ${formatCellScalar(val)}`).join(", ");
-  }
-  return String(v);
 }
 
 function renderCell(val) {

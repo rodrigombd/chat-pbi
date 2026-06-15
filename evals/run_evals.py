@@ -7,15 +7,36 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-PROMPTS_PATH = ROOT / "prompts.json"
-TOOLS_PATH = ROOT / "tools.json"
-EVALSET_PATH = ROOT / "evals" / "regression_set.json"
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
+
+
+def _first_existing(candidates):
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]
+
+
+PROMPTS_PATH = _first_existing([
+    SCRIPT_DIR / "prompts.json",
+    ROOT / "prompts.json",
+])
+TOOLS_PATH = _first_existing([
+    SCRIPT_DIR / "tools.json",
+    ROOT / "tools.json",
+])
+EVALSET_PATH = _first_existing([
+    SCRIPT_DIR / "evals" / "regression_set.json",
+    SCRIPT_DIR / "regression_set.json",
+    ROOT / "evals" / "regression_set.json",
+    ROOT / "regression_set.json",
+])
 
 OPENAI_URL = "https://api.openai.com/v1/responses"
 MODEL = os.environ.get("EVAL_MODEL", "gpt-4o")
 
-ORCH_SUFFIX = (
+ORCH_SUFFIX_FALLBACK = (
     "\n\nINSTRUCCIONES DE ORQUESTACIÓN (Tool Calling):"
     "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre."
     "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos."
@@ -36,7 +57,8 @@ def orchestrator_instructions(prompts):
         "residencias de estudiantes. Decides qué herramienta invocar según el "
         "mensaje del usuario y el contexto de la sesión."
     )
-    return base + ORCH_SUFFIX
+    suffix = prompts.get("__orchestrator_suffix__") or ORCH_SUFFIX_FALLBACK
+    return base + suffix
 
 
 def build_user_content(memory, user_text):
