@@ -7,7 +7,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 PROMPTS_PATH = ROOT / "prompts.json"
 TOOLS_PATH = ROOT / "tools.json"
 EVALSET_PATH = ROOT / "evals" / "regression_set.json"
