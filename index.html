@@ -536,10 +536,10 @@ var STORAGE_TS_KEY   = "resa_assistant_session_ts";
 var STORAGE_HIST_KEY = "resa_assistant_turn_history";
 var STORAGE_SUMMARY_KEY = "resa_assistant_session_summary";
 var SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
-var MAX_HISTORY_TURNS = 40;
-var HISTORY_INJECT_TURNS = 12;
-var SUMMARY_TRIGGER_TURNS = 6;
-var SUMMARY_KEEP_RECENT = 2;
+var MAX_HISTORY_TURNS = 60;
+var HISTORY_INJECT_TURNS = 16;
+var SUMMARY_TRIGGER_TURNS = 18;
+var SUMMARY_KEEP_RECENT = 16;
 var conversationId   = null;
 var lastResponseId   = null;
 var supportsCacheRetention = true;
@@ -551,8 +551,7 @@ var PROMPT_FILES = {
   general: "context_general.txt",
   conclusiones: "context_conclusiones.txt",
   explicacion: "context_explicacion.txt",
-  planificador: "context_planificador.txt" //,
-  //insights_parser: "context_insights_parser.txt"
+  planificador: "context_planificador.txt"
 };
 
 var CSV_TABLES = {
@@ -772,7 +771,6 @@ async function initPyodide() {
 
 async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
-  // [Generar conclusiones desactivado] Sin scikit-learn.
   await pyodide.loadPackage(["pandas", "numpy"]);
   const pythonInitScript = `
 import pandas as pd
@@ -1271,11 +1269,6 @@ async function ensureTablesLoaded(pythonCode) {
 
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
-  // 'isolated' fuerza una llamada totalmente desconectada del hilo persistente:
-  // nada de store, conversation ni previous_response_id. Es OBLIGATORIO para
-  // cualquier llamada con tool-calling: si un function_call entra en el hilo y
-  // luego no se devuelve su function_call_output, la API falla en la siguiente
-  // llamada threaded con "No tool output found for function call ...".
   var isolated = opts.isolated === true || (Array.isArray(opts.tools) && opts.tools.length > 0);
   var threaded = !isolated && opts.threaded !== false;
 
@@ -1336,10 +1329,6 @@ async function callModel(messages, systemPrompt, opts) {
     var errMsg = (errData.error && errData.error.message) || ("HTTP " + r.status);
     var param = errData.error && errData.error.param;
 
-    // Recuperación de hilo envenenado: si una conversación quedó con un
-    // function_call huérfano (sin su function_call_output), la API responde
-    // "No tool output found for function call ...". En ese caso descartamos la
-    // conversación/encadenado y reintentamos en un hilo limpio.
     if (threaded && /no tool output found|tool output|function call/i.test(errMsg)) {
       resetPoisonedThread();
       delete body.conversation;
@@ -1362,10 +1351,6 @@ async function callModel(messages, systemPrompt, opts) {
       throw new Error((e3.error && e3.error.message) || ("HTTP " + r.status));
     }
 
-    // Solo reintentamos eliminando parámetros OPCIONALES que esta cuenta/modelo
-    // pueda no soportar. NUNCA borramos parámetros imprescindibles (p. ej. input,
-    // model, instructions): hacerlo provocaría un segundo error confuso del tipo
-    // "Missing required parameter: 'input'".
     var REMOVABLE_PARAMS = {
       prompt_cache_retention: true,
       parallel_tool_calls: true,
@@ -1494,10 +1479,6 @@ function clearLocalSession() {
   } catch (e) {}
 }
 
-// Descarta SOLO el estado de hilo de la API (conversación encadenada), pero
-// conserva la memoria local (contexto acotado, historial y resumen): el hilo
-// se reconstruye con esa memoria en la siguiente llamada. Se usa cuando una
-// conversación queda inservible por un function_call huérfano.
 function resetPoisonedThread() {
   console.warn("[thread] conversación envenenada detectada; se descarta y se reinicia el hilo.");
   conversationId = null;
@@ -1565,7 +1546,7 @@ async function orchestrate(userText) {
   var tid = appendTyping("interpretando consulta...");
   setStatus("interpretando consulta...", "busy");
 
-  var memory = buildFullMemoryText({ light: true });
+  var memory = buildFullMemoryText();
   var userContent = "";
   if (memory) userContent += memory + "\n\n";
   userContent += "MENSAJE DEL USUARIO:\n" + userText;
@@ -1833,12 +1814,23 @@ function recordTurnInHistory(userText, execResult) {
   maybeUpdateSessionSummary();
 }
 
+function attachConclusionToLastTurn(conclusionText) {
+  if (!turnHistory.length || !conclusionText) return;
+  var last = turnHistory[turnHistory.length - 1];
+  last.c = String(conclusionText).replace(/\s+/g, " ").trim().slice(0, 600);
+  try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
+}
+
 function buildHistoryContextText() {
   if (!turnHistory.length) return "";
-  var recent = turnHistory.slice(-SUMMARY_KEEP_RECENT);
+  var recent = turnHistory.slice(-HISTORY_INJECT_TURNS);
   return recent.map(function (t, i) {
-    var line = (i + 1) + ". Pregunta: " + t.q;
-    if (t.r) line += "\n   Resultado: " + t.r;
+    var line = "Usuario: " + t.q;
+    if (t.c) {
+      line += "\n   Asistente: " + t.c;
+    } else if (t.r) {
+      line += "\n   Asistente (resultado): " + t.r;
+    }
     return line;
   }).join("\n");
 }
@@ -1874,7 +1866,7 @@ function buildFullMemoryText(opts) {
   if (summary) parts.push(summary);
   if (!opts.light) {
     var hist = buildHistoryContextText();
-    if (hist) parts.push("ÚLTIMAS CONSULTAS DE ESTA SESIÓN:\n" + hist);
+    if (hist) parts.push("CONVERSACIÓN RECIENTE (turnos anteriores de esta misma sesión, en orden cronológico):\n" + hist);
   }
   return parts.join("\n\n");
 }
@@ -2313,6 +2305,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
       replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
     } else {
       var deAnon = deanonymizeText(text, built.aliasMap);
+      attachConclusionToLastTurn(deAnon);
       replaceConclusionPlaceholder(loadingEl, deAnon, null);
     }
     setStatus("listo", "ok");
@@ -2485,9 +2478,21 @@ function tableFromPlotlySpec(jsonStr) {
     if (seriesNames.indexOf(serieName) < 0) seriesNames.push(serieName);
 
     var keys, vals;
+    var trType = String(tr.type || "");
     if (tr.type === "pie" || tr.labels) {
       keys = tr.labels || [];
       vals = tr.values || [];
+    } else if (trType.indexOf("mapbox") >= 0) {
+      keys = tr.text || tr.hovertext || [];
+      if (Array.isArray(tr.z) && tr.z.length) {
+        vals = tr.z;
+      } else if (tr.marker && Array.isArray(tr.marker.color)) {
+        vals = tr.marker.color;
+      } else if (tr.marker && Array.isArray(tr.marker.size)) {
+        vals = tr.marker.size;
+      } else {
+        vals = [];
+      }
     } else {
       var horizontal = (tr.orientation === "h");
       keys = horizontal ? (tr.y || []) : (tr.x || []);
@@ -2541,26 +2546,6 @@ function tableFromPlotlySpec(jsonStr) {
 //  Pseudonimización reversible + render a texto
 // ---------------------------------------------------------------------------
 
-// Columnas cuyo contenido NO se anonimiza (se pasan en claro al LLM de conclusiones).
-// Configuración por modelo de datos: lista las columnas categóricas NO sensibles.
-var WHITELIST_NO_ANON = [
-  'Origen/Campaña Posibles Clientes', 'Fuente de Posible Cliente', 'Curso', 'Curso_corregido', 
-  'Ciudades de interés', 'Ciudad_deinteres_corregido', 'Tipo de registro', 'Ciudad actual', 'Ciudad_actual_corregido', 
-  'Fecha creación', 'Origen_Agrupado', 'Fuente_Agrupada', 
-];
-
-var WHITELIST_NO_ANON_SET = (function () {
-  var s = Object.create(null);
-  for (var i = 0; i < WHITELIST_NO_ANON.length; i++) {
-    s[String(WHITELIST_NO_ANON[i]).toLowerCase().trim()] = true;
-  }
-  return s;
-})();
-
-function isWhitelistedColumn(colName) {
-  return WHITELIST_NO_ANON_SET[String(colName).toLowerCase().trim()] === true;
-}
-
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
   var columns = table.columns || [];
   var rows = table.rows || [];
@@ -2597,9 +2582,11 @@ function anonymizeCell(val, colName, anonState, aliasMap) {
   if (asStr === "") return "—";
   if (isNumericLike(asStr)) return asStr;
   if (isTemporalColumn(colName)) return asStr;
-  if (isWhitelistedColumn(colName)) return asStr;
 
-  return aliasFor(asStr, colName, anonState, aliasMap);
+  if (isSensitiveColumn(colName)) {
+    return aliasFor(asStr, colName, anonState, aliasMap);
+  }
+  return asStr;
 }
 
 function isTemporalColumn(colName) {
@@ -2687,12 +2674,7 @@ function formatNumberForLLM(val) {
 function isSensitiveColumn(colName) {
   if (!colName) return false;
   var s = String(colName).trim().toLowerCase();
-  
-  return s.includes("correo") || 
-         s.includes("email") || 
-         s.includes("e-mail") || 
-         s.includes("nombre") || 
-         s.includes("apellido");
+  return s.includes("correo") || s.includes("nombre") || s.includes("apellidos");
 }
 
 
@@ -2995,55 +2977,90 @@ function renderPlotlyInto(elId, jsonStr) {
 }
 
 function beautifyMap(el, data, layout) {
-  el.style.minHeight = "560px";
-  layout.height ??= 560;
+  el.style.minHeight = "580px";
+  layout.height ??= 580;
   layout.mapbox ??= {};
   layout.mapbox.style = "carto-positron";
   layout.mapbox.center ??= { lat: 40.0, lon: -3.7 };
-  layout.mapbox.zoom ??= 4.7;
+  layout.mapbox.zoom ??= 4.9;
 
   layout.paper_bgcolor = "rgba(0,0,0,0)";
   layout.plot_bgcolor  = "rgba(0,0,0,0)";
-  
+
   layout.margin ??= {};
   layout.margin.l ??= 0;
   layout.margin.r ??= 0;
   layout.margin.b ??= 0;
-  layout.margin.t ??= 54;
-  
+  layout.margin.t ??= 58;
+
   layout.font ??= {};
-  layout.font.family ??= "Arial, Helvetica, sans-serif";
-  layout.font.color ??= "#1a1a1a";
+  layout.font.family ??= "Inter, 'Segoe UI', Arial, Helvetica, sans-serif";
+  layout.font.color ??= "#1f2a37";
+
+  layout.hoverlabel ??= {};
+  layout.hoverlabel.bgcolor ??= "#ffffff";
+  layout.hoverlabel.bordercolor ??= "#70d549";
+  layout.hoverlabel.font ??= {};
+  layout.hoverlabel.font.family ??= "Inter, 'Segoe UI', Arial, sans-serif";
+  layout.hoverlabel.font.size ??= 13;
+  layout.hoverlabel.font.color ??= "#1f2a37";
 
   if (layout.title && typeof layout.title === "object") {
     layout.title.x ??= 0.02;
     layout.title.xanchor ??= "left";
     layout.title.font ??= {};
-    layout.title.font.size ??= 16;
+    layout.title.font.size ??= 18;
+    layout.title.font.color ??= "#15351c";
+    layout.title.font.family ??= "Inter, 'Segoe UI', Arial, sans-serif";
   }
 
   for (let i = 0; i < data.length; i++) {
     const tr = data[i];
     if (!tr) continue;
-    
+
     const type = String(tr.type || "");
 
     if (type === "scattermapbox") {
       tr.mode ??= "markers";
       tr.marker ??= {};
-      tr.marker.colorscale ??= [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
-      tr.marker.opacity ??= 0.9;
+      tr.marker.colorscale ??= [
+        [0.0, "#d6f3c4"], [0.35, "#8fdc62"], [0.7, "#52b733"], [1.0, "#247a12"]
+      ];
+      tr.marker.opacity ??= 0.92;
       tr.marker.sizemode ??= "diameter";
-      
+      tr.marker.line ??= { width: 1.2, color: "rgba(255,255,255,0.9)" };
+      if (tr.marker.showscale !== false) {
+        tr.marker.showscale ??= true;
+        tr.marker.colorbar ??= {};
+        tr.marker.colorbar.thickness ??= 12;
+        tr.marker.colorbar.len ??= 0.6;
+        tr.marker.colorbar.outlinewidth ??= 0;
+        tr.marker.colorbar.bgcolor ??= "rgba(255,255,255,0.7)";
+        tr.marker.colorbar.tickfont ??= { size: 11, color: "#1f2a37" };
+        if (tr.marker.colorbar.title && typeof tr.marker.colorbar.title === "object") {
+          tr.marker.colorbar.title.font ??= { size: 12, color: "#1f2a37" };
+        }
+      }
+
       const halo = makeHaloTrace(tr);
-      if (halo) { 
-        data.splice(i, 1, halo, tr); 
+      if (halo) {
+        data.splice(i, 1, halo, tr);
         i++;
       }
     } else if (type === "densitymapbox") {
-      tr.colorscale ??= [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
-      tr.radius ??= 38;
-      tr.opacity ??= 0.85;
+      tr.colorscale ??= [
+        [0.0, "rgba(112,213,73,0)"], [0.25, "rgba(143,220,98,0.55)"],
+        [0.5, "#70d549"], [0.75, "#f0a020"], [1.0, "#c0392b"]
+      ];
+      tr.radius ??= 42;
+      tr.opacity ??= 0.82;
+      tr.showscale ??= true;
+      tr.colorbar ??= {};
+      tr.colorbar.thickness ??= 12;
+      tr.colorbar.len ??= 0.6;
+      tr.colorbar.outlinewidth ??= 0;
+      tr.colorbar.bgcolor ??= "rgba(255,255,255,0.7)";
+      tr.colorbar.tickfont ??= { size: 11, color: "#1f2a37" };
     }
   }
 }
@@ -3051,12 +3068,12 @@ function beautifyMap(el, data, layout) {
 function makeHaloTrace(tr) {
   try {
     const size = tr.marker?.size;
-    let haloSize = 24;
-    
+    let haloSize = 26;
+
     if (Array.isArray(size)) {
-      haloSize = size.map(s => (Number(s) || 10) + 14);
+      haloSize = size.map(s => (Number(s) || 10) + 16);
     } else if (typeof size === "number") {
-      haloSize = size + 14;
+      haloSize = size + 16;
     }
 
     return {
@@ -3068,7 +3085,7 @@ function makeHaloTrace(tr) {
       showlegend: false,
       marker: {
         size: haloSize,
-        color: "rgba(112,213,73,0.22)",
+        color: "rgba(82,183,51,0.18)",
         sizemode: tr.marker?.sizemode || "diameter"
       }
     };

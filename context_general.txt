@@ -65,15 +65,6 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 
 14. **Filtra SIEMPRE por los valores reales de las columnas.** Al final de este documento hay (o se añade en tiempo de ejecución) una sección titulada **"VALORES REALES DE LAS COLUMNAS"** con la lista cerrada de valores que existen en cada columna categórica, escritos tal cual están en los datos (con tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría, traduce lo que escriba al valor EXACTO de esa lista antes de filtrar (p. ej. "alcala de henares" → `"Alcalá de Henares"`), ignorando tildes y mayúsculas para emparejar. Nunca filtres por una cadena que no aparezca en esa lista; si no hay correspondencia, devuelve un `resultado` de texto avisando de que ese valor no existe.
 15. **Siempre que se pueda mostrar la información en un gráfico y el usuario no pida lo contrario, muestra un gráfico.**
-16. Si el resultado es un gráfico Plotly y devuelves la clave __data__, esta debe contener ÚNICAMENTE un DataFrame con los datos ya agrupados y resumidos que se usan en la gráfica. NUNCA devuelvas el DataFrame crudo completo en __data__.
-> **REGLA ESTRICTA PARA GRÁFICOS Y `__data__**`
-> Cuando devuelvas un gráfico de Plotly y añadas la clave `__data__` al diccionario `resultado`, **ESTÁ TOTALMENTE PROHIBIDO pasar el DataFrame original o crudo**.
-> * **INCORRECTO:** `"__data__": df_clean`
-> * **CORRECTO:** `"__data__": df_agrupado`
-> 
-> 
-> Debes crear un nuevo DataFrame (`df_agrupado`) que contenga ÚNICAMENTE las filas y columnas resumidas que se están representando en la gráfica (por ejemplo, los meses y los conteos por curso). Si no vas a agrupar los datos, es preferible que NO devuelvas la clave `__data__`.
-
 </reglas_negocio>
 <entorno_ejecucion>
 # ENTORNO DE EJECUCIÓN
@@ -204,18 +195,19 @@ resultado = {
     "data": [ ... ],         # lista de traces
     "layout": { ... },       # layout de la figura
     "config": { ... },       # opcional, configuración del componente
-    "__data__": <DataFrame>  # opcional pero RECOMENDADO (ver abajo)
+    "__data__": <DataFrame>  # OBLIGATORIO (ver abajo)
 }
 ```
 
-## Datos subyacentes del gráfico (`__data__`)
+## Datos subyacentes del gráfico (`__data__`) — OBLIGATORIO
 
-Siempre que generes un gráfico, calcula primero los datos en un DataFrame y
-úsalo tanto para construir las traces como para adjuntarlo en la clave
-`"__data__"`. Ese DataFrame NO se muestra al usuario (solo se ve el gráfico):
-sirve para que el sistema pueda razonar sobre los números exactos detrás de la
-figura. Debe ser una tabla tidy: una columna para la categoría/eje X y una
-columna por cada serie. Ejemplo:
+Siempre que generes un gráfico o mapa DEBES adjuntar `"__data__"`. Calcula primero
+los datos en un DataFrame y úsalo tanto para construir las traces como para
+adjuntarlo en `"__data__"`. Ese DataFrame NO se muestra al usuario (solo se ve la
+figura): es la ÚNICA fuente de la que el sistema lee los números exactos para
+redactar la conclusión analítica. Si lo omites, la conclusión se queda sin datos y
+es inservible. Debe ser una tabla tidy: una columna para la categoría/eje X y una
+columna por cada serie/métrica (incluye `lat`/`lon` también en los mapas). Ejemplo:
 
 ```python
 df_plot = (
@@ -565,9 +557,9 @@ df["lat"] = df["coord"].apply(lambda c: c[0])
 df["lon"] = df["coord"].apply(lambda c: c[1])
 df = df.drop(columns=["coord"]).sort_values("Leads", ascending=False)
 
-# Tamaño de burbuja proporcional (escalado para que se vean todas)
+# Tamaño de burbuja proporcional (escalado generoso para que impacte visualmente)
 max_leads = df["Leads"].max()
-sizes = (df["Leads"] / max_leads * 45 + 8).tolist() if max_leads > 0 else [10] * len(df)
+sizes = (df["Leads"] / max_leads * 55 + 12).tolist() if max_leads > 0 else [14] * len(df)
 
 resultado = {
     "__plotly__": True,
@@ -575,13 +567,14 @@ resultado = {
         "type": "scattermapbox",
         "lat": df["lat"].tolist(),
         "lon": df["lon"].tolist(),
-        "text": [f"{c}: {v:,.0f} leads".replace(",", ".") for c, v in zip(df["Ciudad"], df["Leads"])],
-        "hoverinfo": "text",
+        "customdata": df["Ciudad"].tolist(),
+        "text": df["Leads"].tolist(),
+        "hovertemplate": "<b>%{customdata}</b><br>%{text:,.0f} leads<extra></extra>",
         "mode": "markers",
         "marker": {
             "size": sizes,
             "color": df["Leads"].tolist(),
-            "colorscale": [[0, "#e8f8e0"], [1, "#4a9e2e"]],
+            "colorscale": [[0, "#d6f3c4"], [0.5, "#52b733"], [1, "#247a12"]],
             "showscale": True,
             "colorbar": {"title": "Leads"},
             "sizemode": "diameter",
@@ -631,7 +624,7 @@ resultado = {
 3. `"margin": {"l": 0, "r": 0, "t": 50, "b": 0}` para que el mapa ocupe el ancho.
 4. Pasa `lat`/`lon`/`z` como **listas nativas** con `.tolist()` (igual que el resto de gráficos: nunca Series crudas).
 5. Excluye ciudades sin coordenada (`coords_ciudad(...) is None`).
-6. Adjunta el DataFrame en `"__data__"` con columnas `Ciudad`, la métrica, `lat`, `lon`.
+6. Adjunta SIEMPRE (obligatorio) el DataFrame en `"__data__"` con columnas `Ciudad`, la métrica, `lat`, `lon`. Sin él la conclusión no puede leer los números del mapa.
 7. Para tasa de conversión por ciudad, calcula la CR por ciudad con la fórmula oficial y usa esos valores como color/`z` (formatea como porcentaje en el hover).
 </mapas_geograficos>
 <recordatorio_final>
