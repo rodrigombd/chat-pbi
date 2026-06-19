@@ -1,0 +1,6 @@
+langchain-core>=0.3,<0.4
+langchain-openai>=0.2,<0.3
+langchain-neo4j>=0.1,<0.2
+neo4j>=5.20
+fastapi>=0.110
+uvicorn[standard]>=0.29
