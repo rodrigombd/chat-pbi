@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Analytics Assistant — RESA</title>
+<script src="grafo_resa.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
@@ -535,6 +536,7 @@ var STORAGE_CTX_KEY  = "resa_assistant_session_context";
 var STORAGE_TS_KEY   = "resa_assistant_session_ts";
 var STORAGE_HIST_KEY = "resa_assistant_turn_history";
 var STORAGE_SUMMARY_KEY = "resa_assistant_session_summary";
+var PROMPTS_FILE = "../backend/prompts.json";
 var SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 var MAX_HISTORY_TURNS = 60;
 var HISTORY_INJECT_TURNS = 16;
@@ -544,18 +546,8 @@ var conversationId   = null;
 var lastResponseId   = null;
 var supportsCacheRetention = true;
 
-var PROMPT_FILES = {
-  router: "context_router.txt",
-  clarify: "context_clarify.txt",
-  modelo_datos: "context_modelo_datos.txt",
-  general: "context_general.txt",
-  conclusiones: "context_conclusiones.txt",
-  explicacion: "context_explicacion.txt",
-  planificador: "context_planificador.txt"
-};
-
 var CSV_TABLES = {
-  "leads_contacts": "Leads_Contacts.csv"
+  "leads_contacts": "../data/Leads_Contacts.csv"
 };
 var PRIMARY_CSV = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
@@ -581,6 +573,20 @@ function renderRich(text) {
     } catch (e) {}
   }
   return tmp.innerHTML;
+}
+
+async function pedirSubgrafo(consulta) {
+  try {
+    if (typeof extraerSubgrafo === "function") {
+      return extraerSubgrafo(consulta, 6); 
+    } else {
+      console.warn("La función extraerSubgrafo no está disponible.");
+      return "";
+    }
+  } catch (e) {
+    console.warn("Error procesando el grafo en memoria:", e.message);
+    return "";
+  }
 }
 
 
@@ -733,32 +739,19 @@ async function initChat() {
 
 async function loadPrompts() {
   setStep("step-prompts", "active");
-  var keys = Object.keys(PROMPT_FILES);
-
-  var fetchPromises = keys.map(async function(key) {
-    try {
-      var r = await fetch(PROMPT_FILES[key] + "?v=" + Date.now());
-      if (r.ok) {
-        var txt = await r.text();
-        if (txt && txt.trim()) prompts[key] = txt;
-      } else {
-        console.warn("No se pudo cargar " + PROMPT_FILES[key] + " (HTTP " + r.status + ")");
-      }
-    } catch (e) {
-      console.warn("Error cargando " + PROMPT_FILES[key], e);
+  try {
+    var r = await fetch(PROMPTS_FILE + "?v=" + Date.now());
+    if (r.ok) {
+      prompts = await r.json();
+      setStep("step-prompts", "done");
+    } else {
+      console.warn("No se pudo cargar " + PROMPTS_FILE + " (HTTP " + r.status + ")");
+      setStep("step-prompts", "error");
     }
-  });
-
-  await Promise.all(fetchPromises);
-  var allOk = true;
-  for (var k in PROMPT_FILES) { 
-    if (!prompts[k]) { 
-      allOk = false; 
-      break; 
-    } 
+  } catch (e) {
+    console.warn("Error cargando " + PROMPTS_FILE, e);
+    setStep("step-prompts", "error");
   }
-  
-  setStep("step-prompts", allOk ? "done" : "error");
 }
 
 async function initPyodide() {
@@ -2060,6 +2053,9 @@ function appendBatchStepHeader(step, total, text) {
 
 async function answerDataQuery(userText, answeredSlots) {
   var enriched = buildEnrichedQuery(userText, answeredSlots);
+  var subgrafo = await pedirSubgrafo(userText);
+  if (subgrafo) enriched = subgrafo + "\n\n" + enriched;
+
   var currentMessage = [{ role: "user", content: enriched }];
 
   var tid = appendTyping("generando código...");
