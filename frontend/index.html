@@ -446,12 +446,6 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 .explain-body p:last-child { margin-bottom: 0; }
 .explain-body ul { margin: 4px 0 4px 20px; }
 .explain-body li { margin-bottom: 3px; }
-.explain-loading {
-  margin-top: 12px; padding: 10px 14px;
-  background: var(--accent-lt); border: 1px solid #c5e8b3;
-  border-left: 3px solid var(--accent); border-radius: var(--radius-sm);
-  font-size: 13px; color: var(--accent-dk); display: flex; align-items: center; gap: 8px;
-}
 </style>
 </head>
 <body>
@@ -507,6 +501,12 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
       <span class="toggle-label-text">Conclusiones</span>
     </label>
     <span class="toggle-hint">Añade una lectura breve del resultado tras cada consulta de datos</span>
+    <label class="toggle-switch" title="Si está activo, tras cada consulta de datos se muestra un panel con el subgrafo seleccionado y el contexto textual exacto enviado al LLM." style="margin-left:18px;">
+      <input type="checkbox" id="debug-graph-toggle">
+      <span class="toggle-track"></span>
+      <span class="toggle-label-text">Debug grafo</span>
+    </label>
+    <span class="toggle-hint">Muestra el subgrafo y el payload textual enviado al modelo</span>
   </div>
 
   <div id="input-area">
@@ -2053,7 +2053,26 @@ function appendBatchStepHeader(step, total, text) {
 
 async function answerDataQuery(userText, answeredSlots) {
   var enriched = buildEnrichedQuery(userText, answeredSlots);
-  var subgrafo = await pedirSubgrafo(userText);
+
+  // Cruce consulta <-> grafo. Si el módulo expone la variante de depuración,
+  // la usamos para capturar también la estructura del subgrafo (no cambia el
+  // texto inyectado: 'texto' es idéntico a extraerSubgrafo). En caso contrario
+  // caemos al comportamiento anterior basado solo en texto.
+  var subgrafo = "";
+  var debugEstructura = null;
+  try {
+    if (typeof extraerSubgrafoDebug === "function") {
+      var dbg = extraerSubgrafoDebug(userText, 6);
+      subgrafo = dbg ? dbg.texto : "";
+      debugEstructura = dbg ? dbg.estructura : null;
+    } else {
+      subgrafo = await pedirSubgrafo(userText);
+    }
+  } catch (e) {
+    console.warn("Error obteniendo subgrafo:", e.message);
+    subgrafo = await pedirSubgrafo(userText);
+  }
+
   if (subgrafo) enriched = subgrafo + "\n\n" + enriched;
 
   var currentMessage = [{ role: "user", content: enriched }];
@@ -2117,6 +2136,20 @@ async function answerDataQuery(userText, answeredSlots) {
   if (postTasks.length > 0) {
     await Promise.allSettled(postTasks);
     setExecutionStatus(execResult);
+  }
+
+  // Panel observacional de depuración del grafo. Puramente lectura: usa la
+  // estructura ya calculada y el payload textual real (currentMessage[0].content).
+  if (debugGraphEnabled()) {
+    try {
+      appendGraphDebugTo(resultEl, {
+        estructura: debugEstructura,
+        subgrafoTexto: subgrafo,
+        enriched: currentMessage[0].content
+      });
+    } catch (e) {
+      console.warn("[debug grafo] no se pudo renderizar:", e.message);
+    }
   }
 }
 
@@ -2193,6 +2226,266 @@ function friendlyError(execError, code, firstError) {
 function conclusionsEnabled() {
   var t = document.getElementById("conclusions-toggle");
   return !!(t && t.checked);
+}
+
+// ============================================================================
+//  Debug grafo (observacional). No altera el cruce ni el envío al LLM:
+//  solo dibuja la estructura ya calculada y vuelca el contexto textual real.
+// ============================================================================
+
+function debugGraphEnabled() {
+  var t = document.getElementById("debug-graph-toggle");
+  return !!(t && t.checked);
+}
+
+function _escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// Construye el SVG del subgrafo con un layout por capas sencillo y legible:
+//  - Las medidas se reparten en columnas según su "profundidad" en las
+//    dependencias (una hija queda a la izquierda de sus padres).
+//  - Aristas dirigidas hija -> padre con marcador de flecha.
+//  - Borde/relleno distinto para match directo vs entrada por dependencia.
+function buildSubgraphSvg(estructura) {
+  if (!estructura || !estructura.nodos || estructura.nodos.length === 0) {
+    return '<p style="font-size:13px;color:var(--text3);margin:8px 0;">' +
+           'No se seleccionó ninguna medida para esta consulta. ' +
+           'El LLM recibió solo el modelo de datos genérico.</p>';
+  }
+
+  var nodos = estructura.nodos;
+  var aristas = estructura.aristas || [];
+
+  // Índice nombre -> nodo
+  var byName = {};
+  nodos.forEach(function (n) { byName[n.nombre] = n; });
+
+  // Profundidad = longitud de la cadena de dependencias saliente (hija -> padre).
+  // Las hojas (padres puros) quedan a la derecha; las medidas derivadas a la izq.
+  var depth = {};
+  function computeDepth(name, seen) {
+    if (depth[name] != null) return depth[name];
+    seen = seen || {};
+    if (seen[name]) return 0; // protección anti-ciclos
+    seen[name] = true;
+    var hijos = aristas.filter(function (e) { return e[0] === name; });
+    if (hijos.length === 0) { depth[name] = 0; return 0; }
+    var maxParent = 0;
+    hijos.forEach(function (e) {
+      if (byName[e[1]]) {
+        var d = computeDepth(e[1], seen) + 1;
+        if (d > maxParent) maxParent = d;
+      }
+    });
+    depth[name] = maxParent;
+    return maxParent;
+  }
+  nodos.forEach(function (n) { computeDepth(n.nombre, {}); });
+
+  // Agrupar por columna (profundidad). Columna 0 = derivadas; mayor = base.
+  var maxDepth = 0;
+  nodos.forEach(function (n) { if (depth[n.nombre] > maxDepth) maxDepth = depth[n.nombre]; });
+  var columnas = [];
+  for (var c = 0; c <= maxDepth; c++) columnas.push([]);
+  nodos.forEach(function (n) { columnas[depth[n.nombre]].push(n); });
+
+  // Geometría
+  var NODE_W = 190, NODE_H = 46;
+  var COL_GAP = 90, ROW_GAP = 18;
+  var PAD = 20;
+  var colX = [];
+  for (var i = 0; i <= maxDepth; i++) {
+    colX[i] = PAD + i * (NODE_W + COL_GAP);
+  }
+  var maxRows = 0;
+  columnas.forEach(function (col) { if (col.length > maxRows) maxRows = col.length; });
+
+  var width = PAD * 2 + (maxDepth + 1) * NODE_W + maxDepth * COL_GAP;
+  var height = PAD * 2 + maxRows * NODE_H + (maxRows - 1) * ROW_GAP;
+  if (height < 120) height = 120;
+
+  // Posiciones por nodo
+  var pos = {};
+  columnas.forEach(function (col, ci) {
+    var colHeight = col.length * NODE_H + (col.length - 1) * ROW_GAP;
+    var startY = PAD + (height - PAD * 2 - colHeight) / 2;
+    col.forEach(function (n, ri) {
+      pos[n.nombre] = {
+        x: colX[ci],
+        y: startY + ri * (NODE_H + ROW_GAP)
+      };
+    });
+  });
+
+  var COLOR_DIRECT = "#7c5cd6", FILL_DIRECT = "#efeafc";
+  var COLOR_DEP = "#9aa3b2", FILL_DEP = "#f3f4f6";
+
+  var svg = [];
+  svg.push('<svg viewBox="0 0 ' + width + ' ' + height + '" width="' + width +
+           '" height="' + height + '" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, sans-serif">');
+  svg.push('<defs>' +
+    '<marker id="dbg-arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">' +
+    '<path d="M0,0 L8,3 L0,6 Z" fill="#b3b8c4"/></marker></defs>');
+
+  // Aristas (hija -> padre): salen del borde derecho de la hija al izquierdo del padre.
+  aristas.forEach(function (e) {
+    var a = pos[e[0]], b = pos[e[1]];
+    if (!a || !b) return;
+    var x1 = a.x + NODE_W, y1 = a.y + NODE_H / 2;
+    var x2 = b.x, y2 = b.y + NODE_H / 2;
+    var mx = (x1 + x2) / 2;
+    var d = "M" + x1 + "," + y1 + " C" + mx + "," + y1 + " " + mx + "," + y2 + " " + (x2 - 2) + "," + y2;
+    svg.push('<path d="' + d + '" fill="none" stroke="#b3b8c4" stroke-width="1.5" marker-end="url(#dbg-arrow)"/>');
+  });
+
+  // Nodos
+  nodos.forEach(function (n) {
+    var p = pos[n.nombre];
+    var stroke = n.matchDirecto ? COLOR_DIRECT : COLOR_DEP;
+    var fill = n.matchDirecto ? FILL_DIRECT : FILL_DEP;
+    var dash = n.matchDirecto ? "" : ' stroke-dasharray="4 3"';
+    var label = n.nombre.length > 26 ? n.nombre.slice(0, 25) + "…" : n.nombre;
+    var tip = n.desc + (n.score ? "  (score " + n.score + ")" : "");
+
+    svg.push('<g>');
+    svg.push('<title>' + _escapeHtml(tip) + '</title>');
+    svg.push('<rect x="' + p.x + '" y="' + p.y + '" width="' + NODE_W + '" height="' + NODE_H +
+             '" rx="8" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.6"' + dash + '/>');
+    svg.push('<text x="' + (p.x + NODE_W / 2) + '" y="' + (p.y + 19) +
+             '" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2a2a2a">' +
+             _escapeHtml(label) + '</text>');
+    var sub = n.familia + (n.curso ? " · " + n.curso : "");
+    svg.push('<text x="' + (p.x + NODE_W / 2) + '" y="' + (p.y + 34) +
+             '" text-anchor="middle" font-size="10" fill="#7a7a85">' +
+             _escapeHtml(sub) + '</text>');
+    svg.push('</g>');
+  });
+
+  svg.push('</svg>');
+  return svg.join("");
+}
+
+function buildDimensionsHtml(estructura) {
+  if (!estructura || !estructura.dimensiones || !estructura.dimensiones.length) return "";
+  var items = estructura.dimensiones.map(function (d) {
+    return "<div><strong>" + _escapeHtml(d.tabla) + "[" + _escapeHtml(d.columna) + "]</strong> — " +
+           _escapeHtml(d.desc) + "</div>";
+  }).join("");
+  return '<div class="debug-dims"><div style="font-weight:600;color:var(--text);margin-bottom:4px;">' +
+         'Dimensiones disponibles para agrupar/filtrar:</div>' + items + '</div>';
+}
+
+// Inserta el panel colapsable de debug en el mismo .msg-text del resultado,
+// antes del toggle de código (igual que explicación/conclusión).
+function appendGraphDebugTo(resultEl, data) {
+  if (!resultEl) return;
+  var textBody = resultEl.querySelector(".msg-text");
+  if (!textBody) return;
+
+  var nDirect = 0, nDep = 0;
+  if (data.estructura && data.estructura.nodos) {
+    data.estructura.nodos.forEach(function (n) {
+      if (n.matchDirecto) nDirect++; else nDep++;
+    });
+  }
+
+  var svg = buildSubgraphSvg(data.estructura);
+  var dimsHtml = buildDimensionsHtml(data.estructura);
+  var subgrafoTxt = _escapeHtml(data.subgrafoTexto || "(vacío)");
+  var enrichedTxt = _escapeHtml(data.enriched || "(vacío)");
+
+  var details = document.createElement("details");
+  details.className = "debug-details";
+  details.innerHTML =
+    '<summary>Debug grafo — ' + nDirect + ' directas · ' + nDep + ' por dependencia</summary>' +
+    '<div class="debug-body">' +
+      '<div class="debug-tabs">' +
+        '<button type="button" class="debug-tab active" data-pane="subgrafo">Subgrafo</button>' +
+        '<button type="button" class="debug-tab" data-pane="contexto">Contexto enviado al LLM</button>' +
+      '</div>' +
+      '<div class="debug-pane active" data-pane="subgrafo">' +
+        '<div class="debug-graph-wrap">' + svg + '</div>' +
+        '<div class="debug-legend">' +
+          '<span class="lg"><span class="sw" style="background:#efeafc;border:1.6px solid #7c5cd6;"></span>Match directo con la consulta</span>' +
+          '<span class="lg"><span class="sw" style="background:#f3f4f6;border:1.6px dashed #9aa3b2;"></span>Entró por dependencia (cierre transitivo)</span>' +
+          '<span class="lg">→ dependencia hija → padre</span>' +
+        '</div>' +
+        dimsHtml +
+      '</div>' +
+      '<div class="debug-pane" data-pane="contexto">' +
+        '<div class="debug-ctx-block">' +
+          '<div class="debug-ctx-head">' +
+            '<span class="debug-ctx-title">Subgrafo serializado (extraerSubgrafo)</span>' +
+            '<button type="button" class="debug-copy-btn">Copiar</button>' +
+          '</div>' +
+          '<pre class="debug-pre">' + subgrafoTxt + '</pre>' +
+        '</div>' +
+        '<div class="debug-ctx-block">' +
+          '<div class="debug-ctx-head">' +
+            '<span class="debug-ctx-title">Consulta enriquecida completa (content enviado a callModel)</span>' +
+            '<button type="button" class="debug-copy-btn">Copiar</button>' +
+          '</div>' +
+          '<pre class="debug-pre">' + enrichedTxt + '</pre>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Conmutación de pestañas
+  var tabs = details.querySelectorAll(".debug-tab");
+  var panes = details.querySelectorAll(".debug-pane");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      var target = tab.getAttribute("data-pane");
+      tabs.forEach(function (t) { t.classList.toggle("active", t === tab); });
+      panes.forEach(function (p) {
+        p.classList.toggle("active", p.getAttribute("data-pane") === target);
+      });
+    });
+  });
+
+  // Botones de copiar (cada uno copia el <pre> de su propio bloque)
+  var copyBtns = details.querySelectorAll(".debug-copy-btn");
+  copyBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var block = btn.closest(".debug-ctx-block");
+      var pre = block ? block.querySelector(".debug-pre") : null;
+      if (!pre) return;
+      var txt = pre.textContent || "";
+      var done = function () {
+        var prev = btn.textContent;
+        btn.textContent = "Copiado ✓";
+        setTimeout(function () { btn.textContent = prev; }, 1200);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done).catch(function () {
+          _fallbackCopy(txt); done();
+        });
+      } else {
+        _fallbackCopy(txt); done();
+      }
+    });
+  });
+
+  var codeToggle = textBody.querySelector(".code-toggle");
+  if (codeToggle) textBody.insertBefore(details, codeToggle);
+  else textBody.appendChild(details);
+  scrollToBottom();
+}
+
+function _fallbackCopy(text) {
+  try {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  } catch (e) { /* noop */ }
 }
 
 function isResultEligibleForConclusion(r) {

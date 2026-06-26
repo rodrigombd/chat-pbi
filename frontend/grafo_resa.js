@@ -91,16 +91,16 @@ function _puntuar(medida, consultaNorm, terminos) {
     if (!t) continue;
     if (texto.indexOf(t) !== -1) score += 1;
     if (_norm(medida.familia) === t) score += 2;
-    // Bonus por año explícito en la consulta
     if (medida.anio && t === String(medida.anio)) score += 3;
     if (medida.curso && medida.curso.indexOf(t) !== -1) score += 3;
   }
-  if ((consultaNorm.indexOf("conversion") !== -1 || consultaNorm.indexOf("tasa") !== -1)
-      && medida.familia === "CR") score += 2;
+  if ((consultaNorm.indexOf("conversion") !== -1 || consultaNorm.indexOf("tasa") !== -1) && medida.familia === "CR") 
+     score += 2;
   return score;
 }
 
-function extraerSubgrafo(consulta, topK) {
+
+function _cruzar(consulta, topK) {
   topK = topK || 6;
   var consultaNorm = _norm(consulta);
   var terminos = consultaNorm.split(/\s+/).filter(Boolean);
@@ -112,7 +112,12 @@ function extraerSubgrafo(consulta, topK) {
     .slice(0, topK);
 
   var seleccion = {};
-  puntuadas.forEach(function (x) { seleccion[x.m.nombre] = x.m; });
+  var procedencia = {};
+
+  puntuadas.forEach(function (x) {
+    seleccion[x.m.nombre] = x.m;
+    procedencia[x.m.nombre] = { matchDirecto: true, porDependencia: false, score: x.score };
+  });
 
   var cambio = true;
   while (cambio) {
@@ -120,12 +125,57 @@ function extraerSubgrafo(consulta, topK) {
     GRAFO_RESA.deriva.forEach(function (par) {
       if (seleccion[par[0]] && !seleccion[par[1]]) {
         var base = GRAFO_RESA.medidas.find(function (m) { return m.nombre === par[1]; });
-        if (base) { seleccion[par[1]] = base; cambio = true; }
+        if (base) {
+          seleccion[par[1]] = base;
+          procedencia[par[1]] = { matchDirecto: false, porDependencia: true, score: 0 };
+          cambio = true;
+        }
       }
     });
   }
 
-  return _serializar(seleccion, consulta);
+  var aristas = GRAFO_RESA.deriva.filter(function (par) {
+    return seleccion[par[0]] && seleccion[par[1]];
+  });
+
+  return { seleccion: seleccion, procedencia: procedencia, aristas: aristas };
+}
+
+function extraerSubgrafo(consulta, topK) {
+  var cruce = _cruzar(consulta, topK);
+  return _serializar(cruce.seleccion, consulta);
+}
+
+function extraerSubgrafoDebug(consulta, topK) {
+  var cruce = _cruzar(consulta, topK);
+  var texto = _serializar(cruce.seleccion, consulta);
+
+  var nodos = Object.keys(cruce.seleccion).map(function (nombre) {
+    var m = cruce.seleccion[nombre];
+    var p = cruce.procedencia[nombre] || { matchDirecto: false, porDependencia: true, score: 0 };
+    return {
+      nombre: m.nombre,
+      familia: m.familia,
+      anio: m.anio,
+      curso: m.curso,
+      tipo: m.tipo,
+      desc: m.desc,
+      matchDirecto: !!p.matchDirecto,
+      porDependencia: !!p.porDependencia,
+      score: p.score || 0
+    };
+  });
+
+  return {
+    texto: texto,
+    estructura: {
+      nodos: nodos,
+      aristas: cruce.aristas.map(function (par) { return [par[0], par[1]]; }),
+      dimensiones: GRAFO_RESA.dimensiones.map(function (d) {
+        return { tabla: d.tabla, columna: d.columna, desc: d.desc };
+      })
+    }
+  };
 }
 
 function _serializar(seleccion, consulta) {
@@ -170,5 +220,9 @@ function _serializar(seleccion, consulta) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { extraerSubgrafo: extraerSubgrafo, GRAFO_RESA: GRAFO_RESA };
+  module.exports = {
+    extraerSubgrafo: extraerSubgrafo,
+    extraerSubgrafoDebug: extraerSubgrafoDebug,
+    GRAFO_RESA: GRAFO_RESA
+  };
 }
