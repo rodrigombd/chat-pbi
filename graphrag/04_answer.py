@@ -35,26 +35,6 @@ def build_prompt(question: str, subgraph_text: str) -> list[dict[str, str]]:
         {"role": "user", "content": user_content},
     ]
 
-def answer_question(question: str, label: str | None = None) -> str:
-    if label is None:
-        subgraph_text = _retrieval.retrieve_context_all(question)
-    else:
-        subgraph_text = _retrieval.retrieve_context(question, label=label)
-    logger.info("Subgrafo recuperado.")
-
-    messages = build_prompt(question, subgraph_text)
-
-    try:
-        response = _client.chat.completions.create(
-            model=ANSWER_MODEL,
-            messages=messages,
-            temperature=0.2,
-        )
-        return response.choices[0].message.content or ""
-    except OpenAIError:
-        logger.exception("Fallo en la llamada al LLM para generar la respuesta.")
-        raise
-
 def answer_question(question: str, label: str | None = None, context: str | None = None) -> str:
     if context is None:
         if label is None:
