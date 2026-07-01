@@ -1,0 +1,9 @@
+# Credenciales y secretos
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
