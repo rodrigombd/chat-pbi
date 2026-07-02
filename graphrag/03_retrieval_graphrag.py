@@ -18,6 +18,7 @@ def _format_record(record: neo4j.Record) -> RetrieverResultItem:
         content=str(record.get("entry")),
         metadata={
             "entry": record.get("entry"),
+            "properties": record.get("properties"),
             "score": record.get("score"),
             "context": record.get("context") or [],
         },

@@ -2,6 +2,12 @@ from __future__ import annotations
 from typing import Any
 from config import LabelConfig, SchemaConfig
 
+_DIRECTION_LABEL: dict[str, str] = {
+    "out": "-->",
+    "in": "<--",
+    "both": "<->",
+}
+
 
 def _direction_pattern(rel_type: str, direction: str, hops: int) -> str:
     depth = "" if hops <= 1 else f"*1..{hops}"
@@ -13,6 +19,14 @@ def _direction_pattern(rel_type: str, direction: str, hops: int) -> str:
     return f"-{body}-"
 
 
+def _props_reducer(alias: str, emb_prop: str, name_prop: str) -> str:
+    return (
+        f"reduce(acc = '', k IN [x IN keys({alias}) "
+        f"WHERE x <> '{emb_prop}' AND x <> '{name_prop}'] | "
+        f"acc + k + ': ' + toString({alias}[k]) + ' | ')"
+    )
+
+
 def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
     name_prop = label_cfg.name_property
     emb_prop = schema.embedding_property
@@ -22,16 +36,15 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
     for idx, rel in enumerate(label_cfg.expansion_relationships):
         rel_type, direction, hops = rel
         alias = f"n{idx}"
+        arrow = _DIRECTION_LABEL.get(direction, "--")
         pattern = _direction_pattern(rel_type, direction, hops)
         optional_matches.append(f"OPTIONAL MATCH (node){pattern}({alias})")
-        props_cypher = (
-            f"reduce(acc = '', k IN [x IN keys({alias}) "
-            f"WHERE x <> '{emb_prop}' AND x <> '{name_prop}'] | "
-            f"acc + k + ': ' + toString({alias}[k]) + ' | ')"
-        )
+        props_cypher = _props_reducer(alias, emb_prop, name_prop)
         collect_clauses.append(
             f"collect(DISTINCT CASE WHEN {alias} IS NOT NULL "
-            f"THEN '{rel_type}: ' + coalesce({alias}.{name_prop}, elementId({alias})) + "
+            f"THEN coalesce(node.{name_prop}, elementId(node)) + "
+            f"' {arrow} {rel_type}: ' + "
+            f"coalesce({alias}.{name_prop}, elementId({alias})) + "
             f"' (' + {props_cypher} + ')' "
             f"END) AS ctx{idx}"
         )
@@ -40,6 +53,7 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
     collect_block = ",\n     ".join(collect_clauses) if collect_clauses else "[] AS ctx_empty"
     ctx_vars = " + ".join(f"ctx{idx}" for idx in range(len(label_cfg.expansion_relationships)))
     ctx_expr = ctx_vars if ctx_vars else "[]"
+    node_props = _props_reducer("node", emb_prop, name_prop)
 
     return f"""
 WITH node, score
@@ -49,6 +63,7 @@ WITH node, score,
      {collect_block}
 RETURN
     node.{name_prop} AS entry,
+    {node_props} AS properties,
     score AS score,
     [x IN ({ctx_expr}) WHERE x IS NOT NULL] AS context
 ORDER BY score DESC
@@ -64,6 +79,10 @@ def serialize_subgraph(records: list[dict[str, Any]]) -> str:
         entry = record.get("entry", "?")
         score = record.get("score", 0.0)
         lines.append(f"\n## {entry}  (similitud={score:.3f})")
+        properties = (record.get("properties") or "").strip().rstrip("|").strip()
+        if properties:
+            lines.append(f"  · propiedades: {properties}")
+
         context = record.get("context") or []
         if context:
             for ctx_line in context:

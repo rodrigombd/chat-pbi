@@ -32,8 +32,8 @@ class LabelConfig:
 class SchemaConfig:
     embedding_property: str = "embedding"
     index_prefix: str = "entity_embeddings"
-    top_k: int = 40
-    score_threshold: float = 0.6
+    top_k: int = 15
+    score_threshold: float = 0.65
 
     labels: tuple[LabelConfig, ...] = (
         LabelConfig(
