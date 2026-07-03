@@ -33,7 +33,7 @@ class SchemaConfig:
     embedding_property: str = "embedding"
     index_prefix: str = "entity_embeddings"
     top_k: int = 15
-    score_threshold: float = 0.65
+    score_threshold: float = 0.7
 
     labels: tuple[LabelConfig, ...] = (
         LabelConfig(
@@ -43,7 +43,6 @@ class SchemaConfig:
             expansion_relationships=(
                 ("TIENE_COLUMNA", "out", 1),
                 ("TIENE_MEDIDA", "out", 1),
-                ("RELACIONA", "out", 1),
             ),
         ),
         LabelConfig(
