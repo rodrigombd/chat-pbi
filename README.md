@@ -1,254 +1,301 @@
-# Asistente analítico CRM (demo)
+# Asistente analítico CRM — RESA (demo)
 
-Chatbot que permite a un empleado preguntar en lenguaje natural y recibir tablas, gráficos interactivos y conclusiones. Toda la aplicación vive
-en un único `index.html` que se sirve por HTTP local; el "cerebro" se reparte entre la **API
-Responses de OpenAI** (clasificación, planificación, generación de código y conclusiones) y
-**Pyodide** (ejecución del código Pandas en el navegador). Los prompts de cada paso son archivos
-`.txt` externos cargados en tiempo de arranque.
+Chatbot que permite a un empleado preguntar en lenguaje natural sobre los datos de captación
+de las residencias de estudiantes RESA y recibir tablas, gráficos interactivos y conclusiones.
 
-> Requisito: servir con `python -m http.server 8000` (no `file://`) y tener `Leads_Contacts.csv`
-> y los `context_*.txt` en la misma carpeta que `index.html`.
+La demo es un sistema **híbrido de dos piezas**:
 
----
+1. **Frontend** (`frontend/index.html`) — una única página que concentra toda la lógica de la
+   aplicación. El "cerebro" de generación se reparte entre la **API Responses de OpenAI**
+   (orquestación por *tool calling*, clarify, generación de código Pandas, explicaciones y
+   conclusiones) y **Pyodide** (ejecución del código Pandas **en el navegador**, sin backend de
+   datos). Los *system prompts* de cada paso son archivos `context_*.txt` externos cargados al
+   arrancar.
+2. **Backend GraphRAG** (`graphrag/`) — un servicio **FastAPI** que expone `/retrieve`. Recupera de
+   **Neo4j Desktop**, mediante *embeddings* y expansión del grafo, el **subgrafo relevante** del modelo
+   de datos (tablas, columnas y medidas) para cada consulta, y lo devuelve como texto listo para
+   inyectar como contexto. Así el generador de código conoce el esquema real sin llevarlo
+   *hardcodeado*.
 
-## 1. Arranque (`initChat`)
-
-El usuario introduce su API key de OpenAI y pulsa *Conectar*. `initChat` lanza tres tareas en
-paralelo con `Promise.all` y solo revela el chat cuando todas terminan:
-
-1. **`loadPrompts`** — descarga en paralelo los archivos de `PROMPT_FILES` (`context_router.txt`,
-   `context_clarify.txt`, `context_modelo_datos.txt`, `context_general.txt`,
-   `context_conclusiones.txt`, `context_explicacion.txt`) y los guarda en la global `prompts`,
-   indexados por clave. Cada `.txt` es el *system prompt* de un paso distinto del pipeline.
-2. **`ensureConversation`** — recupera o crea el hilo de OpenAI (ver sección 2).
-3. **Cadena de Pyodide** — `initPyodide` (carga el runtime), `loadPyodidePackages` (instala
-   `pandas` y `numpy`), `installRuntimeHelpers` (inyecta helpers Python: parser de fechas en
-   español `__parse_fechas_es__`, `__reset_resultado__`, `__serialize_resultado__`),
-   `installCityCoords` (inyecta `CIUDADES_ES_COORDS` y `coords_ciudad`) y `loadPrimaryCsv`
-   (carga `Leads_Contacts.csv` como el DataFrame global de Pyodide `leads_contacts`, parseando
-   `Fecha creación`).
-
-Tras cargar el CSV, `injectColumnValuesIntoContext` añade al final de `prompts.general` la lista
-cerrada de valores reales de cada columna categórica, e `injectCityListIntoContext` añade la lista
-de ciudades con coordenadas. Así el generador de código conoce los valores exactos sobre los que
-puede filtrar.
-
-**Variables globales tras el arranque:**
-
-- `apiKey` — la clave introducida; se usa en cada llamada HTTP.
-- `prompts` — diccionario `{clave: texto}` con los system prompts.
-- `pyodide` — instancia del runtime; mantiene el estado Python (incluido `leads_contacts`) durante
-  toda la sesión.
-- `loadedCsvs` — `Set` con los CSV ya cargados, para no recargarlos.
-- `conversationId` / `lastResponseId` — identifican el hilo persistente de OpenAI.
-- `sessionContext` / `turnHistory` — memoria de la conversación (ver sección 3).
+> El backend GraphRAG es **opcional para arrancar**: si no está disponible, el asistente sigue
+> funcionando con el contexto estático de los `context_*.txt`, pero sin recuperación dinámica del
+> modelo (se muestra un aviso). Para un buen funcionamiento del chatbot debe levantarse.
 
 ---
 
-## 2. El hilo de OpenAI (`ensureConversation` / `createConversation`)
+## 0. Estructura del proyecto
 
-La demo usa la **Conversations API** de OpenAI para dar memoria de servidor a las consultas de
-datos. `ensureConversation`:
+```
+chat-pbi/
+├── .gitignore
+├── README.md
+├── requirements.txt
+│
+├── backend/
+│   ├── prompts.json
+│   └── tools.json
+│
+├── data/
+│   └── Leads_Contacts.csv   # Dataset que carga Pyodide en el navegador
+│
+├── evals/                   # Set de regresión y runner de evaluaciones
+│   ├── build_artifacts.py
+│   ├── regression_set.json
+│   └── run_evals.py
+│
+├── frontend/                # ← se sirve por HTTP; es lo que abre el navegador
+│   ├── index.html
+│   ├── context_router.txt
+│   ├── context_clarify.txt
+│   ├── context_modelo_datos.txt
+│   ├── context_general.txt
+│   ├── context_conclusiones.txt
+│   └── context_explicacion.txt
+│
+└── graphrag/                # ← backend FastAPI de recuperación
+    ├── .env                 # credenciales Neo4j + OpenAI (NO se versiona)
+    ├── api.py               # FastAPI: /health y /retrieve
+    ├── config.py            # esquema, labels y parámetros de recuperación
+    ├── grafo_resa.cypher    # script para construir el grafo en Neo4j
+    ├── requirements.txt
+    ├── 01_populate_embeddings.py
+    ├── 02_create_vector_index.py
+    ├── 03_retrieval_graphrag.py
+    ├── 04_answer.py
+    └── src/
+        ├── db.py            # driver de Neo4j
+        ├── embeddings.py
+        └── graph_parser.py
+```
 
-- Lee de `localStorage` un `conversationId` previo y su marca de tiempo. Si tiene **menos de 48 h**
-  (`SESSION_MAX_AGE_MS`), reutiliza ese hilo y restaura `sessionContext` y `turnHistory` desde
-  `localStorage`. Así, recargar la página no pierde el contexto.
-- Si está caducado o no existe, llama a `createConversation`, que hace `POST /v1/conversations`,
-  guarda el `id` devuelto en `conversationId` y lo persiste en `localStorage`.
-
-Cada vez que se resuelve una consulta, `touchSession` actualiza la marca de tiempo para mantener
-viva la sesión.
-
----
-
-## 3. La memoria de la conversación (dos capas)
-
-La memoria del lado del cliente es independiente del hilo de OpenAI y sirve para enriquecer los
-prompts de los pasos que **no** van al hilo:
-
-- **`sessionContext`** (objeto `{slot: valor}`) — contexto acotado: curso, ciudad, métrica, etc.,
-  rellenado por el paso *clarify* y por `rememberQueryParams` (que infiere curso/métrica del texto
-  con expresiones regulares). Se persiste en `localStorage`.
-- **`turnHistory`** (array) — historial de turnos. `recordTurnInHistory` guarda por cada consulta
-  resuelta un objeto `{q, r, ts}` con la pregunta y un resumen breve del resultado
-  (`summarizeResultForMemory`). Se conserva un máximo de `MAX_HISTORY_TURNS = 40` turnos.
-
-`buildFullMemoryText` combina ambas en un bloque de texto que se inyecta en el *input* del
-planificador y del generador de código. Del historial solo se inyectan los últimos
-`HISTORY_INJECT_TURNS = 12` turnos, para no saturar el contexto.
-
----
-
-## 4. El motor de llamadas a OpenAI (`callModel`)
-
-Todas las llamadas al modelo pasan por `callModel(messages, systemPrompt, opts)`, que hace
-`POST /v1/responses` con este cuerpo:
-
-- **`model`** — `opts.model || "gpt-4o"`. Todos los pasos usan `gpt-4o`.
-- **`instructions`** — el system prompt (`systemPrompt`), normalmente uno de los `context_*.txt`.
-- **`input`** — los mensajes, mapeados al formato Responses: rol `user` usa `input_text` y rol
-  `assistant` usa `output_text`.
-- **`max_output_tokens`** — `opts.maxTokens` (varía por paso, ver tabla más abajo).
-- **`temperature`** — solo se añade si `opts.temperature` es numérica.
-- **`store`** — igual a `opts.threaded` (por defecto `true`). Controla si la respuesta se persiste
-  en el hilo.
-- **`truncation: "auto"`** y, si el modelo lo soporta, `prompt_cache_retention: "24h"`.
-
-**El parámetro clave es `threaded`** (`store`):
-
-- Si `threaded` es `true` y existe `conversationId`, se añade `conversation: conversationId`: la
-  llamada entra en el hilo persistente y el modelo recuerda las consultas de datos anteriores. Si
-  no hay hilo pero sí `lastResponseId`, encadena con `previous_response_id`. Al volver, guarda el
-  nuevo `id` en `lastResponseId`.
-- Si `threaded` es `false`, la llamada es **stateless**: no toca el hilo. Esto es deliberado para
-  los pasos clasificadores (router, clarify, planificador), cuya salida es JSON de fontanería que
-  contaminaría el contexto de datos.
-
-Si OpenAI rechaza un parámetro (`error.param`), `callModel` lo elimina y reintenta una vez —así la
-demo degrada con elegancia si un parámetro no está soportado.
-
-`extractOpenAIText` recupera el texto de la respuesta, ya sea de `output_text` directo o
-recorriendo los bloques `output[].content[]`.
+> **Dos rutas relativas importan y dependen de dónde arrancas cada servidor:**
+>
+> - `index.html` carga el CSV desde `../data/Leads_Contacts.csv` y los `context_*.txt` desde su
+>   **propia carpeta**. Por eso el servidor del frontend debe arrancarse **desde `frontend/`**.
+> - `api.py` importa `import config` y `from src.db import get_driver`, y lee `.env` de su carpeta.
+>   Por eso el backend debe arrancarse **desde `graphrag/`**.
 
 ---
 
-## 5. El flujo de un mensaje (`sendMessage`)
+## 1. Requisitos previos
 
-Cuando el usuario envía un mensaje, `sendMessage` pone `busy = true`, pinta el mensaje y arranca el
-pipeline. El recorrido es:
-
-### Paso 1 — Enrutado (`routeMessage`, `context_router.txt`)
-
-Llamada **stateless** (`threaded: false`, `temperature: 0.2`, `maxTokens: 400`). El router
-devuelve un JSON con `tipo`: `saludo`, `modelo` o `datos`.
-
-- **`saludo`** → se muestra la respuesta del router (o un saludo de reserva) y termina el turno.
-- **`modelo`** → `answerModelQuery` responde una duda sobre el esquema usando
-  `context_modelo_datos.txt` (`temperature: 0.5`, `maxTokens: 1500`); esta es una respuesta de
-  texto, no genera código.
-- **`datos`** → continúa al paso 2.
-
-Si el router falla o no es parseable, se asume `datos` por defecto.
-
-### Paso 2 — Planificación multi-consulta (`runDataTurn` → `planRequests`)
-
-Llamada **stateless** (`threaded: false`, `temperature: 0.1`, `maxTokens: 600`) con un prompt de
-planificador embebido en el código. Recibe el mensaje del usuario más la memoria
-(`buildFullMemoryText`) y devuelve un array `peticiones`:
-
-- La regla central es **no dividir salvo que haya peticiones realmente distintas**. Una comparación
-  (Madrid vs Barcelona) es siempre **una sola** petición.
-- Si hay una única petición → `runDataPipeline`. Si hay varias → `runDataBatch`, que las resuelve
-  secuencialmente, una a una, mostrando una cabecera por paso.
-
-### Paso 3 — Slot-filling / Clarify (`runDataPipeline` → `planSlots`)
-
-Antes de generar código, `planSlots` (stateless, `temperature: 0.5`, `maxTokens: 700`,
-`context_clarify.txt`) detecta si faltan datos imprescindibles (p. ej. el curso). Si faltan:
-
-- Se crea la global **`pendingClarify`** `{userQuery, missing, answered, total}` y se pregunta al
-  usuario slot a slot con botones (`askNextSlot`). El turno queda en pausa (`busy` se mantiene).
-- Cada respuesta (`answerClarify`) rellena `sessionContext[slot]` y guarda en `pendingClarify.answered`.
-- Cuando no quedan slots, `finalizeClarify` reanuda el pipeline llamando a `answerDataQuery` con los
-  slots ya respondidos.
-
-Los slots que ya están en `sessionContext` se filtran y no se vuelven a preguntar.
-
-### Paso 4 — Generación de código (`answerDataQuery`, `context_general.txt`)
-
-Esta es la **única llamada threaded** (`threaded: true`, `temperature: 0.5`, `maxTokens: 1800`):
-entra en el hilo de OpenAI para que el modelo recuerde las consultas de datos previas.
-
-`buildEnrichedQuery` arma el *input*: memoria (`buildFullMemoryText`) + consulta actual + contexto
-de slots respondidos. El system prompt es `context_general.txt`, que obliga al modelo a responder
-**solo** con un bloque ` ```python ... ``` ` que asigna el resultado a la variable `resultado`
-(escalar, DataFrame, Series, dict de KPIs o dict Plotly con `"__plotly__": True`).
-
-`extractPythonCode` extrae el bloque de código de la respuesta.
-
-### Paso 5 — Ejecución en Pyodide (`runPython`)
-
-- `ensureTablesLoaded` garantiza que `leads_contacts` esté cargado en Pyodide.
-- `runPython` primero ejecuta `__reset_resultado__()` (borra cualquier `resultado` previo), luego
-  ejecuta el código del modelo con `runPythonAsync` **a scope global** (sin envolverlo en `try`,
-  para que las variables vivan en el espacio global y no haya `NameError`), y finalmente llama a
-  `__serialize_resultado__()` para convertir `resultado` a JSON.
-- El JSON resultante se etiqueta con un `kind` (`number`, `text`, `dataframe`, `dict`, `plotly`,
-  `none` o `error`) que decide cómo se renderiza.
-
-**Reintento automático:** si la ejecución falla, `retryWithModelFix` reenvía al modelo (threaded,
-mismo prompt) el código y el traceback pidiendo una corrección, y reejecuta una vez. Si vuelve a
-fallar, `friendlyError` muestra un mensaje amable sin tecnicismos.
-
-### Paso 6 — Render del resultado (`appendResult` → `renderResult`)
-
-Según el `kind`:
-
-- **número** → tarjeta KPI grande.
-- **texto** → prosa con Markdown.
-- **dataframe / dict** → tabla HTML alineada.
-- **plotly** → se crea un `<div class="plot-container">` con id único y, tras insertarlo,
-  `renderPlotlyInto` dibuja la figura con `Plotly.newPlot`. Para gráficos no geográficos se aplica
-  un `hoverlabel` legible con `namelength: -1` (no trunca nombres) y, tras renderizar,
-  `unclipPlotHover` elimina el recorte de la capa de hover y de la leyenda para que no las corte la
-  celda del chat. Los mapas (`scattermapbox`/`densitymapbox`) pasan además por `beautifyMap`.
-
-### Paso 7 — Memoria del turno
-
-Si la ejecución fue correcta: `rememberQueryParams` actualiza `sessionContext` con curso/métrica
-inferidos, `recordTurnInHistory` añade el turno a `turnHistory`, `rememberAnsweredSlots` consolida
-los slots respondidos y `touchSession` renueva la marca de tiempo de la sesión. La global
-`lastTurn` guarda la última consulta enriquecida (útil para reintentos y conclusiones).
-
-### Paso 8 — Explicación y conclusión (opcionales)
-
-- **Explicación** (`appendExplanationTo`, `context_explicacion.txt`, stateless, `temperature: 0.3`,
-  `maxTokens: 700`): panel colapsable que explica qué hace el código generado.
-- **Conclusión** (`appendConclusionTo`, `context_conclusiones.txt`, stateless, `temperature: 0.6`,
-  `maxTokens: 700`): solo si el interruptor *Conclusiones* está activo. Antes de enviar los datos
-  al modelo, `buildConclusionPayload` los **pseudonimiza** (`serializeResultForLLM` sustituye
-  categorías de texto por alias genéricos tipo "Ciudad A"; los números se mantienen reales y los
-  identificadores personales se descartan). El modelo redacta usando los alias y, al volver,
-  `deanonymizeText` revierte los alias a los nombres reales antes de mostrar el texto.
+- **Python 3.12** (recomendado; el proyecto se ha probado con 3.12/3.13).
+- Una **API key de OpenAI** (la introduce el usuario en la pantalla de conexión del frontend; el
+  backend usa la suya propia vía `.env`).
+- Para el backend GraphRAG: una instancia de **Neo4j** con el grafo del modelo de datos
+  cargado (ver sección 3).
+- Un navegador moderno (Chrome/Edge/Firefox). **No se puede abrir `index.html` con `file://`**:
+  Pyodide y el `fetch` de los prompts requieren servirlo por HTTP.
 
 ---
 
-## 6. Resumen de parámetros OpenAI por paso
+## 2. Cómo ejecutar el chatbot (paso a paso)
 
-| Paso | System prompt | `threaded` (`store`) | temperatura | `max_output_tokens` |
-|------|---------------|----------------------|-------------|---------------------|
-| Router | `context_router.txt` | `false` | 0.2 | 400 |
-| Modelo de datos | `context_modelo_datos.txt` | `true` (por defecto) | 0.5 | 1500 |
-| Planificador | (prompt embebido) | `false` | 0.1 | 600 |
-| Clarify | `context_clarify.txt` | `false` | 0.5 | 700 |
-| Generación de código | `context_general.txt` | `true` | 0.5 | 1800 |
-| Reintento de código | `context_general.txt` | `true` | 0.5 | 1800 |
-| Explicación | `context_explicacion.txt` | `true` (por defecto) | 0.3 | 700 |
-| Conclusión | `context_conclusiones.txt` | `true` (por defecto) | 0.6 | 700 |
+Necesitas **dos terminales**: una para el **backend GraphRAG** (puerto 8000) y otra para el
+**frontend** (puerto 8080). Todos los comandos asumen que estás en la raíz del proyecto
+(`chat-pbi/`) al empezar.
 
-> Regla de oro de threading: **solo las consultas de datos (generación + reintento) entran en el
-> hilo de OpenAI**. Router, planificador y clarify van *stateless* para no contaminar el hilo con
-> JSON de fontanería; explicación y conclusión reciben los datos ya pseudonimizados en su propio
-> *input*.
+### Terminal 1 — Backend GraphRAG (FastAPI, puerto 8000)
+
+```powershell
+# 1) Entra en la carpeta del backend (los imports y el .env se resuelven desde aquí)
+cd graphrag
+
+# 2) (Recomendado) crea y activa un entorno virtual
+python -m venv venv
+venv\Scripts\activate            # Windows PowerShell
+# source venv/bin/activate       # macOS / Linux
+
+# 3) Instala las dependencias del backend
+pip install -r requirements.txt
+
+# 4) Crea el archivo .env con tus credenciales (ver plantilla más abajo)
+#    graphrag/.env debe contener NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD y OPENAI_API_KEY
+
+# 5) Arranca la API (recarga automática en desarrollo)
+uvicorn api:app --port 8000 --reload
+```
+
+Comprueba que responde antes de seguir:
+
+```powershell
+# En otra terminal, o en el navegador:
+curl http://localhost:8000/health
+# Esperado: {"ok": true, "neo4j": true, "top_k": 15, "score_threshold": 0.7}
+```
+
+Plantilla de `graphrag/.env`:
+
+```dotenv
+NEO4J_URI=neo4j+s://<tu-instancia>.databases.neo4j.io
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=<tu-password>
+OPENAI_API_KEY=sk-<tu-clave>
+```
+
+### Terminal 2 — Frontend (servidor HTTP estático, puerto 8080)
+
+```powershell
+# 1) Desde la raíz del proyecto, entra en la carpeta del frontend
+cd frontend
+
+# 2) Levanta un servidor estático (cualquiera vale; usamos el de Python)
+python -m http.server 8080
+```
+
+### Abrir la aplicación
+
+1. Ve a **`http://localhost:8080/index.html`** en el navegador.
+2. Introduce tu **API key de OpenAI** y pulsa **Conectar**. Durante el arranque (`initChat`) se
+   cargan en paralelo: los `context_*.txt`, el hilo de OpenAI, el runtime de Pyodide con `pandas`
+   y `numpy`, el CSV `Leads_Contacts.csv` y el chequeo de salud del backend GraphRAG.
+3. Empieza a preguntar (p. ej. *"Compara los leads de Madrid y Barcelona este curso"*).
+
+> **Si el backend GraphRAG no está levantado**, verás un aviso al conectar, pero podrás usar el
+> chat igualmente con el contexto estático de los `context_*.txt`.
+>
+> **Puertos:** el frontend espera el backend en `http://localhost:8000` (constante
+> `GRAPHRAG_BASE_URL` en `index.html`). Si cambias el puerto del backend, actualiza esa constante.
 
 ---
 
-## 7. Mapa de variables globales
+## 3. Preparar Neo4j (solo la primera vez)
+
+El backend GraphRAG necesita el grafo del modelo de datos con *embeddings* e índices vectoriales.
+Desde `graphrag/`, con el `.env` ya configurado:
+
+```powershell
+cd graphrag
+
+# 1) Construye el grafo en Neo4j (nodos Tabla/Medida/Columna y relaciones)
+#    Ejecuta grafo_resa.cypher en Neo4j (desde el navegador de Aura,
+#    Neo4j Browser o cypher-shell). Ejemplo con cypher-shell:
+#    cypher-shell -a <NEO4J_URI> -u <USER> -p <PASSWORD> -f grafo_resa.cypher
+
+# 2) Calcula y guarda los embeddings de cada nodo (usa OpenAI text-embedding-3-small)
+python 01_populate_embeddings.py
+
+# 3) Crea los índices vectoriales por label
+python 02_create_vector_index.py
+```
+
+`03_retrieval_graphrag.py` es útil para **inspeccionar el subgrafo recuperado** de forma aislada
+mientras depuras, sin lanzar el pipeline completo del frontend.
+
+---
+
+## 4. El flujo de un mensaje (orquestación por *tool calling*)
+
+Cuando el usuario envía un mensaje, `sendMessage → orchestrate` monta la memoria de sesión y llama
+al **router** con *tool calling* (`context_router.txt`). El router **no** devuelve texto libre: está
+obligado a invocar una de **dos** herramientas.
+
+| Herramienta | Cuándo | Qué hace |
+|-------------|--------|----------|
+| `explicar_modelo_datos` | Preguntas teóricas sobre tablas/columnas/KPIs y saludos | `answerModelQuery` responde en texto usando `context_modelo_datos.txt` (aislado, no toca el hilo) |
+| `ejecutar_analisis_python` | Cualquier cálculo, agregación, ranking, comparación, serie temporal o gráfico | Entra en el pipeline de datos (pasos siguientes). Se puede invocar **varias veces en paralelo** para peticiones independientes |
+
+Si el router no invoca ninguna herramienta, hay **un reintento** con un mensaje reforzado antes de
+caer, por seguridad, en `answerDataQuery` (la rama con más redes de protección: clarify + reintento).
+
+### Rama de datos (`answerDataQuery`)
+
+1. **Recuperación GraphRAG** — `retrieveSubgraph` llama a `POST /retrieve` del backend con la
+   consulta enriquecida y obtiene el subgrafo del modelo de datos. Se inyecta como contexto del
+   generador de código (`wrapSubgraphContext`).
+2. **Clarify** (`runClarifyAgent`, `context_clarify.txt`) — un segundo agente decide, **usando ese
+   mismo subgrafo**, si faltan datos imprescindibles (p. ej. el curso). Si faltan, pregunta al
+   usuario slot a slot con botones (máximo 2 slots) y reanuda al terminar reutilizando el subgrafo.
+   En modo **batch** (varias peticiones en paralelo) el clarify se salta (`skipClarify: true`),
+   porque es interactivo y bloqueante.
+3. **Generación de código** (`context_general.txt`, **única llamada *threaded***) — el modelo
+   responde **solo** con un bloque ```python``` que asigna el resultado a la variable `resultado`
+   (escalar, DataFrame, Series, dict de KPIs o dict Plotly con `"__plotly__": True`).
+4. **Ejecución en Pyodide** (`runPython`) — se resetea `resultado`, se ejecuta el código a scope
+   global y se serializa a JSON etiquetado con un `kind` (`number`, `text`, `dataframe`, `dict`,
+   `plotly`, `none`, `error`). Si falla, `retryWithModelFix` reenvía el código y el traceback al
+   modelo para una corrección y reejecuta una vez.
+5. **Render** (`renderResult`) — número → tarjeta KPI; texto → Markdown; dataframe/dict → tabla;
+   plotly → figura interactiva (los mapas pasan por `beautifyMap`).
+6. **Explicación** (opcional, `context_explicacion.txt`) y **conclusión** (opcional, solo si el
+   interruptor está activo, `context_conclusiones.txt`). Antes de enviar datos al modelo para la
+   conclusión se **pseudonimizan** las categorías de texto (los números se mantienen reales) y al
+   volver se revierten los alias.
+
+---
+
+## 5. Memoria de la conversación
+
+La memoria del lado del cliente enriquece los prompts y sobrevive a recargas dentro de una ventana
+de **3 horas** (`SESSION_MAX_AGE_MS`), persistida en `localStorage`.
+
+- **`sessionContext`** `{slot: valor}` — contexto acotado (curso, ciudad, métrica…), rellenado por
+  el paso clarify y por `rememberQueryParams`.
+- **`turnHistory`** — historial de turnos resueltos `{q, r, ts}` (máx. `MAX_HISTORY_TURNS = 60`; se
+  inyectan los últimos `HISTORY_INJECT_TURNS = 16`).
+- **`sessionSummary`** — cuando `turnHistory` supera `SUMMARY_TRIGGER_TURNS = 18`, los turnos más
+  antiguos se **comprimen** en un resumen (ventana deslizante), manteniendo recientes los últimos
+  `SUMMARY_KEEP_RECENT = 16`.
+
+`buildFullMemoryText` combina resumen + historial reciente + contexto y lo inyecta en el *input* del
+router y del generador de código.
+
+> **Regla de threading:** solo las **consultas de datos** (generación + su reintento) entran en el
+> hilo persistente de OpenAI (`store: true`). Router, clarify, explicación de modelo, explicación
+> de código y conclusión corren **aislados** (`isolated: true`), para no contaminar el hilo con JSON
+> de fontanería ni con salidas auxiliares.
+
+---
+
+## 6. Parámetros de OpenAI por paso
+
+Todos los pasos usan **`gpt-4o`**. La compresión del resumen de sesión usa `gpt-4o-mini`.
+
+| Paso | System prompt | *Threaded* | Temperatura | `max_output_tokens` |
+|------|---------------|------------|-------------|---------------------|
+| Router (tool calling) | `context_router.txt` | no (aislado) | 0.2 | 700 |
+| Explicar modelo de datos | `context_modelo_datos.txt` | no (aislado) | 0.5 | 1500 |
+| Clarify | `context_clarify.txt` | no (aislado) | 0.1 | 500 |
+| Generación de código | `context_general.txt` | **sí** | 0.5 | 1800 |
+| Reintento de código | `context_general.txt` | **sí** | 0.5 | 1800 |
+| Explicación de código | `context_explicacion.txt` | no (aislado) | 0.3 | 700 |
+| Conclusión | `context_conclusiones.txt` | no (aislado) | 0.6 | 700 |
+
+---
+
+## 7. Resolución de problemas frecuentes
+
+- **`NameError: leads_contacts is not defined`** — el CSV no se cargó. Arranca el frontend
+  **desde `frontend/`** con `python -m http.server 8080` (no con `file://`) y confirma que existe
+  `data/Leads_Contacts.csv`.
+- **"Backend GraphRAG no disponible"** — `http://localhost:8000/health` no responde. Revisa que
+  `uvicorn` esté arrancado **desde `graphrag/`** y que el `.env` (Neo4j/OpenAI) sea correcto.
+- **`Falta la variable de entorno 'NEO4J_URI'`** (u otra) al arrancar el backend — falta o está mal
+  el `graphrag/.env`. Complétalo con las cuatro claves de la plantilla.
+- **`ModuleNotFoundError: config` / `src`** al arrancar el backend — estás lanzando `uvicorn` desde
+  la carpeta equivocada. Debe ejecutarse **desde `graphrag/`**.
+- **Faltan archivos de contexto** — algún `context_*.txt` no está junto a `index.html` dentro de
+  `frontend/`.
+
+---
+
+## 8. Mapa de variables globales del frontend
 
 | Global | Qué guarda | Cuándo cambia |
 |--------|------------|---------------|
-| `apiKey` | Clave de OpenAI | Al conectar |
+| `apiKey` | Clave de OpenAI del usuario | Al conectar |
 | `prompts` | System prompts `{clave: texto}` | Arranque (`loadPrompts`) |
 | `pyodide` | Runtime Python + `leads_contacts` | Arranque; persiste toda la sesión |
+| `graphragAvailable` | Si el backend `/health` respondió OK | Arranque (`checkGraphragHealth`) |
 | `loadedCsvs` | CSV ya cargados | Al cargar cada CSV |
-| `conversationId` | Hilo de OpenAI | `ensureConversation` / `createConversation` |
+| `conversationId` | Hilo persistente de OpenAI | `ensureConversation` / `createConversation` |
 | `lastResponseId` | Último `response.id` threaded | Cada llamada threaded |
 | `sessionContext` | Contexto acotado `{slot: valor}` | Clarify, `rememberQueryParams` |
-| `turnHistory` | Historial de turnos (máx. 40) | `recordTurnInHistory` |
+| `turnHistory` | Historial de turnos (máx. 60) | `recordTurnInHistory` |
+| `sessionSummary` | Resumen comprimido de turnos antiguos | Al superar 18 turnos |
 | `pendingClarify` | Estado del slot-filling en curso | Durante clarify |
 | `lastUserQuery` / `lastTurn` | Última consulta / turno enriquecido | Tras cada consulta |
 | `busy` | Bloqueo de envíos concurrentes | Inicio/fin de cada turno |
-| `supportsCacheRetention` | Si el modelo acepta `prompt_cache_retention` | Si OpenAI lo rechaza |
 
-`sessionContext`, `turnHistory` y `conversationId` se reflejan en `localStorage` para sobrevivir a
-recargas dentro de la ventana de 48 h. `startNewChat` los borra y crea un hilo nuevo.
+`sessionContext`, `turnHistory`, `sessionSummary` y `conversationId` se reflejan en `localStorage`
+para sobrevivir a recargas dentro de la ventana de 3 h. **Nuevo chat** los borra y crea un hilo nuevo.
