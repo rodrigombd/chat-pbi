@@ -37,7 +37,7 @@ def build_retriever(driver: neo4j.Driver, label: str) -> VectorCypherRetriever:
         result_formatter=_format_record,
     )
 
-def retrieve_context(question: str, label: str = "Medida") -> str:
+def retrieve_context(question: str, label: str) -> str:
     driver = get_driver()
     try:
         retriever = build_retriever(driver, label)
