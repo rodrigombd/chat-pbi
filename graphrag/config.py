@@ -64,6 +64,14 @@ class SchemaConfig:
                 ("USA_COLUMNA", "in", 1),
             ),
         ),
+        LabelConfig(
+            label="Valor",
+            name_property="valor",
+            text_properties=("columna", "tabla"),
+            expansion_relationships=(
+                ("TIENE_VALOR", "in", 1),
+            ),
+        ),
     )
 
     def index_name(self, label: str) -> str:
