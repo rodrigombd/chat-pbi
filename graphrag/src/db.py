@@ -12,14 +12,14 @@ def get_driver() -> Driver:
             auth=(config.NEO4J_USERNAME, config.NEO4J_PASSWORD),
         )
         driver.verify_connectivity()
-        logger.info("Conexión con Neo4j Aura verificada correctamente.")
+        logger.info("Conexión con Neo4j Desktop verificada correctamente.")
         return driver
     except AuthError:
         logger.error("Credenciales incorrectas.")
         raise
     except ServiceUnavailable:
         logger.error(
-            "No se pudo conectar a Aura."
+            "No se pudo conectar a Neo4j Desktop."
         )
         raise
     except Neo4jError:
