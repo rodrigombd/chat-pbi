@@ -184,6 +184,27 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   font-size: 12.5px; color: #e6e6e6; line-height: 1.55; white-space: pre;
 }
 
+/* ---- System prompt toggle (retrieval inspector) ---- */
+.prompt-toggle {
+  margin-top: 8px; margin-left: 4px; font-size: 12px; color: var(--insight); cursor: pointer;
+  user-select: none; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 4px; transition: background 0.12s, color 0.12s;
+}
+.prompt-toggle:hover { background: var(--insight-lt); color: var(--insight-dk); }
+.prompt-toggle .arrow { transition: transform 0.15s; display: inline-block; }
+.prompt-toggle.expanded .arrow { transform: rotate(90deg); }
+.prompt-block {
+  display: none; margin-top: 8px; background: #0f1729;
+  border: 1px solid #1e293b; border-radius: var(--radius-sm);
+  padding: 12px 14px; overflow-x: auto; max-height: 460px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #334155 transparent;
+}
+.prompt-block.expanded { display: block; }
+.prompt-block pre {
+  margin: 0; font-family: "Menlo","Monaco","Courier New",monospace;
+  font-size: 12px; color: #cbd5e1; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+}
+
 /* ---- Errors ---- */
 .error-box {
   background: var(--error-bg); border: 1px solid var(--error-bd);
@@ -527,19 +548,25 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 </div>
 
 <script>
-
-
+// ==========================================================================
+//  Configuración: constantes de sesión, memoria y backend
+// ==========================================================================
 
 var STORAGE_CONV_KEY = "resa_assistant_conversation_id";
 var STORAGE_CTX_KEY  = "resa_assistant_session_context";
 var STORAGE_TS_KEY   = "resa_assistant_session_ts";
 var STORAGE_HIST_KEY = "resa_assistant_turn_history";
-var SESSION_MAX_AGE_MS = 48 * 60 * 60 * 1000;
-var MAX_HISTORY_TURNS = 40;
-var HISTORY_INJECT_TURNS = 12;
+var STORAGE_SUMMARY_KEY = "resa_assistant_session_summary";
+var SESSION_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+var MAX_HISTORY_TURNS = 60;
+var HISTORY_INJECT_TURNS = 16;
+var SUMMARY_TRIGGER_TURNS = 18;
+var SUMMARY_KEEP_RECENT = 16;
 var conversationId   = null;
 var lastResponseId   = null;
 var supportsCacheRetention = true;
+var GRAPHRAG_BASE_URL = "http://localhost:8000";
+var graphragAvailable = false;
 
 var PROMPT_FILES = {
   router: "context_router.txt",
@@ -547,44 +574,22 @@ var PROMPT_FILES = {
   modelo_datos: "context_modelo_datos.txt",
   general: "context_general.txt",
   conclusiones: "context_conclusiones.txt",
-  explicacion: "context_explicacion.txt",
-  planificador: "context_planificador.txt" //,
-  //insights_parser: "context_insights_parser.txt"
+  explicacion: "context_explicacion.txt"
 };
 
 var CSV_TABLES = {
-  "leads_contacts": "Leads_Contacts.csv"
+  "leads_contacts": "../data/Leads_Contacts.csv"
 };
 var PRIMARY_CSV = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 var CONCLUSION_MAX_ROWS = 300;
 
+
 marked.use({ breaks: true, gfm: true });
 
-function renderRich(text) {
-  var html = marked.parse(text || "");
-  var tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  if (window.renderMathInElement) {
-    try {
-      renderMathInElement(tmp, {
-        delimiters: [
-          { left: "$$", right: "$$", display: true },
-          { left: "\\[", right: "\\]", display: true },
-          { left: "\\(", right: "\\)", display: false },
-          { left: "$", right: "$", display: false }
-        ],
-        throwOnError: false
-      });
-    } catch (e) {}
-  }
-  return tmp.innerHTML;
-}
-
-
-// ============================================================================
-//  Estado
-// ============================================================================
+// ==========================================================================
+//  Estado global de la aplicación
+// ==========================================================================
 
 var apiKey = "";
 var prompts = {};
@@ -596,18 +601,50 @@ var lastUserQuery = null;
 var lastTurn = null;
 var sessionContext = {};
 var turnHistory = [];
+var sessionSummary = null;
+var summarizing = false;
 
+var TOOLS = [
+  {
+    type: "function",
+    name: "explicar_modelo_datos",
+    description: "Úsala cuando el usuario hace una pregunta teórica o conceptual sobre el modelo de datos: qué tablas existen, qué columnas hay, cómo se definen los KPIs (Leads, Contactos, Tasa de conversión), qué significa una columna o cómo se relacionan. NO ejecuta código ni consulta los datos reales; solo explica la estructura y las definiciones. También válida para saludos o preguntas sobre qué puede hacer el asistente.",
+    parameters: {
+      type: "object",
+      properties: {
+        consulta: {
+          type: "string",
+          description: "La pregunta del usuario sobre el modelo de datos, reformulada de forma clara y autocontenida."
+        }
+      },
+      required: ["consulta"],
+      additionalProperties: false
+    }
+  },
+  {
+    type: "function",
+    name: "ejecutar_analisis_python",
+    description: "Úsala cuando la consulta de datos está clara y se puede programar en Pandas sin ambigüedad. Genera el análisis sobre el dataset real. Si el usuario pide comparar o calcular varias cosas independientes (distintas métricas o distintos tipos de salida), invócala varias veces en paralelo, una por cada petición independiente. Una comparación de la misma métrica entre varias categorías es UNA sola llamada.",
+    parameters: {
+      type: "object",
+      properties: {
+        instruccion_enriquecida: {
+          type: "string",
+          description: "Instrucción en lenguaje natural, clara y autocontenida, que describe exactamente el análisis a realizar (métrica, curso/periodo, dimensión de agrupación, filtros y tipo de salida deseado). A partir de ella se generará el script de Pandas."
+        }
+      },
+      required: ["instruccion_enriquecida"],
+      additionalProperties: false
+    }
+  }
+];
 
-// ============================================================================
-//  Mensajes de error
-// ============================================================================
 const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
 const ERR_MSG_PROMPTS = "⚠️ <strong>Faltan archivos de contexto:</strong> {archivos}.<br>Asegúrate de que están en la misma carpeta que <code>index.html</code>.";
 
-
-// ============================================================================
-//  Bootstrap
-// ============================================================================
+// ==========================================================================
+//  1. Arranque
+// ==========================================================================
 
 async function initChat() {
   var key = document.getElementById("api-key-input").value.trim();
@@ -622,6 +659,7 @@ async function initChat() {
     apiKey = key;
     var promptsTask = loadPrompts();
     var conversationTask = ensureConversation();
+    var graphragTask = checkGraphragHealth();
     
     var pyodideTask = (async function() {
       await initPyodide();
@@ -631,7 +669,7 @@ async function initChat() {
       return await loadPrimaryCsv();
     })();
 
-    var results = await Promise.all([promptsTask, conversationTask, pyodideTask]);
+    var results = await Promise.all([promptsTask, conversationTask, pyodideTask, graphragTask]);
     var csvOk = results[2];
 
     if (csvOk) {
@@ -641,6 +679,15 @@ async function initChat() {
     revealChatPanel();
     if (!csvOk) {
       appendDevBanner(ERR_MSG_CSV);
+    }
+    if (!graphragAvailable) {
+      appendDevBanner(
+        "⚠️ <strong>Backend GraphRAG no disponible.</strong> No se ha podido conectar con "
+        + "<code>" + esc(GRAPHRAG_BASE_URL) + "</code>. El asistente seguirá funcionando con el "
+        + "contexto estático de los <code>context_*.txt</code>, pero sin recuperación dinámica del "
+        + "modelo. Arranca el backend con <code>uvicorn api:app --port 8000</code> y revisa el "
+        + "<code>.env</code> (Neo4j/OpenAI)."
+      );
     }
     
     var missing = [];
@@ -697,7 +744,6 @@ async function initPyodide() {
 
 async function loadPyodidePackages() {
   setStep("step-pkgs", "active");
-  // [Generar conclusiones desactivado] Sin scikit-learn.
   await pyodide.loadPackage(["pandas", "numpy"]);
   const pythonInitScript = `
 import pandas as pd
@@ -764,6 +810,33 @@ def _default_json(o):
     if isinstance(o, (_pd.Timestamp,)): return o.isoformat()
     return str(o)
 
+def _df_to_json_safe(df):
+    # pandas.to_json (ujson) no sabe serializar PeriodDtype ni otros dtypes de
+    # objeto exóticos y entra en recursión infinita (OverflowError). Saneamos
+    # una COPIA: convertimos a str el índice/columnas de tipo Period y cualquier
+    # columna cuyo dtype no sea numérico, booleano ni datetime.
+    _df = df.copy()
+
+    if type(_df.index).__name__ in ('PeriodIndex',):
+        _df.index = _df.index.astype(str)
+    elif isinstance(_df.index, _pd.MultiIndex):
+        _levels = [lvl.astype(str) if type(lvl).__name__ == 'PeriodIndex' else lvl
+                   for lvl in _df.index.levels]
+        _df.index = _df.index.set_levels(_levels)
+
+    for _c in _df.columns:
+        _dt = _df[_c].dtype
+        _dtname = type(_dt).__name__
+        if _dtname == 'PeriodDtype' or str(_dt) == 'object':
+            try:
+                _df[_c] = _df[_c].map(lambda v: str(v) if v is not None and not (isinstance(v, float) and _np.isnan(v)) else v)
+            except Exception:
+                _df[_c] = _df[_c].astype(str)
+        elif _dtname == 'PeriodDtype':
+            _df[_c] = _df[_c].astype(str)
+
+    return _df.to_json(orient='split', date_format='iso', force_ascii=False)
+
 def __serialize_resultado__():
     if 'resultado' not in globals():
         return _j.dumps({'kind':'none','value':None})
@@ -774,15 +847,15 @@ def __serialize_resultado__():
         spec = {k: v for k, v in _r.items() if k not in ('__plotly__', '__data__')}
         _payload = {'kind':'plotly','value':_j.dumps(spec, default=_default_json, ensure_ascii=False)}
         if isinstance(_r.get('__data__'), _pd.DataFrame):
-            _payload['data_df'] = _r['__data__'].to_json(orient='split', date_format='iso', force_ascii=False)
+            _payload['data_df'] = _df_to_json_safe(_r['__data__'])
         return _j.dumps(_payload, ensure_ascii=False)
         
     if isinstance(_r, _pd.DataFrame):
-        return _j.dumps({'kind':'dataframe','value':_r.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_r.shape)}, ensure_ascii=False)
+        return _j.dumps({'kind':'dataframe','value':_df_to_json_safe(_r),'shape':list(_r.shape)}, ensure_ascii=False)
         
     if isinstance(_r, _pd.Series):
         _df = _r.reset_index()
-        return _j.dumps({'kind':'dataframe','value':_df.to_json(orient='split',date_format='iso',force_ascii=False),'shape':list(_df.shape)}, ensure_ascii=False)
+        return _j.dumps({'kind':'dataframe','value':_df_to_json_safe(_df),'shape':list(_df.shape)}, ensure_ascii=False)
         
     if isinstance(_r, dict):
         return _j.dumps({'kind':'dict','value':_j.dumps(_r, default=_default_json, ensure_ascii=False)}, ensure_ascii=False)
@@ -892,12 +965,96 @@ ${String(names)}`;
   }
 }
 
-
 async function loadPrimaryCsv() {
   setStep("step-csv", "active");
   var ok = await loadCsv(PRIMARY_CSV);
   setStep("step-csv", ok ? "done" : "error");
   return ok;
+}
+
+async function loadCsv(varName) {
+  if (loadedCsvs.has(varName)) return true;
+  var file = CSV_TABLES[varName];
+  if (!file) {
+    showDevAlert(`loadCsv: «${varName}» no existe en CSV_TABLES.`);
+    return false;
+  }
+  
+  try {
+    var r = await fetch(`${file}?v=${Date.now()}`);
+    if (!r.ok) {
+      showDevAlert(`
+        <strong>No se pudo cargar ${esc(file)}</strong><br>
+        HTTP ${r.status} ${esc(r.statusText)}<br><br>
+        Comprueba que el fichero está en la carpeta del proyecto y que estás abriendo el HTML con un servidor HTTP local.
+      `);
+      return false;
+    }
+    var text = await r.text();
+    if (!text || !text.trim()) {
+      showDevAlert(`<strong>El fichero ${esc(file)} está vacío.</strong>`);
+      return false;
+    }
+    
+    pyodide.globals.set("__csv_buffer__", text);
+    var isPrimary = (varName === PRIMARY_CSV);
+    var pyCode = `
+from io import StringIO as _SIO
+import traceback as _tb
+
+try:
+    ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)
+    ${varName} = ${varName}.drop_duplicates()
+    ${isPrimary ? `${varName} = __parse_fechas_es__(${varName}, ${JSON.stringify(PRIMARY_DATE_COLUMNS)})` : ""}
+    
+    __csv_load_ok__ = True
+    __csv_error__   = ''
+except Exception as _e:
+    __csv_load_ok__ = False
+    __csv_error__   = _tb.format_exc()
+
+del __csv_buffer__
+`;
+
+    await pyodide.runPythonAsync(pyCode);
+    
+    var ok = pyodide.globals.get("__csv_load_ok__");
+    var errTxt = pyodide.globals.get("__csv_error__") || "";
+
+    try {
+      await pyodide.runPythonAsync(
+        "for _k in ('__csv_load_ok__', '__csv_error__'):\n    globals().pop(_k, None)"
+      );
+    } catch (e) {}
+
+    if (!ok) {
+      showDevAlert(`
+        <strong>pd.read_csv falló parseando ${esc(file)}</strong>
+        <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(String(errTxt))}</pre>
+      `);
+      return false;
+    }
+    
+    loadedCsvs.add(varName);
+    return true;
+    
+  } catch (e) {
+    showDevAlert(`
+      <strong>Error inesperado cargando ${esc(file)}</strong>
+      <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(e.message || String(e))}</pre>
+    `);
+    return false;
+  }
+}
+
+async function ensureTablesLoaded(pythonCode) {
+  for (var v in CSV_TABLES) {
+    var re = new RegExp("\\b" + v + "\\b");
+    if (re.test(pythonCode) && !loadedCsvs.has(v)) {
+      setStatus("cargando " + CSV_TABLES[v] + "...", "busy");
+      await loadCsv(v);
+    }
+  }
 }
 
 async function injectColumnValuesIntoContext() {
@@ -986,7 +1143,6 @@ Reglas de filtrado por estos valores:
   return header + "\n" + columnLines.join("\n");
 }
 
-
 function revealChatPanel() {
   var hm = document.getElementById("header-model");
   if (hm) hm.textContent = "openai · pyodide · plotly";
@@ -996,6 +1152,108 @@ function revealChatPanel() {
   if (nc) nc.style.display = "";
   setStatus("conectado · listo", "ok");
   document.getElementById("user-input").focus();
+}
+
+function setStep(id, state) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("active", "done", "error");
+  if (state) el.classList.add(state);
+}
+
+
+// ==========================================================================
+//  2. Sesión, conversación y limpieza
+// ==========================================================================
+
+async function ensureConversation() {
+  if (conversationId) return conversationId;
+
+  var stored = null;
+  var storedTs = 0;
+  try {
+    stored = localStorage.getItem(STORAGE_CONV_KEY);
+    storedTs = parseInt(localStorage.getItem(STORAGE_TS_KEY) || "0", 10) || 0;
+  } catch (e) {}
+
+  var fresh = stored && (Date.now() - storedTs) < SESSION_MAX_AGE_MS;
+  if (fresh) {
+    conversationId = stored;
+    try {
+      var rawCtx = localStorage.getItem(STORAGE_CTX_KEY);
+      if (rawCtx) sessionContext = JSON.parse(rawCtx) || {};
+    } catch (e) { sessionContext = {}; }
+    try {
+      var rawHist = localStorage.getItem(STORAGE_HIST_KEY);
+      if (rawHist) turnHistory = JSON.parse(rawHist) || [];
+    } catch (e) { turnHistory = []; }
+    try {
+      var rawSummary = localStorage.getItem(STORAGE_SUMMARY_KEY);
+      if (rawSummary) sessionSummary = JSON.parse(rawSummary) || null;
+    } catch (e) { sessionSummary = null; }
+    touchSession();
+    return conversationId;
+  }
+
+  clearLocalSession();
+  return await createConversation();
+}
+
+async function createConversation() {
+  try {
+    var r = await fetch("https://api.openai.com/v1/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({ metadata: { app: "resa-analytics-assistant" } })
+    });
+    if (r.ok) {
+      var d = await r.json();
+      if (d && d.id) {
+        conversationId = d.id;
+        try { localStorage.setItem(STORAGE_CONV_KEY, conversationId); } catch (e) {}
+        touchSession();
+      }
+    } else {
+      console.warn("[conversations] no se pudo crear la conversación: HTTP " + r.status);
+    }
+  } catch (e) {
+    console.warn("[conversations] error creando la conversación:", e);
+  }
+  return conversationId;
+}
+
+function touchSession() {
+  try { localStorage.setItem(STORAGE_TS_KEY, String(Date.now())); } catch (e) {}
+}
+
+function clearLocalSession() {
+  conversationId = null;
+  lastResponseId = null;
+  sessionContext = {};
+  turnHistory = [];
+  sessionSummary = null;
+  lastTurn = null;
+  lastUserQuery = null;
+  try {
+    localStorage.removeItem(STORAGE_CONV_KEY);
+    localStorage.removeItem(STORAGE_CTX_KEY);
+    localStorage.removeItem(STORAGE_TS_KEY);
+    localStorage.removeItem(STORAGE_HIST_KEY);
+    localStorage.removeItem(STORAGE_SUMMARY_KEY);
+  } catch (e) {}
+}
+
+function resetPoisonedThread() {
+  console.warn("[thread] conversación envenenada detectada; se descarta y se reinicia el hilo.");
+  conversationId = null;
+  lastResponseId = null;
+  try {
+    localStorage.removeItem(STORAGE_CONV_KEY);
+    localStorage.removeItem(STORAGE_TS_KEY);
+  } catch (e) {}
 }
 
 async function clearPyodideEnv() {
@@ -1035,285 +1293,10 @@ async function startNewChat() {
   document.getElementById("user-input").focus();
 }
 
-function setStep(id, state) {
-  var el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove("active", "done", "error");
-  if (state) el.classList.add(state);
-}
 
-
-// ============================================================================
-//  Carga de CSV
-// ============================================================================
-
-async function loadCsv(varName) {
-  if (loadedCsvs.has(varName)) return true;
-  var file = CSV_TABLES[varName];
-  if (!file) {
-    showDevAlert(`loadCsv: «${varName}» no existe en CSV_TABLES.`);
-    return false;
-  }
-  
-  try {
-    var r = await fetch(`${file}?v=${Date.now()}`);
-    if (!r.ok) {
-      showDevAlert(`
-        <strong>No se pudo cargar ${esc(file)}</strong><br>
-        HTTP ${r.status} ${esc(r.statusText)}<br><br>
-        Comprueba que el fichero está en la carpeta del proyecto y que estás abriendo el HTML con un servidor HTTP local.
-      `);
-      return false;
-    }
-    var text = await r.text();
-    if (!text || !text.trim()) {
-      showDevAlert(`<strong>El fichero ${esc(file)} está vacío.</strong>`);
-      return false;
-    }
-    
-    pyodide.globals.set("__csv_buffer__", text);
-    var isPrimary = (varName === PRIMARY_CSV);
-    var pyCode = `
-from io import StringIO as _SIO
-import traceback as _tb
-
-try:
-    ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)
-    ${varName} = ${varName}.drop_duplicates()
-    ${isPrimary ? `${varName} = __parse_fechas_es__(${varName}, ${JSON.stringify(PRIMARY_DATE_COLUMNS)})` : ""}
-    
-    __csv_load_ok__ = True
-    __csv_error__   = ''
-except Exception as _e:
-    __csv_load_ok__ = False
-    __csv_error__   = _tb.format_exc()
-
-del __csv_buffer__
-`;
-
-    await pyodide.runPythonAsync(pyCode);
-    
-    var ok = pyodide.globals.get("__csv_load_ok__");
-    var errTxt = pyodide.globals.get("__csv_error__") || "";
-
-    try {
-      await pyodide.runPythonAsync(
-        "for _k in ('__csv_load_ok__', '__csv_error__'):\n    globals().pop(_k, None)"
-      );
-    } catch (e) {}
-
-    if (!ok) {
-      showDevAlert(`
-        <strong>pd.read_csv falló parseando ${esc(file)}</strong>
-        <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(String(errTxt))}</pre>
-      `);
-      return false;
-    }
-    
-    loadedCsvs.add(varName);
-    return true;
-    
-  } catch (e) {
-    showDevAlert(`
-      <strong>Error inesperado cargando ${esc(file)}</strong>
-      <pre style='font-size:11px;white-space:pre-wrap;margin-top:6px;'>${esc(e.message || String(e))}</pre>
-    `);
-    return false;
-  }
-}
-
-async function ensureTablesLoaded(pythonCode) {
-  for (var v in CSV_TABLES) {
-    var re = new RegExp("\\b" + v + "\\b");
-    if (re.test(pythonCode) && !loadedCsvs.has(v)) {
-      setStatus("cargando " + CSV_TABLES[v] + "...", "busy");
-      await loadCsv(v);
-    }
-  }
-}
-
-
-// ============================================================================
-//  API del modelo
-// ============================================================================
-
-async function callModel(messages, systemPrompt, opts) {
-  opts = opts || {};
-  var threaded = opts.threaded !== false;
-  var input = messages.map(function (m) {
-    var role = m.role || "user";
-    var contentType = role === "assistant" ? "output_text" : "input_text";
-    return {
-      role: role,
-      content: [{ type: contentType, text: String(m.content || "") }]
-    };
-  });
-
-  var body = {
-    model: opts.model || "gpt-4o",
-    instructions: systemPrompt,
-    input: input,
-    max_output_tokens: opts.maxTokens || 1500,
-    store: threaded,
-    truncation: "auto"
-  };
-
-  if (supportsCacheRetention) {
-    body.prompt_cache_retention = "24h";
-  }
-
-  if (typeof opts.temperature === "number") {
-    body.temperature = opts.temperature;
-  }
-
-  if (threaded) {
-    if (conversationId) {
-      body.conversation = conversationId;
-    } else if (lastResponseId) {
-      body.previous_response_id = lastResponseId;
-    }
-    apiMessages = prior.concat(turn);
-  } else {
-    apiMessages = turn;
-  }
-
-  var r = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      "Authorization": "Bearer " + apiKey
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!r.ok) {
-    var errData = await r.json().catch(function () { return {}; });
-    var errMsg = (errData.error && errData.error.message) || ("HTTP " + r.status);
-    var param = errData.error && errData.error.param;
-    
-    if (param && Object.prototype.hasOwnProperty.call(body, param)) {
-      if (param === "prompt_cache_retention") supportsCacheRetention = false;
-      delete body[param];
-      r = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          "Content-Type":  "application/json",
-          "Authorization": "Bearer " + apiKey
-        },
-        body: JSON.stringify(body)
-      });
-      if (!r.ok) {
-        var e2 = await r.json().catch(function () { return {}; });
-        throw new Error((e2.error && e2.error.message) || ("HTTP " + r.status));
-      }
-    } else {
-      throw new Error(errMsg);
-    }
-  }
-
-  var d = await r.json();
-
-  if (threaded && d.id) lastResponseId = d.id;
-
-  return extractOpenAIText(d);
-}
-
-function extractOpenAIText(d) {
-  if (typeof d.output_text === "string" && d.output_text.length) {
-    return d.output_text;
-  }
-  var out = "";
-  if (Array.isArray(d.output)) {
-    for (var i = 0; i < d.output.length; i++) {
-      var item = d.output[i];
-      if (item && item.type === "message" && Array.isArray(item.content)) {
-        for (var j = 0; j < item.content.length; j++) {
-          var c = item.content[j];
-          if (c && (c.type === "output_text" || c.type === "text") && c.text) {
-            out += c.text;
-          }
-        }
-      }
-    }
-  }
-  return out;
-}
-
-
-async function ensureConversation() {
-  if (conversationId) return conversationId;
-
-  var stored = null;
-  var storedTs = 0;
-  try {
-    stored = localStorage.getItem(STORAGE_CONV_KEY);
-    storedTs = parseInt(localStorage.getItem(STORAGE_TS_KEY) || "0", 10) || 0;
-  } catch (e) {}
-
-  var fresh = stored && (Date.now() - storedTs) < SESSION_MAX_AGE_MS;
-  if (fresh) {
-    conversationId = stored;
-    try {
-      var rawCtx = localStorage.getItem(STORAGE_CTX_KEY);
-      if (rawCtx) sessionContext = JSON.parse(rawCtx) || {};
-    } catch (e) { sessionContext = {}; }
-    try {
-      var rawHist = localStorage.getItem(STORAGE_HIST_KEY);
-      if (rawHist) turnHistory = JSON.parse(rawHist) || [];
-    } catch (e) { turnHistory = []; }
-    touchSession();
-    return conversationId;
-  }
-
-  clearLocalSession();
-  return await createConversation();
-}
-
-function touchSession() {
-  try { localStorage.setItem(STORAGE_TS_KEY, String(Date.now())); } catch (e) {}
-}
-
-function clearLocalSession() {
-  conversationId = null;
-  lastResponseId = null;
-  sessionContext = {};
-  turnHistory = [];
-  lastTurn = null;
-  lastUserQuery = null;
-  try {
-    localStorage.removeItem(STORAGE_CONV_KEY);
-    localStorage.removeItem(STORAGE_CTX_KEY);
-    localStorage.removeItem(STORAGE_TS_KEY);
-    localStorage.removeItem(STORAGE_HIST_KEY);
-  } catch (e) {}
-}
-
-async function createConversation() {
-  try {
-    var r = await fetch("https://api.openai.com/v1/conversations", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": "Bearer " + apiKey
-      },
-      body: JSON.stringify({ metadata: { app: "resa-analytics-assistant" } })
-    });
-    if (r.ok) {
-      var d = await r.json();
-      if (d && d.id) {
-        conversationId = d.id;
-        try { localStorage.setItem(STORAGE_CONV_KEY, conversationId); } catch (e) {}
-        touchSession();
-      }
-    } else {
-      console.warn("[conversations] no se pudo crear la conversación: HTTP " + r.status);
-    }
-  } catch (e) {
-    console.warn("[conversations] error creando la conversación:", e);
-  }
-  return conversationId;
-}
-
+// ==========================================================================
+//  3. Tool calling
+// ==========================================================================
 
 async function sendMessage(text) {
   if (busy) return;
@@ -1329,21 +1312,7 @@ async function sendMessage(text) {
   setBusy(true);
 
   try {
-    // ----- Paso 1: enrutado -----
-    var decision = await routeMessage(userText);
-
-    if (decision.tipo === "saludo") {
-      appendAssistantText(decision.respuesta || fallbackGreeting(), "saludo");
-      setStatus("listo", "ok");
-      return;
-    }
-    if (decision.tipo === "modelo") {
-      await answerModelQuery(userText);
-      return;
-    }
-
-    // ----- Paso 2: planificación multi-consulta + clarify + generación -----
-    await runDataTurn(userText);
+    await orchestrate(userText);
   } catch (e) {
     clearStaleTypings();
     appendError(`Error en la consulta: ${e.message || String(e)}`);
@@ -1353,74 +1322,167 @@ async function sendMessage(text) {
   }
 }
 
-function resetInput(input) {
-  input.value = "";
-  input.style.height = "auto";
+async function callRouter(userContent) {
+  return callModel(
+    [{ role: "user", content: userContent }],
+    orchestratorInstructions(),
+    {
+      model: "gpt-4o",
+      maxTokens: 700,
+      temperature: 0.2,
+      threaded: false,
+      tools: TOOLS,
+      toolChoice: "required",
+      parallelToolCalls: true
+    }
+  );
 }
 
-function hideWelcomeAndQuicks() {
-  var welcome = document.getElementById("welcome");
-  if (welcome) welcome.remove();
-  var quicks = document.getElementById("quick-questions");
-  if (quicks) quicks.style.display = "none";
-}
-
-function setBusy(b) {
-  busy = b;
-  document.getElementById("send-btn").disabled = b;
-}
-
-function fallbackGreeting() {
-  return "Hola. Soy un asistente analítico. Puedo responder dudas sobre el modelo de datos o ejecutar consultas. ¿En qué te ayudo?";
-}
-
-
-// ----- Paso 1: enrutado (usa context_router.txt) -----
-
-async function routeMessage(userText) {
-  if (!prompts.router) {
-    return { tipo: "datos", respuesta: "" };
-  }
+async function orchestrate(userText) {
   var tid = appendTyping("interpretando consulta...");
-  setStatus("clasificando consulta...", "busy");
+  setStatus("interpretando consulta...", "busy");
+
+  var memory = buildFullMemoryText();
+  var userContent = "";
+  if (memory) userContent += memory + "\n\n";
+  userContent += "MENSAJE DEL USUARIO:\n" + userText;
+
+  var result;
   try {
-    var reply = await callModel(
-      [{ role: "user", content: userText }],
-      prompts.router,
-      { model: "gpt-4o", maxTokens: 400, temperature: 0.2, threaded: false }
-    );
-    removeTyping(tid);
-    var j = extractJSON(reply);
-    if (!j || !j.tipo) {
-      console.warn("[router] respuesta no parseable:", reply);
-      return { tipo: "datos", respuesta: "" };
-    }
-    var tipo = String(j.tipo).toLowerCase();
-    if (tipo !== "saludo" && tipo !== "modelo" && tipo !== "datos") {
-      return { tipo: "datos", respuesta: "" };
-    }
-    return { tipo: tipo, respuesta: j.respuesta || "" };
+    result = await callRouter(userContent);
   } catch (e) {
     removeTyping(tid);
-    console.warn("[router] error:", e);
-    return { tipo: "datos", respuesta: "" };
+    appendError(`Error de API: ${e.message || String(e)}`);
+    setStatus("error", "error");
+    return;
   }
+  removeTyping(tid);
+
+  var toolCalls = (result && result.toolCalls) || [];
+
+  if (toolCalls.length === 0) {
+    var fallbackText = (result && result.text || "").trim();
+    if (fallbackText) {
+      appendAssistantText(fallbackText, "saludo");
+      setStatus("listo", "ok");
+      return;
+    }
+
+    appendRetryNotice("No se pudo enrutar la consulta; reintentando la selección de herramienta...");
+    var retryContent = userContent;
+
+    var rid = appendTyping("reintentando enrutado...");
+    setStatus("reintentando enrutado...", "busy");
+    var retryResult;
+    try {
+      retryResult = await callRouter(retryContent);
+    } catch (e) {
+      removeTyping(rid);
+      lastUserQuery = userText;
+      await answerDataQuery(userText, []);
+      return;
+    }
+    removeTyping(rid);
+
+    toolCalls = (retryResult && retryResult.toolCalls) || [];
+    if (toolCalls.length === 0) {
+      lastUserQuery = userText;
+      await answerDataQuery(userText, []);
+      return;
+    }
+  }
+
+  await dispatchToolCalls(userText, toolCalls);
 }
 
+function orchestratorInstructions() {
+  var base = prompts.router ||
+    "Eres el orquestador de un asistente analítico sobre datos de CRM de residencias de estudiantes. " +
+    "Decides qué herramienta invocar según el mensaje del usuario y el contexto de la sesión.";
+  return base + ORCHESTRATOR_SUFFIX;
+}
 
-// ----- Paso 2a: consulta sobre el modelo (usa context_modelo_datos.txt) -----
+async function dispatchToolCalls(userText, toolCalls) {
+  var modelCall = null;
+  var pythonCalls = [];
+  for (var j = 0; j < toolCalls.length; j++) {
+    var tc = toolCalls[j];
+    if (tc.name === "ejecutar_analisis_python") pythonCalls.push(tc);
+    else if (tc.name === "explicar_modelo_datos" && !modelCall) modelCall = tc;
+  }
+
+  if (pythonCalls.length > 0) {
+    await runBatchFromToolCalls(userText, pythonCalls);
+    return;
+  }
+
+  if (modelCall) {
+    var consulta = (modelCall.args && modelCall.args.consulta) || userText;
+    await answerModelQuery(consulta);
+    return;
+  }
+
+  lastUserQuery = userText;
+  await answerDataQuery(userText, []);
+}
+
+async function runBatchFromToolCalls(userText, pythonCalls) {
+  function instrOf(tc) {
+    return (tc.args && tc.args.instruccion_enriquecida) || userText;
+  }
+
+  if (pythonCalls.length === 1) {
+    lastUserQuery = userText;
+    await answerDataQuery(instrOf(pythonCalls[0]), []);
+    setStatus("listo", "ok");
+    return;
+  }
+
+  var subRequests = pythonCalls.map(instrOf);
+  appendPlanNotice(subRequests);
+
+  for (var i = 0; i < subRequests.length; i++) {
+    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
+    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
+    try {
+      await answerDataQuery(subRequests[i], [], { skipClarify: true });
+    } catch (e) {
+      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
+    }
+  }
+
+  lastUserQuery = userText;
+  setStatus("listo", "ok");
+}
+
+var ORCHESTRATOR_SUFFIX =
+    "\n\nINSTRUCCIONES DE ORQUESTACIÓN (Tool Calling):" +
+    "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre." +
+    "\n- Solo tienes DOS herramientas: explicar_modelo_datos y ejecutar_analisis_python." +
+    "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos." +
+    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python." +
+    "\n- Si el usuario pide varias cosas independientes (distintas métricas o salidas), invoca ejecutar_analisis_python varias veces en paralelo, una por petición. Una comparación de la misma métrica entre categorías es UNA sola llamada.";
+
+// ==========================================================================
+//  4. Rama: pregunta sobre el modelo de datos
+// ==========================================================================
 
 async function answerModelQuery(userText) {
+  var rid = appendTyping("recuperando modelo de datos...");
+  var subgraph = await retrieveSubgraph(userText, null);
+  removeTyping(rid);
+  var modeloPrompt = prompts.modelo_datos + wrapSubgraphContext(subgraph);
+
   var tid = appendTyping("consultando el modelo de datos...");
   setStatus("respondiendo sobre el modelo...", "busy");
   try {
     var reply = await callModel(
       [{ role: "user", content: userText }],
-      prompts.modelo_datos,
-      { model: "gpt-4o", maxTokens: 1500, temperature: 0.5 }
+      modeloPrompt,
+      { model: "gpt-4o", maxTokens: 1500, temperature: 0.5, isolated: true }
     );
     removeTyping(tid);
-    appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
+    appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo", modeloPrompt);
     setStatus("listo", "ok");
   } catch (e) {
     removeTyping(tid);
@@ -1430,174 +1492,59 @@ async function answerModelQuery(userText) {
 }
 
 
-// ----- Paso 2b: planificación de clarify (usa context_clarify.txt) -----
-function rememberAnsweredSlots(answeredSlots) {
-  if (!answeredSlots) return;
-  for (var i = 0; i < answeredSlots.length; i++) {
-    var a = answeredSlots[i];
-    if (!a || !a.slot || !a.answer) continue;
-    sessionContext[a.slot] = String(a.answer);
-  }
-  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
-}
+// ==========================================================================
+//  5. Rama: consulta de datos
+// ==========================================================================
 
-function rememberQueryParams(queryText) {
-  if (!queryText) return;
-  var t = String(queryText);
+async function runClarifyAgent(userText, enrichedQuery, subgraph) {
+  if (!prompts.clarify) return false; 
 
-  var mCurso = t.match(/\b(20\d{2})\s*[\/\-]\s*(20\d{2})\b/);
-  if (mCurso) {
-    sessionContext.curso = `${mCurso[1]}/${mCurso[2]}`;
-  } else if (/\bhist[oó]ric|\btodos los cursos\b/i.test(t)) {
-    sessionContext.curso = "Histórico (todos los cursos)";
-  }
+  var tid = appendTyping("comprobando si falta información...");
+  setStatus("comprobando la consulta...", "busy");
 
-  if (/\bconversi[oó]n\b|\btasa de conversi[oó]n\b|\bCR\b/i.test(t)) {
-    sessionContext.metrica = "Tasa de conversión";
-  } else if (/\bcontactos?\b|\bfirmas?\b|\breservas?\b/i.test(t) && !/\bleads?\b/i.test(t)) {
-    sessionContext.metrica = "Volumen de contactos";
-  } else if (/\bleads?\b/i.test(t) && !/\bcontactos?\b/i.test(t)) {
-    sessionContext.metrica = "Volumen de leads";
-  }
-
-  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
-}
-
-function buildSessionContextText() {
-  var keys = Object.keys(sessionContext);
-  if (keys.length === 0) return "";
-  
-  return keys.map(k => `- ${k}: ${sessionContext[k]}`).join("\n");
-}
-
-function summarizeResultForMemory(execResult) {
-  if (!execResult) return "";
-
-  function tablePreview(table, shapeNote) {
-    if (!table) return "";
-    var cols = Array.isArray(table.columns) ? table.columns : [];
-    var rows = Array.isArray(table.rows) ? table.rows : [];
-    var head = (shapeNote ? shapeNote + ". " : "");
-    if (cols.length) head += "columnas: " + cols.join(", ") + ". ";
-    var preview = rows.slice(0, 6).map(function (r) {
-      return (Array.isArray(r) ? r : Object.values(r)).join(" | ");
-    }).join(" ; ");
-    return (head + preview).slice(0, 700);
-  }
-
-  if (execResult.kind === "number") {
-    return "Valor numérico: " + String(execResult.value);
-  }
-  if (execResult.kind === "text") {
-    return String(execResult.value || "").slice(0, 400);
-  }
-  if (execResult.kind === "dict") {
-    return tablePreview(tableFromDict(execResult.value), null);
-  }
-  if (execResult.kind === "dataframe") {
-    var df = tableFromDataFrame(execResult);
-    return tablePreview(df.table, df.shapeNote);
-  }
-  if (execResult.kind === "plotly") {
-    var table;
-    if (execResult.data_df) {
-      table = tableFromDataFrame({ value: execResult.data_df, shape: null }).table;
-    } else {
-      table = tableFromPlotlySpec(execResult.value);
-    }
-    return "Gráfico generado. " + tablePreview(table, null);
-  }
-  return "";
-}
-
-function recordTurnInHistory(userText, execResult) {
-  var resumen = summarizeResultForMemory(execResult);
-  turnHistory.push({
-    q: String(userText || "").slice(0, 500),
-    r: resumen,
-    ts: Date.now()
-  });
-  if (turnHistory.length > MAX_HISTORY_TURNS) {
-    turnHistory = turnHistory.slice(turnHistory.length - MAX_HISTORY_TURNS);
-  }
-  try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
-}
-
-function buildHistoryContextText() {
-  if (!turnHistory.length) return "";
-  var recent = turnHistory.slice(-HISTORY_INJECT_TURNS);
-  return recent.map(function (t, i) {
-    var line = (i + 1) + ". Pregunta: " + t.q;
-    if (t.r) line += "\n   Resultado: " + t.r;
-    return line;
-  }).join("\n");
-}
-
-function buildFullMemoryText() {
-  var parts = [];
-  var ctx = buildSessionContextText();
-  if (ctx) parts.push("CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n" + ctx);
-  var hist = buildHistoryContextText();
-  if (hist) parts.push("HISTORIAL DE CONSULTAS Y RESULTADOS PREVIOS DE ESTA SESIÓN:\n" + hist);
-  return parts.join("\n\n");
-}
-
-async function planSlots(text) {
-  if (!prompts.clarify) return { slots: [] };
-  var tid = appendTyping("comprobando si necesito aclaraciones...");
-  setStatus("planificando...", "busy");
-  
+  var clarifyPrompt = prompts.clarify + wrapSubgraphContext(subgraph);
+  var slots = [];
   try {
-    var memory = buildFullMemoryText();
-    var userContent = "";
-
-    if (memory) {
-      userContent += memory + "\n\n";
-    }
-    userContent += `CONSULTA ACTUAL DEL USUARIO:\n${text}`;
-
     var reply = await callModel(
-      [{ role: "user", content: userContent }],
-      prompts.clarify,
-      { model: "gpt-4o", maxTokens: 700, temperature: 0.5, threaded: false }
+      [{ role: "user", content: enrichedQuery }],
+      clarifyPrompt,
+      { model: "gpt-4o", maxTokens: 500, temperature: 0.1, isolated: true }
     );
-
-    removeTyping(tid);
-    var j = extractJSON(reply);
-    if (!j || !Array.isArray(j.slots)) return { slots: [] };
-    
-    return { slots: sanitizeSlots(dropKnownSlots(j.slots)) };
+    var parsed = extractJSON(reply);
+    if (parsed && Array.isArray(parsed.slots)) slots = parsed.slots;
   } catch (e) {
+    console.warn("[clarify] fallo del agente, se continúa sin aclarar:", e && e.message);
     removeTyping(tid);
-    return { slots: [] };
+    return false;
   }
-}
+  removeTyping(tid);
 
-function dropKnownSlots(slots) {
-  return slots.filter(s => !(s && s.slot && Object.prototype.hasOwnProperty.call(sessionContext, s.slot)));
-}
-
-function sanitizeSlots(raw) {
-  var clean = [];
-  for (var i = 0; i < raw.length && i < 4; i++) {
-    var s = raw[i];
-    if (!s || !s.pregunta) continue;
-    
-    var opciones = Array.isArray(s.opciones)
-      ? s.opciones.slice(0, 4).filter(Boolean).map(String)
-      : [];
-      
-    if (opciones.length < 2) continue;
-    
-    clean.push({
-      slot: s.slot || `slot_${i}`,
+  var missing = [];
+  for (var i = 0; i < slots.length && missing.length < 2; i++) {
+    var s = slots[i] || {};
+    var opciones = Array.isArray(s.opciones)? s.opciones.slice(0, 4).filter(Boolean).map(String): [];
+    if (!s.pregunta || opciones.length < 2) continue;
+    missing.push({
+      slot: s.slot || ("slot_" + i),
       pregunta: String(s.pregunta),
       opciones: opciones,
       razon: s.razon ? String(s.razon) : "",
       permitirOtro: s.permitirOtro !== false
     });
   }
-  return clean;
+
+  if (missing.length === 0) return false;
+
+  pendingClarify = {
+    userQuery: userText,
+    subgraph: subgraph,
+    missing: missing,
+    answered: [],
+    total: missing.length
+  };
+  lastUserQuery = userText;
+  askNextSlot();
+  return true;
 }
 
 function askNextSlot() {
@@ -1659,7 +1606,10 @@ async function finalizeClarify() {
   
   try {
     rememberAnsweredSlots(pipe.answered);
-    await answerDataQuery(pipe.userQuery, pipe.answered);
+    await answerDataQuery(pipe.userQuery, pipe.answered, {
+      precomputedSubgraph: pipe.subgraph,
+      skipClarify: true
+    });
   } catch (e) {
     appendError(`Error en la consulta: ${e.message}`);
     setStatus("error", "error");
@@ -1668,66 +1618,220 @@ async function finalizeClarify() {
   }
 }
 
-
-async function runDataTurn(userText) {
-  var subRequests = await planRequests(userText);
-  if (subRequests.length <= 1) {
-    await runDataPipeline(subRequests[0] || userText);
-    return;
-  }
-  await runDataBatch(userText, subRequests);
+function appendClarify(payload, step, total) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente · necesita aclaración</div>'
+    + '<div class="msg-text">' + buildClarifyBoxHtml(payload, step, total) + '</div>'
+    + '</div>';
+  box.appendChild(d);
+  attachClarifyListeners(d, payload);
+  scrollToBottom();
 }
 
-async function planRequests(userText) {
-  if (!prompts.router) return [userText];
+function buildClarifyBoxHtml(payload, step, total) {
+  var opciones = (payload.opciones || []).slice(0, 4);
+  var optsHtml = '<div class="clarify-options">';
+  for (var i = 0; i < opciones.length; i++) {
+    optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
+                '">' + esc(opciones[i]) + '</button>';
+  }
+  var otherLabel = (payload.permitirOtro !== false)
+      ? "Otro... (escribe tu respuesta)"
+      : "Ninguna de estas: escribe tu respuesta";
+  optsHtml +=
+    '<div class="clarify-other-wrap">' +
+    '<input type="text" class="clarify-other-input" placeholder="' + esc(otherLabel) + '">' +
+    '<button class="clarify-other-btn">Enviar</button>' +
+    '</div>';
+  optsHtml += '</div>';
+  var progressHtml = (step && total && total > 1)
+    ? '<div class="clarify-progress">Aclaración ' + step + ' de ' + total + '</div>'
+    : '';
+  var razonHtml = payload.razon
+    ? '<div class="clarify-why">' + esc(payload.razon) + '</div>'
+    : '';
+  return '<div class="clarify-box">' + progressHtml
+    + '<div class="clarify-q">' + esc(payload.pregunta || "¿Puedes concretar?") + '</div>'
+    + razonHtml + optsHtml + '</div>';
+}
 
-  var tid = appendTyping("planificando la consulta...");
-  setStatus("planificando la consulta...", "busy");
+function attachClarifyListeners(container, payload) {
+  var btns = container.querySelectorAll(".clarify-option");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function (ev) {
+      var txt = ev.currentTarget.getAttribute("data-opt");
+      answerClarify(txt);
+    });
+  }
+  var otherInput = container.querySelector(".clarify-other-input");
+  var otherBtn = container.querySelector(".clarify-other-btn");
+  if (otherInput && otherBtn) {
+    var submit = function () {
+      var v = otherInput.value.trim();
+      if (v) answerClarify(v);
+    };
+    otherBtn.addEventListener("click", submit);
+    otherInput.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); submit(); }
+    });
+  }
+}
+
+
+async function answerDataQuery(userText, answeredSlots, opts) {
+  opts = opts || {};
+  var enriched = buildEnrichedQuery(userText, answeredSlots);
+  var currentMessage = [{ role: "user", content: enriched }];
+  var subgraph;
+  if (Object.prototype.hasOwnProperty.call(opts, "precomputedSubgraph")) {
+    subgraph = opts.precomputedSubgraph;
+  } else {
+    var rid = appendTyping("recuperando modelo de datos...");
+    subgraph = await retrieveSubgraph(userText, null);
+    removeTyping(rid);
+  }
+  if (!opts.skipClarify) {
+    var needsClarify = await runClarifyAgent(userText, enriched, subgraph);
+    if (needsClarify) return;
+  }
+
+  var generalPrompt = prompts.general + wrapSubgraphContext(subgraph);
+
+  var tid = appendTyping("generando código...");
+  setStatus("llamando a la API...", "busy");
+  var reply;
+  
   try {
-    var memory = buildFullMemoryText();
-    var userContent = "";
-    if (memory) userContent += memory + "\n\n";
-    userContent += "MENSAJE DEL USUARIO:\n" + userText;
-
-    var reply = await callModel(
-      [{ role: "user", content: userContent }],
-      prompts.planificador,
-      { model: "gpt-4o", maxTokens: 600, temperature: 0.1, threaded: false }
-    );
-    removeTyping(tid);
-
-    var j = extractJSON(reply);
-    if (!j || !Array.isArray(j.peticiones)) return [userText];
-
-    var limpio = j.peticiones
-      .filter(function (p) { return p && String(p).trim(); })
-      .map(function (p) { return String(p).trim(); })
-      .slice(0, 6);
-
-    if (limpio.length === 0) return [userText];
-    return limpio;
+    reply = await callModel(currentMessage, generalPrompt, { maxTokens: 1800, threaded: true, temperature: 0.5 });
   } catch (e) {
     removeTyping(tid);
-    console.warn("[planificador] error:", e);
-    return [userText];
+    appendError(`Error de API: ${e.message}`);
+    setStatus("error", "error");
+    return;
+  }
+  
+  removeTyping(tid);
+
+  var code = extractPythonCode(reply);
+  if (!code) {
+    appendAssistantText(
+      `El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n${reply}`,
+      "datos"
+    );
+    setStatus("respuesta sin código", "error");
+    return;
+  }
+
+  setStatus("ejecutando código...", "busy");
+  await ensureTablesLoaded(code);
+  
+  var execResult = await runPython(code);
+  if (execResult.kind === "error") {
+    execResult = await retryWithModelFix(code, execResult, generalPrompt);
+  }
+
+  var resultEl = appendResult(execResult, execResult.__codeUsed || code, "datos", generalPrompt);
+  setExecutionStatus(execResult);
+
+  lastTurn = {
+    userQuery: userText,
+    enrichedQuery: enriched,
+    answeredSlots: answeredSlots.slice()
+  };
+
+  if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
+    recordTurnInHistory(userText, execResult);
+  }
+  rememberAnsweredSlots(answeredSlots);
+  touchSession();
+
+  var codeForExplain = execResult.__codeUsed || code;
+  var wantExplain = isResultEligibleForConclusion(execResult) && !!codeForExplain;
+  var wantConclusion = conclusionsEnabled() && isResultEligibleForConclusion(execResult);
+
+  var postTasks = [];
+  if (wantExplain) postTasks.push(appendExplanationTo(resultEl, userText, codeForExplain));
+  if (wantConclusion) postTasks.push(appendConclusionTo(resultEl, userText, execResult));
+
+  if (postTasks.length > 0) {
+    await Promise.allSettled(postTasks);
+    setExecutionStatus(execResult);
   }
 }
 
-async function runDataBatch(originalText, subRequests) {
-  appendPlanNotice(subRequests);
+function buildEnrichedQuery(userText, answeredSlots) {
+  var sections = [];
+  var memory = buildFullMemoryText();
+  if (memory) sections.push(memory);
 
-  for (var i = 0; i < subRequests.length; i++) {
-    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
-    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
-    try {
-      await answerDataQuery(subRequests[i], []);
-    } catch (e) {
-      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
-    }
+  sections.push("CONSULTA ACTUAL:\n" + userText);
+
+  if (answeredSlots && answeredSlots.length > 0) {
+    var slotsText = answeredSlots.map(a => `- ${a.pregunta} → ${a.answer}`).join("\n");
+    sections.push("Contexto adicional ya acotado por el usuario:\n" + slotsText);
   }
 
-  lastUserQuery = originalText;
-  setStatus("listo", "ok");
+  if (sections.length === 1) return userText;
+  return sections.join("\n\n");
+}
+
+function setExecutionStatus(execResult) {
+  var isErr = execResult.kind === "error" || execResult.kind === "error_friendly";
+  setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
+}
+
+async function retryWithModelFix(originalCode, firstError, generalPrompt) {
+  generalPrompt = generalPrompt || prompts.general;
+  appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
+  var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
+  var fixMessages = [{
+    role: "user",
+    content: `El código que has generado ha fallado al ejecutarse en Pyodide.
+
+CÓDIGO QUE FALLÓ:
+\`\`\`python
+${originalCode}
+\`\`\`
+
+ERROR (Python):
+\`\`\`
+${firstError.trace || firstError.value || ""}
+\`\`\`
+
+Devuelve EXCLUSIVAMENTE un nuevo bloque \`\`\`python ... \`\`\` con el código corregido. Asegúrate de que la variable \`resultado\` queda asignada al final. NO escribas explicaciones.`
+  }];
+  
+  try {
+    var reply = await callModel(fixMessages, generalPrompt, { maxTokens: 1800, threaded: true, temperature: 0.5 });
+    var code = extractPythonCode(reply);
+    
+    if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
+    if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
+    
+    await ensureTablesLoaded(code);
+    var second = await runPython(code);
+    
+    if (second.kind === "error") return friendlyError(second, code, firstErrorPack);
+    second.__codeUsed = code;
+    return second;
+  } catch (e) {
+    return friendlyError(firstError, originalCode, firstErrorPack);
+  }
+}
+
+function friendlyError(execError, code, firstError) {
+  return {
+    kind: "error_friendly",
+    value: "No he podido obtener una respuesta esta vez. Prueba a reformular tu pregunta con más detalle (por ejemplo, indicando el curso, la métrica concreta o las categorías exactas que quieres comparar).",
+    technical: execError.value || "",
+    trace: execError.trace || "",
+    firstError: firstError || null,
+    __codeUsed: code
+  };
 }
 
 function appendPlanNotice(subRequests) {
@@ -1760,160 +1864,7 @@ function appendBatchStepHeader(step, total, text) {
   scrollToBottom();
 }
 
-async function runDataPipeline(userText) {
-  var plan = await planSlots(userText);
-  if (plan && plan.slots && plan.slots.length > 0) {
-    pendingClarify = {
-      userQuery: userText,
-      missing: plan.slots.slice(),
-      answered: [],
-      total: plan.slots.length
-    };
-    lastUserQuery = userText;
-    askNextSlot();
-    return;
-  }
-  
-  lastUserQuery = userText;
-  await answerDataQuery(userText, []);
-}
-
-
-// ----- Paso 3: generación de código y ejecución (usa context_general.txt) -----
-
-async function answerDataQuery(userText, answeredSlots) {
-  var enriched = buildEnrichedQuery(userText, answeredSlots);
-  var currentMessage = [{ role: "user", content: enriched }];
-
-  var tid = appendTyping("generando código...");
-  setStatus("llamando a la API...", "busy");
-  var reply;
-  
-  try {
-    reply = await callModel(currentMessage, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
-  } catch (e) {
-    removeTyping(tid);
-    appendError(`Error de API: ${e.message}`);
-    setStatus("error", "error");
-    return;
-  }
-  
-  removeTyping(tid);
-
-  var code = extractPythonCode(reply);
-  if (!code) {
-    appendAssistantText(
-      `El modelo no devolvió código ejecutable. Respuesta sin procesar:\n\n${reply}`,
-      "datos"
-    );
-    setStatus("respuesta sin código", "error");
-    return;
-  }
-
-  setStatus("ejecutando código...", "busy");
-  await ensureTablesLoaded(code);
-  
-  var execResult = await runPython(code);
-  if (execResult.kind === "error") {
-    execResult = await retryWithModelFix(code, execResult);
-  }
-
-  var resultEl = appendResult(execResult, execResult.__codeUsed || code, "datos");
-  setExecutionStatus(execResult);
-
-  lastTurn = {
-    userQuery: userText,
-    enrichedQuery: enriched,
-    answeredSlots: answeredSlots.slice()
-  };
-
-  if (execResult.kind !== "error" && execResult.kind !== "error_friendly") {
-    rememberQueryParams(enriched);
-    recordTurnInHistory(userText, execResult);
-  }
-  rememberAnsweredSlots(answeredSlots);
-  touchSession();
-
-  var codeForExplain = execResult.__codeUsed || code;
-  if (isResultEligibleForConclusion(execResult) && codeForExplain) {
-    await appendExplanationTo(resultEl, userText, codeForExplain);
-  }
-
-  if (conclusionsEnabled() && isResultEligibleForConclusion(execResult)) {
-    await appendConclusionTo(resultEl, userText, execResult);
-  }
-}
-
-function buildEnrichedQuery(userText, answeredSlots) {
-  var sections = [];
-  var memory = buildFullMemoryText();
-  if (memory) sections.push(memory);
-
-  sections.push("CONSULTA ACTUAL:\n" + userText);
-
-  if (answeredSlots && answeredSlots.length > 0) {
-    var slotsText = answeredSlots.map(a => `- ${a.pregunta} → ${a.answer}`).join("\n");
-    sections.push("Contexto adicional ya acotado por el usuario:\n" + slotsText);
-  }
-
-  if (sections.length === 1) return userText;
-  return sections.join("\n\n");
-}
-
-function setExecutionStatus(execResult) {
-  var isErr = execResult.kind === "error" || execResult.kind === "error_friendly";
-  setStatus(isErr ? "error en la ejecución" : "listo", isErr ? "error" : "ok");
-}
-
-async function retryWithModelFix(originalCode, firstError) {
-  appendRetryNotice("El código devolvió un error; reintentando con corrección automática...");
-  var firstErrorPack = { value: firstError.value || "", trace: firstError.trace || "", code: originalCode };
-  var fixMessages = [{
-    role: "user",
-    content: `El código que has generado ha fallado al ejecutarse en Pyodide.
-
-CÓDIGO QUE FALLÓ:
-\`\`\`python
-${originalCode}
-\`\`\`
-
-ERROR (Python):
-\`\`\`
-${firstError.trace || firstError.value || ""}
-\`\`\`
-
-Devuelve EXCLUSIVAMENTE un nuevo bloque \`\`\`python ... \`\`\` con el código corregido. Asegúrate de que la variable \`resultado\` queda asignada al final. NO escribas explicaciones.`
-  }];
-  
-  try {
-    var reply = await callModel(fixMessages, prompts.general, { maxTokens: 1800, threaded: true, temperature: 0.5 });
-    var code = extractPythonCode(reply);
-    
-    if (!code) return friendlyError(firstError, originalCode, firstErrorPack);
-    if (code.trim() === originalCode.trim()) return friendlyError(firstError, originalCode, firstErrorPack);
-    
-    await ensureTablesLoaded(code);
-    var second = await runPython(code);
-    
-    if (second.kind === "error") return friendlyError(second, code, firstErrorPack);
-    second.__codeUsed = code;
-    return second;
-  } catch (e) {
-    return friendlyError(firstError, originalCode, firstErrorPack);
-  }
-}
-
-function friendlyError(execError, code, firstError) {
-  return {
-    kind: "error_friendly",
-    value: "No he podido obtener una respuesta esta vez. Prueba a reformular tu pregunta con más detalle (por ejemplo, indicando el curso, la métrica concreta o las categorías exactas que quieres comparar).",
-    technical: execError.value || "",
-    trace: execError.trace || "",
-    firstError: firstError || null,
-    __codeUsed: code
-  };
-}
-
+// ----- Explicación del código (perfiles no técnicos) -----
 function conclusionsEnabled() {
   var t = document.getElementById("conclusions-toggle");
   return !!(t && t.checked);
@@ -1954,7 +1905,7 @@ async function appendExplanationTo(resultEl, userQuery, code) {
     var reply = await callModel(
       [{ role: "user", content: payload }],
       prompts.explicacion,
-      { model: "gpt-4o", maxTokens: 700, temperature: 0.3 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.3, isolated: true }
     );
     
     var text = (reply || "").trim();
@@ -1988,7 +1939,6 @@ function removeExplanationPlaceholder(loadingEl) {
 }
 
 // ----- Conclusiones analíticas -----
-
 async function appendConclusionTo(resultEl, userQuery, execResult) {
   if (!resultEl) return;
   if (!prompts.conclusiones) {
@@ -2017,7 +1967,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
       prompts.conclusiones,
-      { model: "gpt-4o", maxTokens: 700, temperature: 0.6 }
+      { model: "gpt-4o", maxTokens: 700, temperature: 0.6, isolated: true }
     );
     
     var text = (reply || "").trim();
@@ -2025,6 +1975,7 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
       replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
     } else {
       var deAnon = deanonymizeText(text, built.aliasMap);
+      attachConclusionToLastTurn(deAnon);
       replaceConclusionPlaceholder(loadingEl, deAnon, null);
     }
     setStatus("listo", "ok");
@@ -2074,6 +2025,10 @@ function buildConclusionPayload(userQuery, r) {
   return { payload: payload, aliasMap: aliasMap };
 }
 
+
+// ==========================================================================
+//  6. Resultados para el LLM
+// ==========================================================================
 
 function serializeResultForLLM(r, aliasMap) {
   if (!r) return "(sin resultado)";
@@ -2197,9 +2152,21 @@ function tableFromPlotlySpec(jsonStr) {
     if (seriesNames.indexOf(serieName) < 0) seriesNames.push(serieName);
 
     var keys, vals;
+    var trType = String(tr.type || "");
     if (tr.type === "pie" || tr.labels) {
       keys = tr.labels || [];
       vals = tr.values || [];
+    } else if (trType.indexOf("mapbox") >= 0) {
+      keys = tr.text || tr.hovertext || [];
+      if (Array.isArray(tr.z) && tr.z.length) {
+        vals = tr.z;
+      } else if (tr.marker && Array.isArray(tr.marker.color)) {
+        vals = tr.marker.color;
+      } else if (tr.marker && Array.isArray(tr.marker.size)) {
+        vals = tr.marker.size;
+      } else {
+        vals = [];
+      }
     } else {
       var horizontal = (tr.orientation === "h");
       keys = horizontal ? (tr.y || []) : (tr.x || []);
@@ -2248,25 +2215,6 @@ function tableFromPlotlySpec(jsonStr) {
   return { columns: columns, rows: rows };
 }
 
-
-// ---------------------------------------------------------------------------
-//  Pseudonimización reversible + render a texto
-// ---------------------------------------------------------------------------
-
-// Columnas cuyo contenido NO se anonimiza (se pasan en claro al LLM de conclusiones).
-var WHITELIST_NO_ANON = [
-  'Origen/Campaña Posibles Clientes', 'Fuente de Posible Cliente', 'Curso', 'Curso_corregido', 
-  'Ciudades de interés', 'Ciudad_deinteres_corregido', 'Tipo de registro', 'Ciudad actual', 'Ciudad_actual_corregido', 
-  'Fecha creación', 'Origen_Agrupado', 'Fuente_Agrupada', 
-];
-
-function isWhitelistedColumn(colName) {
-  var s = String(colName).toLowerCase().trim();
-  return WHITELIST_NO_ANON.some(function (w) { 
-    return s === String(w).toLowerCase().trim(); 
-  });
-}
-
 function tableToAnonymizedText(table, aliasMap, shapeNote) {
   var columns = table.columns || [];
   var rows = table.rows || [];
@@ -2294,7 +2242,6 @@ function tableToAnonymizedText(table, aliasMap, shapeNote) {
   return lines.join("\n");
 }
 
-
 function anonymizeCell(val, colName, anonState, aliasMap) {
   if (val === null || val === undefined) return "—";
   if (typeof val === "number") return formatNumberForLLM(val);
@@ -2303,9 +2250,11 @@ function anonymizeCell(val, colName, anonState, aliasMap) {
   if (asStr === "") return "—";
   if (isNumericLike(asStr)) return asStr;
   if (isTemporalColumn(colName)) return asStr;
-  if (isWhitelistedColumn(colName)) return asStr;
 
-  return aliasFor(asStr, colName, anonState, aliasMap);
+  if (isSensitiveColumn(colName)) {
+    return aliasFor(asStr, colName, anonState, aliasMap);
+  }
+  return asStr;
 }
 
 function isTemporalColumn(colName) {
@@ -2393,20 +2342,444 @@ function formatNumberForLLM(val) {
 function isSensitiveColumn(colName) {
   if (!colName) return false;
   var s = String(colName).trim().toLowerCase();
-  
-  return s.includes("correo") || 
-         s.includes("email") || 
-         s.includes("e-mail") || 
-         s.includes("nombre") || 
-         s.includes("apellido");
+  return s.includes("correo") || s.includes("nombre") || s.includes("apellidos");
 }
 
 
+// ==========================================================================
+//  7. Memoria
+// ==========================================================================
+
+function buildFullMemoryText(opts) {
+  opts = opts || {};
+  var parts = [];
+  var ctx = buildSessionContextText();
+  if (ctx) parts.push("CONTEXTO ACOTADO DE LA CONVERSACIÓN:\n" + ctx);
+  var summary = buildSessionSummaryText();
+  if (summary) parts.push(summary);
+  if (!opts.light) {
+    var hist = buildHistoryContextText();
+    if (hist) parts.push("CONVERSACIÓN RECIENTE (turnos anteriores de esta misma sesión, en orden cronológico):\n" + hist);
+  }
+  return parts.join("\n\n");
+}
+
+function buildSessionContextText() {
+  var keys = Object.keys(sessionContext);
+  if (keys.length === 0) return "";
+  
+  return keys.map(k => `- ${k}: ${sessionContext[k]}`).join("\n");
+}
+
+function buildSessionSummaryText() {
+  if (!sessionSummary) return "";
+  var s = sessionSummary;
+  var lines = [];
+  if (s.filtros_activos && typeof s.filtros_activos === "object") {
+    var fk = Object.keys(s.filtros_activos);
+    for (var i = 0; i < fk.length; i++) {
+      var v = s.filtros_activos[fk[i]];
+      if (v !== null && v !== undefined && String(v).trim() !== "") {
+        lines.push("- " + fk[i] + ": " + v);
+      }
+    }
+  }
+  var head = "RESUMEN DE LA SESIÓN HASTA AHORA (estado consolidado de turnos anteriores):";
+  var body = lines.length ? ("Dimensiones/filtros activos de la sesión:\n" + lines.join("\n")) : "";
+  if (s.resumen_narrativo && String(s.resumen_narrativo).trim()) {
+    body += (body ? "\n" : "") + "Contexto: " + String(s.resumen_narrativo).trim();
+  }
+  if (!body) return "";
+  return head + "\n" + body;
+}
+
+function buildHistoryContextText() {
+  if (!turnHistory.length) return "";
+  var recent = turnHistory.slice(-HISTORY_INJECT_TURNS);
+  return recent.map(function (t, i) {
+    var line = "Usuario: " + t.q;
+    if (t.c) {
+      line += "\n   Asistente: " + t.c;
+    } else if (t.r) {
+      line += "\n   Asistente (resultado): " + t.r;
+    }
+    return line;
+  }).join("\n");
+}
+
+function rememberAnsweredSlots(answeredSlots) {
+  if (!answeredSlots) return;
+  for (var i = 0; i < answeredSlots.length; i++) {
+    var a = answeredSlots[i];
+    if (!a || !a.slot || !a.answer) continue;
+    sessionContext[a.slot] = String(a.answer);
+  }
+  try { localStorage.setItem(STORAGE_CTX_KEY, JSON.stringify(sessionContext)); } catch (e) {}
+}
+
+function recordTurnInHistory(userText, execResult) {
+  var resumen = summarizeResultForMemory(execResult);
+  turnHistory.push({
+    q: String(userText || "").slice(0, 500),
+    r: resumen,
+    ts: Date.now()
+  });
+  if (turnHistory.length > MAX_HISTORY_TURNS) {
+    turnHistory = turnHistory.slice(turnHistory.length - MAX_HISTORY_TURNS);
+  }
+  try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
+  maybeUpdateSessionSummary();
+}
+
+function summarizeResultForMemory(execResult) {
+  if (!execResult) return "";
+
+  function tablePreview(table, shapeNote) {
+    if (!table) return "";
+    var cols = Array.isArray(table.columns) ? table.columns : [];
+    var rows = Array.isArray(table.rows) ? table.rows : [];
+    var head = (shapeNote ? shapeNote + ". " : "");
+    if (cols.length) head += "columnas: " + cols.join(", ") + ". ";
+    var preview = rows.slice(0, 6).map(function (r) {
+      return (Array.isArray(r) ? r : Object.values(r)).join(" | ");
+    }).join(" ; ");
+    return (head + preview).slice(0, 700);
+  }
+
+  if (execResult.kind === "number") {
+    return "Valor numérico: " + String(execResult.value);
+  }
+  if (execResult.kind === "text") {
+    return String(execResult.value || "").slice(0, 400);
+  }
+  if (execResult.kind === "dict") {
+    return tablePreview(tableFromDict(execResult.value), null);
+  }
+  if (execResult.kind === "dataframe") {
+    var df = tableFromDataFrame(execResult);
+    return tablePreview(df.table, df.shapeNote);
+  }
+  if (execResult.kind === "plotly") {
+    var table;
+    if (execResult.data_df) {
+      table = tableFromDataFrame({ value: execResult.data_df, shape: null }).table;
+    } else {
+      table = tableFromPlotlySpec(execResult.value);
+    }
+    return "Gráfico generado. " + tablePreview(table, null);
+  }
+  return "";
+}
+
+function attachConclusionToLastTurn(conclusionText) {
+  if (!turnHistory.length || !conclusionText) return;
+  var last = turnHistory[turnHistory.length - 1];
+  last.c = String(conclusionText).replace(/\s+/g, " ").trim().slice(0, 600);
+  try { localStorage.setItem(STORAGE_HIST_KEY, JSON.stringify(turnHistory)); } catch (e) {}
+}
+
+async function maybeUpdateSessionSummary() {
+  if (summarizing) return;
+  var summarizedUpTo = sessionSummary && sessionSummary.__turns ? sessionSummary.__turns : 0;
+  var pending = turnHistory.length - summarizedUpTo;
+  if (turnHistory.length <= SUMMARY_TRIGGER_TURNS) return;
+  if (pending < SUMMARY_KEEP_RECENT + 1) return;
+
+  summarizing = true;
+  try {
+    var consolidatable = turnHistory.slice(0, turnHistory.length - SUMMARY_KEEP_RECENT);
+    var prevFilters = (sessionSummary && sessionSummary.filtros_activos) || summaryDefaultFilters();
+    var prevNarr = (sessionSummary && sessionSummary.resumen_narrativo) || "";
+
+    var turnsText = consolidatable.map(function (t, i) {
+      var line = (i + 1) + ". P: " + t.q;
+      if (t.r) line += " | R: " + t.r;
+      return line;
+    }).join("\n");
+
+    var payload =
+      "ESTADO PREVIO DE FILTROS (JSON, dimensiones arbitrarias):\n" + JSON.stringify(prevFilters) +
+      "\n\nRESUMEN NARRATIVO PREVIO:\n" + (prevNarr || "(ninguno)") +
+      "\n\nTURNOS A CONSOLIDAR:\n" + turnsText +
+      "\n\nDevuelve EXCLUSIVAMENTE un JSON con esta forma exacta, sin texto adicional ni bloques de código:\n" +
+      '{"filtros_activos":{"<nombre_dimension>":"<valor>", ...},"resumen_narrativo":"<string>"}';
+
+    var systemPrompt =
+      "Eres un compresor de memoria conversacional para un asistente analítico de datos. " +
+      "Recibes el estado previo de filtros (un objeto JSON con dimensiones ARBITRARIAS, no fijas), " +
+      "un resumen narrativo previo y una lista de turnos recientes (pregunta y resumen de resultado). " +
+      "Tu trabajo es consolidar todo en un único estado estructurado, sin asumir qué dimensiones existen. " +
+      "Reglas: el objeto \"filtros_activos\" puede contener cualquier clave que represente un eje de análisis " +
+      "que el usuario haya fijado (por ejemplo un periodo, una categoría, una métrica, un segmento, etc.); " +
+      "usa como clave un nombre corto en minúsculas que describa la dimensión y como valor el ÚLTIMO valor " +
+      "que el usuario mencionó para ella. Conserva del estado previo las dimensiones que sigan vigentes y " +
+      "actualiza o añade las nuevas. No incluyas una dimensión si el usuario nunca la ha fijado. " +
+      "NO inventes valores; conserva los nombres tal y como aparecen. " +
+      "El \"resumen_narrativo\" debe ser una sola frase breve (máx. 30 palabras) que capture el hilo analítico " +
+      "de la sesión, sin cifras concretas. Devuelve solo el JSON pedido.";
+
+    var reply = await callModel(
+      [{ role: "user", content: payload }],
+      systemPrompt,
+      { model: "gpt-4o-mini", maxTokens: 300, temperature: 0.1, threaded: false }
+    );
+
+    var parsed = extractJSON(reply);
+    if (parsed && parsed.filtros_activos && typeof parsed.filtros_activos === "object") {
+      sessionSummary = {
+        filtros_activos: mergeFilterMaps(prevFilters, parsed.filtros_activos),
+        resumen_narrativo: typeof parsed.resumen_narrativo === "string" ? parsed.resumen_narrativo : prevNarr,
+        __turns: turnHistory.length - SUMMARY_KEEP_RECENT
+      };
+      try { localStorage.setItem(STORAGE_SUMMARY_KEY, JSON.stringify(sessionSummary)); } catch (e) {}
+    }
+  } catch (e) {
+    console.warn("[memoria] no se pudo generar el resumen incremental:", e);
+  } finally {
+    summarizing = false;
+  }
+}
+
+function mergeFilterMaps(prev, next) {
+  var out = {};
+  var k;
+  if (prev && typeof prev === "object") {
+    for (k in prev) {
+      if (prev[k] !== null && prev[k] !== undefined && String(prev[k]).trim() !== "") {
+        out[k] = prev[k];
+      }
+    }
+  }
+  if (next && typeof next === "object") {
+    for (k in next) {
+      var v = next[k];
+      if (v === null || v === undefined || String(v).trim() === "") continue;
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+function summaryDefaultFilters() {
+  return {};
+}
 
 
-// ============================================================================
-//  Ejecución en Pyodide
-// ============================================================================
+// ==========================================================================
+//  8. GraphRAG
+// ==========================================================================
+
+async function checkGraphragHealth() {
+  try {
+    var r = await fetch(GRAPHRAG_BASE_URL + "/health", { method: "GET" });
+    if (!r.ok) { graphragAvailable = false; return false; }
+    var d = await r.json();
+    graphragAvailable = !!(d && d.ok && d.neo4j);
+    return graphragAvailable;
+  } catch (e) {
+    console.warn("[graphrag] backend no disponible:", e && e.message);
+    graphragAvailable = false;
+    return false;
+  }
+}
+
+async function retrieveSubgraph(enrichedQuery, label) {
+  if (!graphragAvailable) return null;
+  try {
+    var body = { query: String(enrichedQuery || "") };
+    if (label) body.label = label;
+    var r = await fetch(GRAPHRAG_BASE_URL + "/retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      console.warn("[graphrag] /retrieve HTTP " + r.status);
+      return null;
+    }
+    var d = await r.json();
+    var txt = d && d.subgraph_text;
+    return (typeof txt === "string" && txt.trim()) ? txt : null;
+  } catch (e) {
+    console.warn("[graphrag] error en /retrieve:", e && e.message);
+    return null;
+  }
+}
+
+function wrapSubgraphContext(subgraphText) {
+  if (!subgraphText) return "";
+  return "\n\n# CONTEXTO DEL MODELO DE DATOS (recuperado dinámicamente para esta consulta)\n"
+    + "Usa EXCLUSIVAMENTE la información de tablas, columnas y medidas de este subgrafo. "
+    + "Si necesitas una tabla, columna o medida que no aparezca aquí, indícalo en lugar de inventarla.\n\n"
+    + subgraphText;
+}
+
+
+// ==========================================================================
+//  9. Llamada a la API de OpenAI
+// ==========================================================================
+
+async function callModel(messages, systemPrompt, opts) {
+  opts = opts || {};
+  var isolated = opts.isolated === true || (Array.isArray(opts.tools) && opts.tools.length > 0);
+  var threaded = !isolated && opts.threaded !== false;
+
+  var input = messages.map(function (m) {
+    var role = m.role || "user";
+    var contentType = role === "assistant" ? "output_text" : "input_text";
+    return {
+      role: role,
+      content: [{ type: contentType, text: String(m.content || "") }]
+    };
+  });
+
+  var body = {
+    model: opts.model || "gpt-4o",
+    instructions: systemPrompt,
+    input: input,
+    max_output_tokens: opts.maxTokens || 1500,
+    store: threaded,
+    truncation: "auto"
+  };
+
+  if (supportsCacheRetention) {
+    body.prompt_cache_retention = "24h";
+  }
+
+  if (typeof opts.temperature === "number") {
+    body.temperature = opts.temperature;
+  }
+
+  var wantsTools = Array.isArray(opts.tools) && opts.tools.length > 0;
+  if (wantsTools) {
+    body.tools = opts.tools;
+    if (opts.toolChoice) body.tool_choice = opts.toolChoice;
+    if (typeof opts.parallelToolCalls === "boolean") {
+      body.parallel_tool_calls = opts.parallelToolCalls;
+    }
+  }
+
+  if (threaded) {
+    if (conversationId) {
+      body.conversation = conversationId;
+    } else if (lastResponseId) {
+      body.previous_response_id = lastResponseId;
+    }
+  }
+
+  var r = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": "Bearer " + apiKey
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!r.ok) {
+    var errData = await r.json().catch(function () { return {}; });
+    var errMsg = (errData.error && errData.error.message) || ("HTTP " + r.status);
+    var param = errData.error && errData.error.param;
+
+    if (threaded && /no tool output found|tool output|function call/i.test(errMsg)) {
+      resetPoisonedThread();
+      delete body.conversation;
+      delete body.previous_response_id;
+      r = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": "Bearer " + apiKey
+        },
+        body: JSON.stringify(body)
+      });
+      if (r.ok) {
+        var dRetry = await r.json();
+        if (threaded && !isolated && dRetry.id) lastResponseId = dRetry.id;
+        if (wantsTools) return { text: extractOpenAIText(dRetry), toolCalls: extractToolCalls(dRetry) };
+        return extractOpenAIText(dRetry);
+      }
+      var e3 = await r.json().catch(function () { return {}; });
+      throw new Error((e3.error && e3.error.message) || ("HTTP " + r.status));
+    }
+
+    var REMOVABLE_PARAMS = {
+      prompt_cache_retention: true,
+      parallel_tool_calls: true,
+      truncation: true,
+      prompt_cache_key: true,
+      temperature: true
+    };
+
+    if (param && REMOVABLE_PARAMS[param] && Object.prototype.hasOwnProperty.call(body, param)) {
+      if (param === "prompt_cache_retention") supportsCacheRetention = false;
+      delete body[param];
+      r = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "Authorization": "Bearer " + apiKey
+        },
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) {
+        var e2 = await r.json().catch(function () { return {}; });
+        throw new Error((e2.error && e2.error.message) || ("HTTP " + r.status));
+      }
+    } else {
+      throw new Error(errMsg);
+    }
+  }
+
+  var d = await r.json();
+
+  if (threaded && !isolated && d.id) lastResponseId = d.id;
+
+  if (wantsTools) {
+    return { text: extractOpenAIText(d), toolCalls: extractToolCalls(d) };
+  }
+  return extractOpenAIText(d);
+}
+
+function extractOpenAIText(d) {
+  if (typeof d.output_text === "string" && d.output_text.length) {
+    return d.output_text;
+  }
+  var out = "";
+  if (Array.isArray(d.output)) {
+    for (var i = 0; i < d.output.length; i++) {
+      var item = d.output[i];
+      if (item && item.type === "message" && Array.isArray(item.content)) {
+        for (var j = 0; j < item.content.length; j++) {
+          var c = item.content[j];
+          if (c && (c.type === "output_text" || c.type === "text") && c.text) {
+            out += c.text;
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function extractToolCalls(d) {
+  var calls = [];
+  if (!Array.isArray(d.output)) return calls;
+  for (var i = 0; i < d.output.length; i++) {
+    var item = d.output[i];
+    if (item && item.type === "function_call") {
+      var args = {};
+      try { args = JSON.parse(item.arguments || "{}"); } catch (e) { args = {}; }
+      calls.push({ name: item.name, args: args, callId: item.call_id, raw: item.arguments });
+    }
+  }
+  return calls;
+}
+
+
+// ==========================================================================
+//  10. Ejecución de Python en Pyodide
+// ==========================================================================
 
 async function runPython(code) {
   if (!code) return { kind: "error", value: "Código vacío" };
@@ -2450,9 +2823,18 @@ function extractPyErrorMessage(traceback) {
 }
 
 
-// ============================================================================
-//  Parseo de respuestas del modelo
-// ============================================================================
+// ==========================================================================
+//  11. Parseo de las respuestas del modelo
+// ==========================================================================
+
+function extractPythonCode(reply) {
+  if (!reply) return null;
+  var m = reply.match(/```(?:python|py)?\s*\n([\s\S]*?)```/i);
+  if (m) return normalizeCode(m[1]);
+  var t = reply.trim();
+  if (/(?:^|\n)\s*resultado\s*=/.test(t)) return normalizeCode(t);
+  return null;
+}
 
 function extractJSON(reply) {
   if (!reply) return null;
@@ -2475,15 +2857,6 @@ function extractJSON(reply) {
   try { return JSON.parse(sliced); } catch (e) { return null; }
 }
 
-function extractPythonCode(reply) {
-  if (!reply) return null;
-  var m = reply.match(/```(?:python|py)?\s*\n([\s\S]*?)```/i);
-  if (m) return normalizeCode(m[1]);
-  var t = reply.trim();
-  if (/(?:^|\n)\s*resultado\s*=/.test(t)) return normalizeCode(t);
-  return null;
-}
-
 function normalizeCode(code) {
   code = code.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   code = stripCommonLeadingWhitespace(code);
@@ -2502,9 +2875,9 @@ function stripCommonLeadingWhitespace(code) {
 }
 
 
-// ============================================================================
-//  Renderizado de mensajes (UI)
-// ============================================================================
+// ==========================================================================
+//  12. Render de mensajes y resultados en la UI
+// ==========================================================================
 
 function appendMsg(role, text, route = null) {
   const box = document.getElementById("messages");
@@ -2529,10 +2902,20 @@ function appendMsg(role, text, route = null) {
 
   box.appendChild(d);
   scrollToBottom();
+
+  return d;
 }
 
-function appendAssistantText(text, route) {
-  appendMsg("assistant", text, route);
+function appendAssistantText(text, route, systemPrompt) {
+  var node = appendMsg("assistant", text, route);
+  if (systemPrompt && node) {
+    var body = node.querySelector(".msg-text");
+    if (body) {
+      body.insertAdjacentHTML("beforeend", renderPromptToggle(systemPrompt));
+      attachPromptToggle(node);
+    }
+  }
+  return node;
 }
 
 function routeLabel(route) {
@@ -2543,7 +2926,7 @@ function routeLabel(route) {
   return route;
 }
 
-function appendResult(result, code, route) {
+function appendResult(result, code, route, systemPrompt) {
   const box = document.getElementById("messages");
   const d = document.createElement("div");
   d.className = "msg assistant";
@@ -2555,6 +2938,7 @@ function appendResult(result, code, route) {
     : `<div class="${boxCls}">${renderResult(result)}</div>`;
 
   const codeHtml = renderCodeToggle(code, route === "insight");
+  const promptHtml = renderPromptToggle(systemPrompt);
   const badgeHtml = route 
     ? `<span class="route-badge ${route}">${routeLabel(route)}</span>` 
     : '';
@@ -2566,12 +2950,14 @@ function appendResult(result, code, route) {
       <div class="msg-text">
         ${resultContent}
         ${codeHtml}
+        ${promptHtml}
       </div>
     </div>
   `;
 
   box.appendChild(d);
   attachCodeToggle(d);
+  attachPromptToggle(d);
   if (result.kind === "plotly" && result.__plotElId) {
     renderPlotlyInto(result.__plotElId, result.value);
   }
@@ -2589,6 +2975,36 @@ function attachCodeToggle(container) {
     const codeBlock = btn.nextElementSibling;
     if (codeBlock) {
       codeBlock.classList.toggle("expanded");
+    }
+  });
+}
+
+function renderCodeToggle(code, isInsight) {
+  if (!code) return "";
+  const label = isInsight ? "ver script de análisis" : "ver código ejecutado";
+  return `
+    <span class="code-toggle"><span class="arrow">▶</span> ${label}</span>
+    <div class="code-block"><pre>${esc(code)}</pre></div>
+  `;
+}
+
+function renderPromptToggle(systemPrompt) {
+  if (!systemPrompt) return "";
+  return `
+    <span class="prompt-toggle"><span class="arrow">▶</span> ver system prompt enviado (retrieval)</span>
+    <div class="prompt-block"><pre>${esc(systemPrompt)}</pre></div>
+  `;
+}
+
+function attachPromptToggle(container) {
+  const toggle = container.querySelector(".prompt-toggle");
+  if (!toggle) return;
+  toggle.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    btn.classList.toggle("expanded");
+    const promptBlock = btn.nextElementSibling;
+    if (promptBlock) {
+      promptBlock.classList.toggle("expanded");
     }
   });
 }
@@ -2651,20 +3067,6 @@ function renderDataFrame(df, shape) {
   return html;
 }
 
-function formatCellScalar(v) {
-  if (v == null) return "—";
-  if (typeof v === "number") {
-    return Number.isInteger(v) 
-      ? new Intl.NumberFormat("es-ES").format(v) 
-      : v.toFixed(4).replace(/\.?0+$/, "");
-  }
-  if (Array.isArray(v)) return v.map(formatCellScalar).join(", ");
-  if (typeof v === "object") {
-    return Object.entries(v).map(([k, val]) => `${k}: ${formatCellScalar(val)}`).join(", ");
-  }
-  return String(v);
-}
-
 function renderCell(val) {
   const isNum = typeof val === "number";
   const display = formatCellScalar(val);
@@ -2683,6 +3085,31 @@ function formatCellScalar(v) {
   return String(v);
 }
 
+function renderError(r) {
+  const techParts = [];
+  const summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
+  
+  if (summary) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(summary)}</div>`);
+  if (r.trace) techParts.push(`<pre>${esc(r.trace)}</pre>`);
+  
+  if (r.firstError) {
+    techParts.push(`<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>`);
+    if (r.firstError.value) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(r.firstError.value)}</div>`);
+    if (r.firstError.trace) techParts.push(`<pre>${esc(r.firstError.trace)}</pre>`);
+    if (r.firstError.code)  techParts.push(`<pre>${esc(r.firstError.code)}</pre>`);
+  }
+  
+  const techHtml = techParts.join("");
+  const details = techHtml 
+    ? `<details class="err-details"><summary>ver detalles técnicos del error</summary>${techHtml}</details>` 
+    : "";
+    
+  const prefix = r.kind === "error_friendly" ? "No he podido responder." : "Error al ejecutar el código:";
+  
+  return `<div class="error-box"><strong>${prefix}</strong> ${esc(r.value)}${details}</div>`;
+}
+
+// ----- Gráficos Plotly -----
 function renderPlotlyInto(elId, jsonStr) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -2715,55 +3142,90 @@ function renderPlotlyInto(elId, jsonStr) {
 }
 
 function beautifyMap(el, data, layout) {
-  el.style.minHeight = "560px";
-  layout.height ??= 560;
+  el.style.minHeight = "580px";
+  layout.height ??= 580;
   layout.mapbox ??= {};
   layout.mapbox.style = "carto-positron";
   layout.mapbox.center ??= { lat: 40.0, lon: -3.7 };
-  layout.mapbox.zoom ??= 4.7;
+  layout.mapbox.zoom ??= 4.9;
 
   layout.paper_bgcolor = "rgba(0,0,0,0)";
   layout.plot_bgcolor  = "rgba(0,0,0,0)";
-  
+
   layout.margin ??= {};
   layout.margin.l ??= 0;
   layout.margin.r ??= 0;
   layout.margin.b ??= 0;
-  layout.margin.t ??= 54;
-  
+  layout.margin.t ??= 58;
+
   layout.font ??= {};
-  layout.font.family ??= "Arial, Helvetica, sans-serif";
-  layout.font.color ??= "#1a1a1a";
+  layout.font.family ??= "Inter, 'Segoe UI', Arial, Helvetica, sans-serif";
+  layout.font.color ??= "#1f2a37";
+
+  layout.hoverlabel ??= {};
+  layout.hoverlabel.bgcolor ??= "#ffffff";
+  layout.hoverlabel.bordercolor ??= "#70d549";
+  layout.hoverlabel.font ??= {};
+  layout.hoverlabel.font.family ??= "Inter, 'Segoe UI', Arial, sans-serif";
+  layout.hoverlabel.font.size ??= 13;
+  layout.hoverlabel.font.color ??= "#1f2a37";
 
   if (layout.title && typeof layout.title === "object") {
     layout.title.x ??= 0.02;
     layout.title.xanchor ??= "left";
     layout.title.font ??= {};
-    layout.title.font.size ??= 16;
+    layout.title.font.size ??= 18;
+    layout.title.font.color ??= "#15351c";
+    layout.title.font.family ??= "Inter, 'Segoe UI', Arial, sans-serif";
   }
 
   for (let i = 0; i < data.length; i++) {
     const tr = data[i];
     if (!tr) continue;
-    
+
     const type = String(tr.type || "");
 
     if (type === "scattermapbox") {
       tr.mode ??= "markers";
       tr.marker ??= {};
-      tr.marker.colorscale ??= [[0, "#bdebab"], [0.5, "#70d549"], [1, "#2f7d18"]];
-      tr.marker.opacity ??= 0.9;
+      tr.marker.colorscale ??= [
+        [0.0, "#d6f3c4"], [0.35, "#8fdc62"], [0.7, "#52b733"], [1.0, "#247a12"]
+      ];
+      tr.marker.opacity ??= 0.92;
       tr.marker.sizemode ??= "diameter";
-      
+      tr.marker.line ??= { width: 1.2, color: "rgba(255,255,255,0.9)" };
+      if (tr.marker.showscale !== false) {
+        tr.marker.showscale ??= true;
+        tr.marker.colorbar ??= {};
+        tr.marker.colorbar.thickness ??= 12;
+        tr.marker.colorbar.len ??= 0.6;
+        tr.marker.colorbar.outlinewidth ??= 0;
+        tr.marker.colorbar.bgcolor ??= "rgba(255,255,255,0.7)";
+        tr.marker.colorbar.tickfont ??= { size: 11, color: "#1f2a37" };
+        if (tr.marker.colorbar.title && typeof tr.marker.colorbar.title === "object") {
+          tr.marker.colorbar.title.font ??= { size: 12, color: "#1f2a37" };
+        }
+      }
+
       const halo = makeHaloTrace(tr);
-      if (halo) { 
-        data.splice(i, 1, halo, tr); 
+      if (halo) {
+        data.splice(i, 1, halo, tr);
         i++;
       }
     } else if (type === "densitymapbox") {
-      tr.colorscale ??= [[0, "rgba(112,213,73,0)"], [0.45, "#70d549"], [0.75, "#f0a020"], [1, "#c0392b"]];
-      tr.radius ??= 38;
-      tr.opacity ??= 0.85;
+      tr.colorscale ??= [
+        [0.0, "rgba(112,213,73,0)"], [0.25, "rgba(143,220,98,0.55)"],
+        [0.5, "#70d549"], [0.75, "#f0a020"], [1.0, "#c0392b"]
+      ];
+      tr.radius ??= 42;
+      tr.opacity ??= 0.82;
+      tr.showscale ??= true;
+      tr.colorbar ??= {};
+      tr.colorbar.thickness ??= 12;
+      tr.colorbar.len ??= 0.6;
+      tr.colorbar.outlinewidth ??= 0;
+      tr.colorbar.bgcolor ??= "rgba(255,255,255,0.7)";
+      tr.colorbar.tickfont ??= { size: 11, color: "#1f2a37" };
     }
   }
 }
@@ -2771,12 +3233,12 @@ function beautifyMap(el, data, layout) {
 function makeHaloTrace(tr) {
   try {
     const size = tr.marker?.size;
-    let haloSize = 24;
-    
+    let haloSize = 26;
+
     if (Array.isArray(size)) {
-      haloSize = size.map(s => (Number(s) || 10) + 14);
+      haloSize = size.map(s => (Number(s) || 10) + 16);
     } else if (typeof size === "number") {
-      haloSize = size + 14;
+      haloSize = size + 16;
     }
 
     return {
@@ -2788,7 +3250,7 @@ function makeHaloTrace(tr) {
       showlegend: false,
       marker: {
         size: haloSize,
-        color: "rgba(112,213,73,0.22)",
+        color: "rgba(82,183,51,0.18)",
         sizemode: tr.marker?.sizemode || "diameter"
       }
     };
@@ -2797,112 +3259,7 @@ function makeHaloTrace(tr) {
   }
 }
 
-function renderError(r) {
-  const techParts = [];
-  const summary = r.kind === "error_friendly" ? (r.technical || "") : r.value;
-  
-  if (summary) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(summary)}</div>`);
-  if (r.trace) techParts.push(`<pre>${esc(r.trace)}</pre>`);
-  
-  if (r.firstError) {
-    techParts.push(`<div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;">Primer intento (falló, se reintentó):</div>`);
-    if (r.firstError.value) techParts.push(`<div style="font-family:Menlo,monospace;font-size:12.5px;padding:4px 0;color:#7a1f15;">${esc(r.firstError.value)}</div>`);
-    if (r.firstError.trace) techParts.push(`<pre>${esc(r.firstError.trace)}</pre>`);
-    if (r.firstError.code)  techParts.push(`<pre>${esc(r.firstError.code)}</pre>`);
-  }
-  
-  const techHtml = techParts.join("");
-  const details = techHtml 
-    ? `<details class="err-details"><summary>ver detalles técnicos del error</summary>${techHtml}</details>` 
-    : "";
-    
-  const prefix = r.kind === "error_friendly" ? "No he podido responder." : "Error al ejecutar el código:";
-  
-  return `<div class="error-box"><strong>${prefix}</strong> ${esc(r.value)}${details}</div>`;
-}
-
-function renderCodeToggle(code, isInsight) {
-  if (!code) return "";
-  const label = isInsight ? "ver script de análisis" : "ver código ejecutado";
-  return `
-    <span class="code-toggle"><span class="arrow">▶</span> ${label}</span>
-    <div class="code-block"><pre>${esc(code)}</pre></div>
-  `;
-}
-
-
-// ============================================================================
-//  Clarify UI
-// ============================================================================
-
-function appendClarify(payload, step, total) {
-  var box = document.getElementById("messages");
-  var d = document.createElement("div");
-  d.className = "msg assistant";
-  d.innerHTML = '<div class="msg-avatar">A</div>'
-    + '<div class="msg-body">'
-    + '<div class="msg-role">Asistente · necesita aclaración</div>'
-    + '<div class="msg-text">' + buildClarifyBoxHtml(payload, step, total) + '</div>'
-    + '</div>';
-  box.appendChild(d);
-  attachClarifyListeners(d, payload);
-  scrollToBottom();
-}
-
-function buildClarifyBoxHtml(payload, step, total) {
-  var opciones = (payload.opciones || []).slice(0, 4);
-  var optsHtml = '<div class="clarify-options">';
-  for (var i = 0; i < opciones.length; i++) {
-    optsHtml += '<button class="clarify-option" data-opt="' + esc(opciones[i]) +
-                '">' + esc(opciones[i]) + '</button>';
-  }
-  var otherLabel = (payload.permitirOtro !== false)
-      ? "Otro... (escribe tu respuesta)"
-      : "Ninguna de estas: escribe tu respuesta";
-  optsHtml +=
-    '<div class="clarify-other-wrap">' +
-    '<input type="text" class="clarify-other-input" placeholder="' + esc(otherLabel) + '">' +
-    '<button class="clarify-other-btn">Enviar</button>' +
-    '</div>';
-  optsHtml += '</div>';
-  var progressHtml = (step && total && total > 1)
-    ? '<div class="clarify-progress">Aclaración ' + step + ' de ' + total + '</div>'
-    : '';
-  var razonHtml = payload.razon
-    ? '<div class="clarify-why">' + esc(payload.razon) + '</div>'
-    : '';
-  return '<div class="clarify-box">' + progressHtml
-    + '<div class="clarify-q">' + esc(payload.pregunta || "¿Puedes concretar?") + '</div>'
-    + razonHtml + optsHtml + '</div>';
-}
-
-function attachClarifyListeners(container, payload) {
-  var btns = container.querySelectorAll(".clarify-option");
-  for (var i = 0; i < btns.length; i++) {
-    btns[i].addEventListener("click", function (ev) {
-      var txt = ev.currentTarget.getAttribute("data-opt");
-      answerClarify(txt);
-    });
-  }
-  var otherInput = container.querySelector(".clarify-other-input");
-  var otherBtn = container.querySelector(".clarify-other-btn");
-  if (otherInput && otherBtn) {
-    var submit = function () {
-      var v = otherInput.value.trim();
-      if (v) answerClarify(v);
-    };
-    otherBtn.addEventListener("click", submit);
-    otherInput.addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter") { ev.preventDefault(); submit(); }
-    });
-  }
-}
-
-
-// ============================================================================
-//  Typing dots y notificaciones
-// ============================================================================
-
+// ----- Indicadores de escritura, errores y avisos -----
 function appendTyping(label) {
   var box = document.getElementById("messages");
   var id = "t" + Date.now() + "_" + Math.floor(Math.random() * 1000);
@@ -2986,9 +3343,37 @@ function appendDevBanner(htmlMsg) {
 }
 
 
-// ============================================================================
-//  Utilidades UI
-// ============================================================================
+// ==========================================================================
+//  13. Utilidades de la interfaz
+// ==========================================================================
+
+function renderRich(text) {
+  var html = marked.parse(text || "");
+  var tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(tmp, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "$", right: "$", display: false }
+        ],
+        throwOnError: false
+      });
+    } catch (e) {}
+  }
+  return tmp.innerHTML;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 function scrollToBottom() {
   var box = document.getElementById("messages");
@@ -3003,12 +3388,21 @@ function setStatus(msg, kind) {
   else if (kind === "error") dot.classList.add("error");
 }
 
-function esc(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function setBusy(b) {
+  busy = b;
+  document.getElementById("send-btn").disabled = b;
+}
+
+function resetInput(input) {
+  input.value = "";
+  input.style.height = "auto";
+}
+
+function hideWelcomeAndQuicks() {
+  var welcome = document.getElementById("welcome");
+  if (welcome) welcome.remove();
+  var quicks = document.getElementById("quick-questions");
+  if (quicks) quicks.style.display = "none";
 }
 
 function handleKey(e) {
@@ -3022,9 +3416,11 @@ function autoResize(el) {
 
 function quickAsk(t) { sendMessage(t); }
 
+// Enviar la API key con Enter en la pantalla de inicio.
 document.getElementById("api-key-input").addEventListener("keydown", function (e) {
   if (e.key === "Enter") initChat();
 });
+
 </script>
 </body>
 </html>

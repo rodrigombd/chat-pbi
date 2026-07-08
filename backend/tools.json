@@ -1,0 +1,73 @@
+[
+  {
+    "type": "function",
+    "name": "explicar_modelo_datos",
+    "description": "Úsala cuando el usuario hace una pregunta teórica o conceptual sobre el modelo de datos: qué tablas existen, qué columnas hay, cómo se definen los KPIs (Leads, Contactos, Tasa de conversión), qué significa una columna o cómo se relacionan. NO ejecuta código ni consulta los datos reales; solo explica la estructura y las definiciones. También válida para saludos o preguntas sobre qué puede hacer el asistente.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "consulta": {
+          "type": "string",
+          "description": "La pregunta del usuario sobre el modelo de datos, reformulada de forma clara y autocontenida."
+        }
+      },
+      "required": [
+        "consulta"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "solicitar_aclaracion",
+    "description": "Úsala SOLO cuando el usuario pide un análisis de datos pero faltan parámetros críticos que impiden programar la consulta sin ambigüedad: el curso/periodo (p. ej. 2024/2025 o histórico), la métrica concreta (volumen de leads, volumen de contactos, tasa de conversión) o la dimensión de agrupación (ciudad, fuente, campaña, curso). No la uses si el contexto previo de la sesión ya resuelve el dato. Haz UNA sola pregunta por llamada; si faltan varios parámetros, pregunta primero por el más bloqueante.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "slot": {
+          "type": "string",
+          "description": "Identificador corto del parámetro que falta. Uno de: curso, metrica, dimension, ciudad, otro."
+        },
+        "pregunta": {
+          "type": "string",
+          "description": "La pregunta clara y breve que se le mostrará al usuario para desambiguar."
+        },
+        "opciones": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Entre 2 y 4 opciones excluyentes y concretas que el usuario podrá pulsar. Deben ser respuestas válidas a la pregunta."
+        },
+        "razon": {
+          "type": "string",
+          "description": "Frase breve opcional que explica por qué se necesita esta aclaración."
+        }
+      },
+      "required": [
+        "slot",
+        "pregunta",
+        "opciones"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "ejecutar_analisis_python",
+    "description": "Úsala cuando la consulta de datos está clara y se puede programar en Pandas sin ambigüedad. Genera el análisis sobre el dataset real. Si el usuario pide comparar o calcular varias cosas independientes (distintas métricas o distintos tipos de salida), invócala varias veces en paralelo, una por cada petición independiente. Una comparación de la misma métrica entre varias categorías es UNA sola llamada.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "instruccion_enriquecida": {
+          "type": "string",
+          "description": "Instrucción en lenguaje natural, clara y autocontenida, que describe exactamente el análisis a realizar (métrica, curso/periodo, dimensión de agrupación, filtros y tipo de salida deseado). A partir de ella se generará el script de Pandas."
+        }
+      },
+      "required": [
+        "instruccion_enriquecida"
+      ],
+      "additionalProperties": false
+    }
+  }
+]
