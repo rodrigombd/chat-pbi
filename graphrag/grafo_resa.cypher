@@ -32,7 +32,7 @@ UNWIND [
   {nombre: "Tipo de registro",                    desc: "Discrimina si el registro es 'Leads' o 'Contacts'."},
   {nombre: "Particular o Grupo",                  desc: "Indica si el contact es 'Particular' o 'Grupo'. Las conversiones solo cuentan particulares."},
   {nombre: "Curso_corregido",                     desc: "Curso académico del registro."},
-  {nombre: "Fecha creación",                      desc: "Fecha de creación del registro."},
+  {nombre: "Fecha creación",                      desc: "Fecha de creación del registro. Fecha creación, columna temporal de la tabla Leads_Contacts, fecha de alta / creación del registro, usada para series y evoluciones mensuales"},
   {nombre: "Ciudad_actual_corregido",             desc: "Ciudad de residencia actual del usuario."},
   {nombre: "Ciudades_deinteres_corregido",        desc: "Ciudad de interés del usuario."},
   {nombre: "Residencias_actual_corregido",        desc: "Residencia RESA actual del contact."},
@@ -56,6 +56,11 @@ UNWIND ["2024/2025", "2025/2026", "2026/2027"] AS valor
 MERGE (v:Valor {columna: "Curso", tabla: "Tabla_Curso", valor: valor})
 MERGE (c)-[:TIENE_VALOR]->(v);
 
+MATCH (c:Columna {tabla: "Leads_Contacts", nombre: "Origen_Agrupado"})
+UNWIND ["Comisionistas", "Eventos", "Ferias", "Otros", "Paid Media", "Resa Housing", "SEO & Directo"] AS valor
+MERGE (v:Valor {columna: "Curso", tabla: "Tabla_Curso", valor: valor})
+MERGE (c)-[:TIENE_VALOR]->(v);
+
 
 // ----------------------------------------------------------------------------
 //  4) MEDIDAS
@@ -63,9 +68,9 @@ MERGE (c)-[:TIENE_VALOR]->(v);
 MATCH (f:Tabla {nombre: "Leads_Contacts"})
 UNWIND [
   {nombre: "CR CantidadRegistros",               familia: "CR",       tipo: "Contacts+Leads", desc: "Denominador del conversion rate: registros totales (contacts particulares + leads), general por contexto/slicer.",
-    formula: "VAR cant_registros = CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Contacts\",\n    Leads_Contacts[Particular o Grupo] = \"Particular\",\n    REMOVEFILTERS('Tabla_Ciudad_Interés'),\n    REMOVEFILTERS('Tabla_Residencia_Interés'),\n    FILTER(Calendario, Calendario[Date] IN VALUES(Calendario[Date])), USERELATIONSHIP(Calendario[Date], Leads_Contacts[Fecha creación]))\n                +\n            CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Leads\",\n    REMOVEFILTERS(Tabla_Ciudad_Actual),\n    REMOVEFILTERS(Tabla_Residencia_Actual_CONTACTS),\n    FILTER(Calendario, Calendario[Date] IN VALUES(Calendario[Date])), USERELATIONSHIP(Calendario[Date], Leads_Contacts[Fecha creación]))\n                RETURN IF(ISBLANK(cant_registros), 0, cant_registros)"},
+    formula: "VAR cant_registros = CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Contacts\",\n    Leads_Contacts[Particular o Grupo] = \"Particular\",\n    REMOVEFILTERS('Tabla_Ciudad_Interés'),\n    REMOVEFILTERS('Tabla_Residencia_Interés'))\n                   +\n            CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Leads\",\n    REMOVEFILTERS(Tabla_Ciudad_Actual),\n    REMOVEFILTERS(Tabla_Residencia_Actual_CONTACTS))\n                RETURN IF(ISBLANK(cant_registros), 0, cant_registros)"},
   {nombre: "CR Convertidos",                     familia: "CR",       tipo: "Contacts",       desc: "Numerador del conversion rate: contacts particulares convertidos, general por contexto/slicer.",
-    formula: "VAR cant_registros = CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Contacts\",\n    Leads_Contacts[Particular o Grupo] = \"Particular\",\n    REMOVEFILTERS('Tabla_Ciudad_Interés'),\n    REMOVEFILTERS('Tabla_Residencia_Interés'),\n    FILTER(Calendario, Calendario[Date] IN VALUES(Calendario[Date])), USERELATIONSHIP(Calendario[Date], Leads_Contacts[Fecha creación]))\nRETURN IF(ISBLANK(cant_registros), 0, cant_registros)"},
+    formula: "VAR cant_registros = CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Contacts\",\n    Leads_Contacts[Particular o Grupo] = \"Particular\",\n    REMOVEFILTERS('Tabla_Ciudad_Interés'),\n    REMOVEFILTERS('Tabla_Residencia_Interés'))\n    \nRETURN IF(ISBLANK(cant_registros), 0, cant_registros)"},
   {nombre: "CR ConversionRate",                  familia: "CR",       tipo: null,             desc: "Tasa de conversión = Convertidos / CantidadRegistros.",
     formula: "var conversion_rate = DIVIDE([CR Convertidos], [CR CantidadRegistros],0)\nRETURN\nconversion_rate"}
 ] AS m
