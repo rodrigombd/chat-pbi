@@ -44,7 +44,7 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
             f"collect(DISTINCT CASE WHEN {alias} IS NOT NULL "
             f"THEN coalesce(node.{name_prop}, node.valor, elementId(node)) + "
             f"' {arrow} {rel_type}: ' + "
-            f"coalesce({alias}.{name_prop}, {alias}.valor, elementId({alias})) + "
+            f"coalesce({alias}.{name_prop}, {alias}.nombre, {alias}.valor, elementId({alias})) + "
             f"' (' + {props_cypher} + ')' "
             f"END) AS ctx{idx}"
         )
