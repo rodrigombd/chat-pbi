@@ -42,9 +42,9 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
         props_cypher = _props_reducer(alias, emb_prop, name_prop)
         collect_clauses.append(
             f"collect(DISTINCT CASE WHEN {alias} IS NOT NULL "
-            f"THEN coalesce(node.{name_prop}, elementId(node)) + "
+            f"THEN coalesce(node.{name_prop}, node.valor, elementId(node)) + "
             f"' {arrow} {rel_type}: ' + "
-            f"coalesce({alias}.{name_prop}, elementId({alias})) + "
+            f"coalesce({alias}.{name_prop}, {alias}.valor, elementId({alias})) + "
             f"' (' + {props_cypher} + ')' "
             f"END) AS ctx{idx}"
         )
