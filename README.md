@@ -121,7 +121,7 @@ Comprueba que responde antes de seguir:
 ```powershell
 # En otra terminal, o en el navegador:
 curl http://localhost:8000/health
-# Esperado: {"ok": true, "neo4j": true, "top_k": 15, "score_threshold": 0.7}
+# Esperado: {"ok": true, "neo4j": true, "top_k": 15, "score_threshold": 0.55}
 ```
 
 Plantilla de `graphrag/.env`:
