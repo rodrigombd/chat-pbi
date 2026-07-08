@@ -1482,7 +1482,7 @@ async function answerModelQuery(userText) {
       { model: "gpt-4o", maxTokens: 1500, temperature: 0.5, isolated: true }
     );
     removeTyping(tid);
-    appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo");
+    appendAssistantText(reply.trim() || "No he podido elaborar una respuesta.", "modelo", modeloPrompt);
     setStatus("listo", "ok");
   } catch (e) {
     removeTyping(tid);
@@ -1691,7 +1691,7 @@ async function answerDataQuery(userText, answeredSlots, opts) {
     subgraph = opts.precomputedSubgraph;
   } else {
     var rid = appendTyping("recuperando modelo de datos...");
-    subgraph = await retrieveSubgraph(enriched, null);
+    subgraph = await retrieveSubgraph(userText, null);
     removeTyping(rid);
   }
   if (!opts.skipClarify) {
@@ -2904,8 +2904,16 @@ function appendMsg(role, text, route = null) {
   scrollToBottom();
 }
 
-function appendAssistantText(text, route) {
-  appendMsg("assistant", text, route);
+function appendAssistantText(text, route, systemPrompt) {
+  var node = appendMsg("assistant", text, route);
+  if (systemPrompt && node) {
+    var body = node.querySelector(".msg-text");
+    if (body) {
+      body.insertAdjacentHTML("beforeend", renderPromptToggle(systemPrompt));
+      attachPromptToggle(node);
+    }
+  }
+  return node;
 }
 
 function routeLabel(route) {
