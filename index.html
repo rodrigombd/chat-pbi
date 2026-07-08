@@ -1140,7 +1140,6 @@ async function ensureTablesLoaded(pythonCode) {
 async function callModel(messages, systemPrompt, opts) {
   opts = opts || {};
   var threaded = opts.threaded !== false;
-
   var input = messages.map(function (m) {
     var role = m.role || "user";
     var contentType = role === "assistant" ? "output_text" : "input_text";
@@ -1173,6 +1172,9 @@ async function callModel(messages, systemPrompt, opts) {
     } else if (lastResponseId) {
       body.previous_response_id = lastResponseId;
     }
+    apiMessages = prior.concat(turn);
+  } else {
+    apiMessages = turn;
   }
 
   var r = await fetch("https://api.openai.com/v1/responses", {
