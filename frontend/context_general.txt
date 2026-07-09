@@ -81,12 +81,20 @@ El código se ejecuta en Pyodide (Python en el navegador). Lee con atención:
 # ENTORNO DE EJECUCIÓN
 Pyodide en navegador. Disponibles: `pandas` (pd), `numpy` (np). NO hay red, NO hay ficheros, NO hay shell. Los DataFrames están en variables globales.
 
-El nombre de la variable global de la tabla de hechos y los nombres EXACTOS de sus columnas te los da el CONTEXTO DEL MODELO proporcionado. No asumas un nombre de tabla ni de columna que no aparezca ahí.
+El nombre de la variable global de cada tabla y los nombres EXACTOS de sus columnas te los da el CONTEXTO DEL MODELO proporcionado. No asumas un nombre de tabla ni de columna que no aparezca ahí.
+
+En el entorno puede haber varios DataFrames de hechos y de dimensión, cada uno cargado como variable global con el mismo nombre que su tabla en el modelo:
+- `leads_contacts`: tabla de hechos del CRM (un registro por solicitud: lead o contact).
+- `economics`: tabla de hechos económica (un registro por residencia y mes; columnas `codigo_residencia`, `fecha` en formato MM/AAAA, `ingresos`, `costes`).
+- `sizing`: tabla de hechos de dimensionamiento (un registro por residencia y tipo de habitación; columnas `codigo_residencia`, `num_rooms`, `room_type` con valores 'S', 'D', 'Q').
+- `maestro_residencias`: tabla maestra/dimensión (un registro por residencia; columnas `codigo_residencia`, `nombre_residencia`).
+
+Usa SOLO los DataFrames que aparezcan en el CONTEXTO DEL MODELO de esta consulta. `economics`, `sizing` y `maestro_residencias` se enlazan entre sí por la clave `codigo_residencia`; para mostrar el nombre legible de la residencia haz un `merge` con `maestro_residencias` por `codigo_residencia`. La columna `fecha` de `economics` es texto MM/AAAA: conviértela con `pd.to_datetime(economics["fecha"], format="%m/%Y")` cuando necesites ordenar u operar por tiempo.
 </entorno_ejecucion>
 <metricas_y_medidas>
 # COLUMNAS vs MEDIDAS (CONCEPTO CLAVE DEL ENTORNO)
 
-En el entorno de ejecución hay UN ÚNICO DataFrame de hechos, `leads_contacts`, ya cargado como variable global. Distingue dos tipos de campo del modelo:
+En el entorno de ejecución hay varios DataFrames cargados como variables globales (ver ENTORNO DE EJECUCIÓN): la tabla de hechos del CRM `leads_contacts` y, cuando el CONTEXTO DEL MODELO lo indique, también `economics`, `sizing` y `maestro_residencias`. Distingue dos tipos de campo del modelo:
 
 - **COLUMNAS**: son campos que EXISTEN físicamente como columnas del DataFrame `leads_contacts` (p. ej. tipo de registro, curso, ciudad, fuente...). Puedes acceder a ellas directamente con `leads_contacts["<nombre exacto de la columna>"]`.
 - **MEDIDAS**: son KPIs calculados (p. ej. la familia de conversión: registros totales, convertidos, tasa de conversión). **NO existen como columna del DataFrame.** No intentes acceder a `leads_contacts["CR ConversionRate"]`: dará KeyError. Una medida hay que **CALCULARLA** a partir de las columnas, siguiendo su fórmula.
@@ -100,6 +108,11 @@ Guía de traducción DAX → Pandas (para las fórmulas que verás en el context
 - `DIVIDE(a, b, 0)` → `a / b if b else 0` (protege la división por cero; nunca dividas sin protección).
 - `REMOVEFILTERS(...)`, `USERELATIONSHIP(...)`, `FILTER(Calendario, ...)` son mecánica interna del modelo Power BI (relaciones y contexto de filtro de tablas que aquí NO existen: no hay tabla Calendario ni relaciones). **Ignóralos**: en Pandas trabajas sobre el DataFrame que tú ya has filtrado, así que esa parte del contexto de filtro la aportas tú con tu propio `.loc`/máscaras. Traduce solo la parte que cuenta o filtra sobre columnas que SÍ existen en `leads_contacts`.
 - `VAR x = ... RETURN IF(ISBLANK(x), 0, x)` → calcula `x` y devuelve `0` si queda vacío/None.
+
+Medidas económicas (familia ECO), que NO están en DAX sino descritas en lenguaje natural en el CONTEXTO DEL MODELO:
+- `ECO Margen` = `ingresos - costes` por fila de `economics`. Para el margen de una residencia o de un periodo, filtra/agrupa `economics` y suma: `(economics["ingresos"] - economics["costes"]).sum()`.
+- `ECO TotalRooms` = total de habitaciones de una residencia: `sizing.groupby("codigo_residencia")["num_rooms"].sum()`.
+- `ECO MargenPorHabitacion` = `ECO Margen` / `ECO TotalRooms`, cruzando `economics` y `sizing` por `codigo_residencia`. Calcula el margen agregado por residencia desde `economics`, el total de habitaciones por residencia desde `sizing`, únelos por `codigo_residencia` y divide protegiendo la división por cero (`np.where(rooms>0, margen/rooms, 0)`).
 
 ## Nota sobre el grano al calcular medidas
 Las medidas de conversión están definidas con **correos distintos** (`DISTINCTCOUNT` sobre el correo), por eso aquí SÍ se usa `.nunique()` sobre la columna de correo. Esto es una EXCEPCIÓN explícita a la regla general de "cuenta filas, no identificadores únicos": para los VOLÚMENES genéricos (nº de solicitudes, leads o contactos por ciudad, evolución temporal, etc.) sigues contando **filas** con `len(...)`/`.size()`; el `.nunique()` sobre el correo se reserva para el numerador y el denominador de la conversión, tal como manda su fórmula.
