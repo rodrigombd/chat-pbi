@@ -578,7 +578,10 @@ var PROMPT_FILES = {
 };
 
 var CSV_TABLES = {
-  "leads_contacts": "../data/Leads_Contacts.csv"
+  "leads_contacts": { path: "../data/Leads_Contacts.csv", sep: ";", primary: true },
+  "economics": { path: "../data/economics.csv", sep: ";" },
+  "sizing": { path: "../data/sizing.csv", sep: ";" },
+  "maestro_residencias": { path: "../data/maestro_residencias.csv", sep: "," }
 };
 var PRIMARY_CSV = "leads_contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
@@ -974,12 +977,15 @@ async function loadPrimaryCsv() {
 
 async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) return true;
-  var file = CSV_TABLES[varName];
-  if (!file) {
+  var entry = CSV_TABLES[varName];
+  if (!entry) {
     showDevAlert(`loadCsv: «${varName}» no existe en CSV_TABLES.`);
     return false;
   }
-  
+  var file = entry.path;
+  var sep = entry.sep || ";";
+  var isPrimary = !!entry.primary || (varName === PRIMARY_CSV);
+
   try {
     var r = await fetch(`${file}?v=${Date.now()}`);
     if (!r.ok) {
@@ -995,18 +1001,18 @@ async function loadCsv(varName) {
       showDevAlert(`<strong>El fichero ${esc(file)} está vacío.</strong>`);
       return false;
     }
-    
+
     pyodide.globals.set("__csv_buffer__", text);
-    var isPrimary = (varName === PRIMARY_CSV);
+    pyodide.globals.set("__csv_sep__", sep);
     var pyCode = `
 from io import StringIO as _SIO
 import traceback as _tb
 
 try:
-    ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=';', low_memory=False)
+    ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=__csv_sep__, low_memory=False)
     ${varName} = ${varName}.drop_duplicates()
     ${isPrimary ? `${varName} = __parse_fechas_es__(${varName}, ${JSON.stringify(PRIMARY_DATE_COLUMNS)})` : ""}
-    
+
     __csv_load_ok__ = True
     __csv_error__   = ''
 except Exception as _e:
@@ -1014,10 +1020,11 @@ except Exception as _e:
     __csv_error__   = _tb.format_exc()
 
 del __csv_buffer__
+del __csv_sep__
 `;
 
     await pyodide.runPythonAsync(pyCode);
-    
+
     var ok = pyodide.globals.get("__csv_load_ok__");
     var errTxt = pyodide.globals.get("__csv_error__") || "";
 
@@ -1034,10 +1041,10 @@ del __csv_buffer__
       `);
       return false;
     }
-    
+
     loadedCsvs.add(varName);
     return true;
-    
+
   } catch (e) {
     showDevAlert(`
       <strong>Error inesperado cargando ${esc(file)}</strong>
@@ -1051,7 +1058,7 @@ async function ensureTablesLoaded(pythonCode) {
   for (var v in CSV_TABLES) {
     var re = new RegExp("\\b" + v + "\\b");
     if (re.test(pythonCode) && !loadedCsvs.has(v)) {
-      setStatus("cargando " + CSV_TABLES[v] + "...", "busy");
+      setStatus("cargando " + CSV_TABLES[v].path + "...", "busy");
       await loadCsv(v);
     }
   }
