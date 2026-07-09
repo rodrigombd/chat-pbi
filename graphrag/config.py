@@ -63,6 +63,7 @@ class SchemaConfig:
                 ("TIENE_COLUMNA", "in", 1),
                 ("USA_COLUMNA", "in", 1),
                 ("TIENE_VALOR", "out", 1),
+                ("RELACIONA", "both", 2),
             ),
         ),
         LabelConfig(
