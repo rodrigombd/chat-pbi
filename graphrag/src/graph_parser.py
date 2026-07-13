@@ -9,14 +9,14 @@ _DIRECTION_LABEL: dict[str, str] = {
 }
 
 
-def _direction_pattern(rel_type: str, direction: str, hops: int) -> str:
+def _direction_pattern(rel_type: str, direction: str, hops: int, alias: str) -> str:
     depth = "" if hops <= 1 else f"*1..{hops}"
     body = f"[:{rel_type}{depth}]"
     if direction == "out":
-        return f"-{body}->"
+        return f"-{body}->({alias})"
     if direction == "in":
-        return f"<-{body}-"
-    return f"-{body}-"
+        return f"<-{body}-({alias})"
+    return f"-{body}-({alias})"
 
 
 def _props_reducer(alias: str, emb_prop: str, name_prop: str) -> str:
@@ -30,6 +30,7 @@ def _props_reducer(alias: str, emb_prop: str, name_prop: str) -> str:
 def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
     name_prop = label_cfg.name_property
     emb_prop = schema.embedding_property
+    exp_threshold = schema.expansion_score_threshold
     optional_matches: list[str] = []
     collect_clauses: list[str] = []
 
@@ -37,14 +38,23 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
         rel_type, direction, hops = rel
         alias = f"n{idx}"
         arrow = _DIRECTION_LABEL.get(direction, "--")
-        pattern = _direction_pattern(rel_type, direction, hops)
-        optional_matches.append(f"OPTIONAL MATCH (node){pattern}({alias})")
+        pattern = _direction_pattern(rel_type, direction, hops, alias)
+        optional_matches.append(
+            f"OPTIONAL MATCH (node){pattern}\n"
+            f"WHERE {alias}.{emb_prop} IS NULL\n"
+            f"   OR vector.similarity.cosine({alias}.{emb_prop}, $query_vector) >= {exp_threshold}"
+        )
         props_cypher = _props_reducer(alias, emb_prop, name_prop)
+        rel_score = (
+            f"CASE WHEN {alias}.{emb_prop} IS NULL THEN -1.0 "
+            f"ELSE vector.similarity.cosine({alias}.{emb_prop}, $query_vector) END"
+        )
         collect_clauses.append(
             f"collect(DISTINCT CASE WHEN {alias} IS NOT NULL "
             f"THEN coalesce(node.{name_prop}, node.valor, elementId(node)) + "
             f"' {arrow} {rel_type}: ' + "
             f"coalesce({alias}.{name_prop}, {alias}.nombre, {alias}.valor, elementId({alias})) + "
+            f"' [score=' + toString(round({rel_score}, 3)) + ']' + "
             f"' (' + {props_cypher} + ')' "
             f"END) AS ctx{idx}"
         )
@@ -68,7 +78,6 @@ RETURN
     [x IN ({ctx_expr}) WHERE x IS NOT NULL] AS context
 ORDER BY score DESC
 """
-
 
 def serialize_subgraph(records: list[dict[str, Any]]) -> str:
     if not records:
