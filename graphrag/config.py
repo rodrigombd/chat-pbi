@@ -33,7 +33,8 @@ class SchemaConfig:
     embedding_property: str = "embedding"
     index_prefix: str = "entity_embeddings"
     top_k: int = 15
-    score_threshold: float = 0.55
+    score_threshold: float = 0.65
+    expansion_score_threshold: float = 0.45
 
     labels: tuple[LabelConfig, ...] = (
         LabelConfig(
@@ -50,8 +51,7 @@ class SchemaConfig:
             name_property="nombre",
             text_properties=("nombre", "descripcion", "familia", "tipo"),
             expansion_relationships=(
-                ("DERIVA_DE", "both", 2),
-                ("TIENE_MEDIDA", "in", 1),
+                ("DERIVA_DE", "out", 2),
                 ("USA_COLUMNA", "out", 1),
             ),
         ),
@@ -60,8 +60,6 @@ class SchemaConfig:
             name_property="nombre",
             text_properties=("nombre", "descripcion"),
             expansion_relationships=(
-                ("TIENE_COLUMNA", "in", 1),
-                ("USA_COLUMNA", "in", 1),
                 ("TIENE_VALOR", "out", 1),
                 ("RELACIONA", "both", 2),
             ),
@@ -70,9 +68,7 @@ class SchemaConfig:
             label="Valor",
             name_property="valor",
             text_properties=("columna", "tabla"),
-            expansion_relationships=(
-                ("TIENE_VALOR", "in", 1),
-            ),
+            expansion_relationships=(),
         ),
     )
 
