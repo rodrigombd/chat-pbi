@@ -65,9 +65,9 @@ MERGE (c)-[:TIENE_VALOR]->(v);
 // ----------------------------------------------------------------------------
 MATCH (f:Tabla {nombre: "Leads_Contacts"})
 UNWIND [
-  {nombre: "CR CantidadRegistros",               familia: "CR",       tipo: "Contacts+Leads", desc: "Denominador del conversion rate: registros totales (contacts particulares + leads), general por contexto/slicer.",
+  {nombre: "CR CantidadRegistros",               familia: "CR",       tipo: "Contacts+Leads", desc: "Registros totales (contacts particulares + leads), general por contexto/slicer.",
     formula: "VAR cant_registros = CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Contacts\",\n    Leads_Contacts[Particular o Grupo] = \"Particular\",\n    REMOVEFILTERS('Tabla_Ciudad_Interés'),\n    REMOVEFILTERS('Tabla_Residencia_Interés'))\n                   +\n            CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Leads\",\n    REMOVEFILTERS(Tabla_Ciudad_Actual),\n    REMOVEFILTERS(Tabla_Residencia_Actual_CONTACTS))\n                RETURN IF(ISBLANK(cant_registros), 0, cant_registros)"},
-  {nombre: "CR Convertidos",                     familia: "CR",       tipo: "Contacts",       desc: "Numerador del conversion rate: contacts particulares convertidos, general por contexto/slicer.",
+  {nombre: "CR Convertidos",                     familia: "CR",       tipo: "Contacts",       desc: "Contacts particulares convertidos, general por contexto/slicer.",
     formula: "VAR cant_registros = CALCULATE(\n    DISTINCTCOUNT(Leads_Contacts[Correo electrónico]),\n    Leads_Contacts[Tipo de registro] = \"Contacts\",\n    Leads_Contacts[Particular o Grupo] = \"Particular\",\n    REMOVEFILTERS('Tabla_Ciudad_Interés'),\n    REMOVEFILTERS('Tabla_Residencia_Interés'))\n    \nRETURN IF(ISBLANK(cant_registros), 0, cant_registros)"},
   {nombre: "CR ConversionRate",                  familia: "CR",       tipo: null,             desc: "Tasa de conversión = Convertidos / CantidadRegistros.",
     formula: "var conversion_rate = DIVIDE([CR Convertidos], [CR CantidadRegistros],0)\nRETURN\nconversion_rate"}
@@ -76,7 +76,8 @@ MERGE (med:Medida {nombre: m.nombre})
   SET med.familia = m.familia,
       med.tipo = m.tipo,
       med.descripcion = m.desc,
-      med.formula = m.formula
+      med.formula = m.formula,
+      med.tabla = f.nombre
 MERGE (f)-[:TIENE_MEDIDA]->(med);
 
 

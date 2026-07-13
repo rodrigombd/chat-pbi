@@ -52,7 +52,8 @@ MERGE (med:Medida {nombre: m.nombre})
   SET med.familia = m.familia,
       med.tipo = m.tipo,
       med.descripcion = m.desc,
-      med.formula = m.formula
+      med.formula = m.formula,
+      med.tabla = f.nombre
 MERGE (f)-[:TIENE_MEDIDA]->(med);
 
 
@@ -78,7 +79,8 @@ MERGE (med:Medida {nombre: "ECO MargenPorHabitacion"})
   SET med.familia = "ECO",
       med.tipo = "economics+sizing",
       med.descripcion = "Margen por habitación de una residencia: margen económico total de la residencia dividido entre su número total de habitaciones. Cruza economics (margen) y sizing (total de habitaciones) por codigo_residencia.",
-      med.formula = "DIVIDE([ECO Margen], [ECO TotalRooms], 0)"
+      med.formula = "DIVIDE([ECO Margen], [ECO TotalRooms], 0)",
+      med.tabla = "economics+sizing"
 MERGE (te)-[:TIENE_MEDIDA]->(med)
 MERGE (ts)-[:TIENE_MEDIDA]->(med);
 

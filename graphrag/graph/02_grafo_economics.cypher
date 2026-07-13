@@ -44,7 +44,8 @@ MERGE (med:Medida {nombre: m.nombre})
   SET med.familia = m.familia,
       med.tipo = m.tipo,
       med.descripcion = m.desc,
-      med.formula = m.formula
+      med.formula = m.formula,
+      med.tabla = f.nombre
 MERGE (f)-[:TIENE_MEDIDA]->(med);
 
 
