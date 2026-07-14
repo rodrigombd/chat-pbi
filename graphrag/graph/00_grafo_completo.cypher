@@ -20,7 +20,7 @@ CREATE CONSTRAINT columna_clave IF NOT EXISTS
 // ----------------------------------------------------------------------------
 MERGE (f:Tabla {nombre: "Leads_Contacts"})
   SET f.rol = "hechos",
-      f.descripcion = "Tabla de hechos del CRM: un registro por correo electrónico, que puede ser un lead o un contact. Contiene la información de captación de posibles clientes de las residencias RESA.";
+      f.descripcion = "Tabla de hechos del CRM: un registro por solicitud del usuario, que puede ser un lead o un contact. Contiene la información de solicitud para residir en una de las residencias de RESA.";
 
 
 // ----------------------------------------------------------------------------
@@ -28,11 +28,11 @@ MERGE (f:Tabla {nombre: "Leads_Contacts"})
 // ----------------------------------------------------------------------------
 MATCH (f:Tabla {nombre: "Leads_Contacts"})
 UNWIND [
-  {nombre: "Correo electrónico",                  desc: "Identificador del registro del usuario."},
-  {nombre: "Tipo de registro",                    desc: "Discrimina si el registro es 'Leads' o 'Contacts'."},
+  {nombre: "Correo electrónico",                  desc: "Identificador del usuario."},
+  {nombre: "Tipo de registro",                    desc: "Indica si el usuario es 'Leads' o 'Contacts'."},
   {nombre: "Particular o Grupo",                  desc: "Indica si el contact es 'Particular' o 'Grupo'."},
   {nombre: "Curso_corregido",                     desc: "Curso académico para el que se solicita el servicio."},
-  {nombre: "Fecha creación",                      desc: "Fecha creación, columna temporal de la tabla Leads_Contacts, fecha de alta / creación del registro, usada para series y evoluciones mensuales"},
+  {nombre: "Fecha creación",                      desc: "Fecha creación del registro, AAAA-MM-DDTHH:MM:SS"},
   {nombre: "Ciudad_actual_corregido",             desc: "Ciudad de residencia actual del usuario, en la que se ubica la residencia actual."},
   {nombre: "Ciudad_deinteres_corregido",          desc: "Ciudad de interés del usuario, en la que se ubica la residencia de interés."},
   {nombre: "Residencias_actual_corregido",        desc: "Código de residencia RESA actual del contact."},
@@ -136,10 +136,10 @@ MERGE (f:Tabla {nombre: "economics"})
 // ----------------------------------------------------------------------------
 MATCH (f:Tabla {nombre: "economics"})
 UNWIND [
-  {nombre: "codigo_residencia",     desc: "Id residencia. //Identificador de la residencia RESA."},
-  {nombre: "fecha",                 desc: "MM/AAAA //Mes al que corresponden los ingresos y costes, en formato MM/AAAA (por ejemplo 01/2023). Columna temporal, usada para series y evoluciones mensuales."},
-  {nombre: "ingresos",              desc: "Ingresos mensuales//ingresos mensuales de la residencia en euros para el mes indicado."},
-  {nombre: "costes",                desc: "Costes mensuales // costes mensuales de la residencia en euros para el mes indicado."}
+  {nombre: "codigo_residencia",     desc: "Id de residencia."},
+  {nombre: "fecha",                 desc: "MM/AAAA."},
+  {nombre: "ingresos",              desc: "Ingresos mensuales."},
+  {nombre: "costes",                desc: "Costes mensuales."}
 ] AS col
 MERGE (c:Columna {tabla: "economics", nombre: col.nombre})
   SET c.descripcion = col.desc
@@ -151,7 +151,7 @@ MERGE (f)-[:TIENE_COLUMNA]->(c);
 // ----------------------------------------------------------------------------
 MATCH (f:Tabla {nombre: "economics"})
 UNWIND [
-  {nombre: "ECO Margen",  familia: "ECO", tipo: "economics", desc: "Margen económico de la residencia: ingresos menos costes. Se puede agregar por residencia y/o por mes (fecha).",
+  {nombre: "ECO Margen",  familia: "ECO", tipo: "economics", desc: "Margen económico de la residencia. Se puede agregar por residencia y/o por mes (fecha).",
     formula: "SUMX(economics, economics[ingresos] - economics[costes])"}
 ] AS m
 MERGE (med:Medida {nombre: m.nombre})
@@ -196,7 +196,7 @@ MERGE (f:Tabla {nombre: "sizing"})
 // ----------------------------------------------------------------------------
 MATCH (f:Tabla {nombre: "sizing"})
 UNWIND [
-  {nombre: "codigo_residencia",     desc: "Identificador de la residencia RESA. Clave que enlaza sizing con las tablas economics y maestro_residencias."},
+  {nombre: "codigo_residencia",     desc: "Id de residencia."},
   {nombre: "num_rooms",             desc: "Número de habitaciones de un tipo concreto en la residencia."},
   {nombre: "room_type",             desc: "Tipo de habitacion. Valores posibles: 'S' (Single), 'D' (Double) y 'Q' (Quadruple)."}
 ] AS col
@@ -219,7 +219,7 @@ MERGE (c)-[:TIENE_VALOR]->(v);
 // ----------------------------------------------------------------------------
 MATCH (f:Tabla {nombre: "sizing"})
 UNWIND [
-  {nombre: "ECO TotalRooms", familia: "ECO", tipo: "sizing", desc: "Número total de habitaciones de una residencia: suma de num_rooms de todos los tipos de habitación de esa misma residencia (codigo_residencia).",
+  {nombre: "ECO TotalRooms", familia: "ECO", tipo: "sizing", desc: "Número total de habitaciones de una residencia.",
     formula: "SUM(sizing[num_rooms])"}
 ] AS m
 MERGE (med:Medida {nombre: m.nombre})
@@ -252,7 +252,7 @@ MATCH (ts:Tabla {nombre: "sizing"})
 MERGE (med:Medida {nombre: "ECO MargenPorHabitacion"})
   SET med.familia = "ECO",
       med.tipo = "economics+sizing",
-      med.descripcion = "Margen por habitación de una residencia: margen económico total de la residencia dividido entre su número total de habitaciones. Cruza economics (margen) y sizing (total de habitaciones) por codigo_residencia.",
+      med.descripcion = "Margen por habitación de una residencia: margen económico total de la residencia dividido entre su número total de habitaciones.",
       med.formula = "DIVIDE([ECO Margen], [ECO TotalRooms], 0)",
       med.tabla = "economics+sizing"
 MERGE (te)-[:TIENE_MEDIDA]->(med)
@@ -286,7 +286,7 @@ CREATE CONSTRAINT columna_clave IF NOT EXISTS
 // ----------------------------------------------------------------------------
 MERGE (f:Tabla {nombre: "maestro_residencias"})
   SET f.rol = "dimension",
-      f.descripcion = "Tabla maestra de residencias: un registro por residencia RESA. Traduce el codigo_residencia a su nombre legible. Se usa para enriquecer las tablas de hechos economics y sizing con el nombre de cada residencia.";
+      f.descripcion = "Tabla maestra de residencias: un registro por residencia RESA. Traduce el codigo_residencia a su nombre legible.";
 
 
 // ----------------------------------------------------------------------------
