@@ -1,16 +1,3 @@
-"""
-Sustituye los NOMBRES de residencia por su CODIGO_RESIDENCIA en Leads_Contacts.csv,
-usando maestro_residencias.csv como diccionario nombre -> codigo.
-
-Requiere en la misma carpeta:
-    - Leads_Contacts.csv          (separador ';')
-    - maestro_residencias.csv     (separador ',', ya reparado de mojibake)
-
-Genera:
-    - Leads_Contacts.csv          (sobrescrito, con copia de seguridad .bak)
-    - un informe por consola de valores no encontrados (deberia ser 0)
-"""
-
 import shutil
 import pandas as pd
 
