@@ -3075,7 +3075,7 @@ function renderCodeToggle(code, isInsight) {
 function renderPromptToggle(systemPrompt) {
   if (!systemPrompt) return "";
   return `
-    <span class="prompt-toggle"><span class="arrow">▶</span> ver system prompt enviado (retrieval)</span>
+    <span class="prompt-toggle"><span class="arrow">▶</span> system prompt enviado</span>
     <div class="prompt-block"><pre>${esc(systemPrompt)}</pre></div>
   `;
 }
@@ -3095,7 +3095,7 @@ function attachPromptToggle(container) {
 
 function renderConclusionToggle(systemPrompt, userPayload, modelName) {
   return `
-    <span class="concl-toggle"><span class="arrow">▶</span> ver todo lo enviado al agente de conclusiones</span>
+    <span class="concl-toggle"><span class="arrow">▶</span> prompt enviado a conclusiones</span>
     <div class="concl-block">
       <div class="concl-sep">modelo</div>
       <pre>${esc(modelName || "")}</pre>
