@@ -579,12 +579,12 @@ var PROMPT_FILES = {
 
 var MODELS = {
   router:      "gpt-4.1-nano",
-  clarify:     "gpt-5.4-nano", //"gpt-5.4-mini"
-  modelQuery:  "gpt-5.4-nano", // "gpt-5.4-mini" o "gpt-5.6-luna"
-  codeGen:     "gpt-5.6-luna",
-  explicacion: "gpt-5.4-nano",
+  modelQuery:  "gpt-5.4-mini",
+  clarify:     "gpt-5.4-mini",
+  codeGen:     "gpt-5.1",
+  explicacion: "gpt-5.4-mini",
   conclusiones:"gpt-5.6-luna",
-  memoria:     "gpt-4o-mini" //"gpt-5.4-nano"
+  memoria:     "gpt-4o-mini"
 };
 
 var CSV_TABLES = {
@@ -679,7 +679,9 @@ async function initChat() {
       await loadPyodidePackages();
       await installRuntimeHelpers();
       await installCityCoords();
-      return await loadPrimaryCsv();
+      var okPrimary = await loadPrimaryCsv();
+      await loadSecondaryCsvs();
+      return okPrimary;
     })();
 
     var results = await Promise.all([promptsTask, conversationTask, pyodideTask, graphragTask]);
@@ -985,6 +987,14 @@ async function loadPrimaryCsv() {
   return ok;
 }
 
+async function loadSecondaryCsvs() {
+  for (var v in CSV_TABLES) {
+    if (v === PRIMARY_CSV) continue;
+    if (loadedCsvs.has(v)) continue;
+    await loadCsv(v);
+  }
+}
+
 async function loadCsv(varName) {
   if (loadedCsvs.has(varName)) return true;
   var entry = CSV_TABLES[varName];
@@ -1020,6 +1030,7 @@ import traceback as _tb
 
 try:
     ${varName} = pd.read_csv(_SIO(__csv_buffer__), sep=__csv_sep__, low_memory=False)
+    ${varName}.columns = [str(_c).lstrip('\\ufeff').strip() for _c in ${varName}.columns]
     ${varName} = ${varName}.drop_duplicates()
     ${isPrimary ? `${varName} = __parse_fechas_es__(${varName}, ${JSON.stringify(PRIMARY_DATE_COLUMNS)})` : ""}
 
@@ -1074,6 +1085,18 @@ async function ensureTablesLoaded(pythonCode) {
   }
 }
 
+async function ensureTablesFromContext(contextText) {
+  if (!contextText) return;
+  var txt = String(contextText);
+  for (var v in CSV_TABLES) {
+    var re = new RegExp("\\b" + v + "\\b", "i");
+    if (re.test(txt) && !loadedCsvs.has(v)) {
+      setStatus("cargando " + CSV_TABLES[v].path + "...", "busy");
+      await loadCsv(v);
+    }
+  }
+}
+
 async function injectColumnValuesIntoContext() {
   if (!pyodide || !prompts.general) return;
   if (prompts.general.indexOf("# VALORES REALES DE LAS COLUMNAS") >= 0) return;
@@ -1081,6 +1104,7 @@ async function injectColumnValuesIntoContext() {
   try {
     const pyCode = `
 import json as _json
+from pandas.api.types import is_string_dtype as _pd_is_string_dtype
 
 def __collect_unique_values__():
     _total_rows = len(leads_contacts)
@@ -1089,23 +1113,20 @@ def __collect_unique_values__():
     _dynamic_max = min(80, max(10, int(_total_rows * 0.05)))
     
     _out = {}
-    
-    # Lista explícita de columnas a procesar
-    _target_cols = [
-        "Origen_Agrupado", 
-        "Fuente_Agrupada", 
-        "Ciudad_actual_corregido", 
-        "Ciudad_deinteres_corregido", 
-        "Curso_corregido"
-    ]
-    
-    for _col in _target_cols:
-        # Evitar errores si alguna columna no existe en el DataFrame
-        if _col not in leads_contacts.columns:
+    for _col in leads_contacts.columns:
+        _name = str(_col)
+        _low = _name.strip().lower()
+        
+        if ('correo' in _low) or ('email' in _low) or ('e-mail' in _low):
+            continue
+        if ('nombre' in _low) or ('apellido' in _low):
             continue
             
         _ser = leads_contacts[_col]
-        
+        _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)
+        if not _is_text:
+            continue
+            
         _vals = _ser.dropna().astype(str).str.strip()
         _vals = _vals[_vals != '']
         _uniques = sorted(_vals.unique().tolist())
@@ -1115,9 +1136,9 @@ def __collect_unique_values__():
             
         # Usamos el límite dinámico en lugar de un número fijo
         if len(_uniques) > _dynamic_max:
-            _out[_col] = {'alta_cardinalidad': True, 'n': len(_uniques)}
+            _out[_name] = {'alta_cardinalidad': True, 'n': len(_uniques)}
         else:
-            _out[_col] = {'alta_cardinalidad': False, 'valores': _uniques}
+            _out[_name] = {'alta_cardinalidad': False, 'valores': _uniques}
             
     return _json.dumps(_out, ensure_ascii=False)
 
@@ -1148,6 +1169,7 @@ Reglas de filtrado por estos valores:
 1. Filtra SIEMPRE usando uno de los valores literales de la lista de la columna correspondiente. No uses cadenas que no aparezcan aquí.
 2. El texto del usuario puede venir sin tildes, en otra capitalización o con pequeñas variaciones (p. ej. "alcala de henares" o "ALCALA DE HENARES"). Identifica a qué valor real corresponde ("Alcalá de Henares") y filtra por ESE valor exacto. Si dudas entre varios, elige el más parecido ignorando tildes y mayúsculas/minúsculas.
 3. Si el usuario menciona un valor que no se corresponde con ninguno de la lista de esa columna, asigna a \`resultado\` un string corto explicando que ese valor no existe en los datos y, si procede, sugiere los valores disponibles más parecidos.
+4. Para columnas marcadas como de ALTA CARDINALIDAD no se lista el detalle: trátalas con \`.str.contains(..., case=False, na=False)\` en lugar de igualdad exacta.
 `;
   const columnLines = cols.map(function(name) {
     var info = colsInfo[name];
@@ -1286,6 +1308,8 @@ for k in list(globals().keys()):
   
   try {
     await pyodide.runPythonAsync(pyCode);
+    loadedCsvs.clear();
+    loadedCsvs.add(PRIMARY_CSV);
   } catch (e) {
     console.warn("Error limpiando el entorno de Pyodide:", e);
   }
@@ -1295,6 +1319,8 @@ async function startNewChat() {
   if (busy) return;
   clearLocalSession();
   await clearPyodideEnv();
+  await loadCsv(PRIMARY_CSV);
+  await loadSecondaryCsvs();
   pendingClarify = null;
   var box = document.getElementById("messages");
   box.innerHTML = `
@@ -1420,27 +1446,17 @@ function orchestratorInstructions() {
   return base + ORCHESTRATOR_SUFFIX;
 }
 
-
 async function dispatchToolCalls(userText, toolCalls) {
-  var hasPython = false;
-  var pythonInstr = null;
   var modelCall = null;
+  var pythonCalls = [];
   for (var j = 0; j < toolCalls.length; j++) {
     var tc = toolCalls[j];
-    if (tc.name === "ejecutar_analisis_python") {
-      if (!hasPython) {
-        hasPython = true;
-        pythonInstr = (tc.args && tc.args.instruccion_enriquecida) || userText;
-      }
-    } else if (tc.name === "explicar_modelo_datos" && !modelCall) {
-      modelCall = tc;
-    }
+    if (tc.name === "ejecutar_analisis_python") pythonCalls.push(tc);
+    else if (tc.name === "explicar_modelo_datos" && !modelCall) modelCall = tc;
   }
 
-  if (hasPython) {
-    lastUserQuery = userText;
-    await answerDataQuery(pythonInstr, []);
-    setStatus("listo", "ok");
+  if (pythonCalls.length > 0) {
+    await runBatchFromToolCalls(userText, pythonCalls);
     return;
   }
 
@@ -1454,12 +1470,43 @@ async function dispatchToolCalls(userText, toolCalls) {
   await answerDataQuery(userText, []);
 }
 
+async function runBatchFromToolCalls(userText, pythonCalls) {
+  function instrOf(tc) {
+    return (tc.args && tc.args.instruccion_enriquecida) || userText;
+  }
+
+  if (pythonCalls.length === 1) {
+    lastUserQuery = userText;
+    await answerDataQuery(instrOf(pythonCalls[0]), []);
+    setStatus("listo", "ok");
+    return;
+  }
+
+  var subRequests = pythonCalls.map(instrOf);
+  appendPlanNotice(subRequests);
+
+  for (var i = 0; i < subRequests.length; i++) {
+    appendBatchStepHeader(i + 1, subRequests.length, subRequests[i]);
+    setStatus("resolviendo petición " + (i + 1) + " de " + subRequests.length + "...", "busy");
+    try {
+      await answerDataQuery(subRequests[i], [], { skipClarify: true });
+    } catch (e) {
+      appendError("No se pudo resolver la petición " + (i + 1) + ": " + (e.message || String(e)));
+    }
+  }
+
+  lastUserQuery = userText;
+  setStatus("listo", "ok");
+}
+
 var ORCHESTRATOR_SUFFIX =
     "\n\nINSTRUCCIONES DE ORQUESTACIÓN (Tool Calling):" +
     "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre." +
     "\n- Solo tienes DOS herramientas: explicar_modelo_datos y ejecutar_analisis_python." +
     "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos." +
-    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python.";
+    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python." +
+    "\n- Si el usuario pide varias cosas independientes (distintas métricas o salidas), invoca ejecutar_analisis_python varias veces en paralelo, una por petición. Una comparación de la misma métrica entre categorías es UNA sola llamada.";
+
 // ==========================================================================
 //  4. Rama: pregunta sobre el modelo de datos
 // ==========================================================================
@@ -1696,6 +1743,8 @@ async function answerDataQuery(userText, answeredSlots, opts) {
     if (needsClarify) return;
   }
 
+  await ensureTablesFromContext(wrapSubgraphContext(subgraph));
+
   var generalPrompt = prompts.general + wrapSubgraphContext(subgraph);
 
   var tid = appendTyping("generando código...");
@@ -1831,6 +1880,37 @@ function friendlyError(execError, code, firstError) {
   };
 }
 
+function appendPlanNotice(subRequests) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "msg assistant";
+  var items = subRequests.map(function (s, i) {
+    return '<li>' + esc(s) + '</li>';
+  }).join("");
+  d.innerHTML = '<div class="msg-avatar">A</div>'
+    + '<div class="msg-body">'
+    + '<div class="msg-role">Asistente<span class="route-badge datos">plan</span></div>'
+    + '<div class="msg-text"><div class="plan-box">'
+    + '<div class="plan-box-title">He detectado ' + subRequests.length
+    + ' peticiones. Las resuelvo una a una:</div>'
+    + '<ol class="plan-box-list">' + items + '</ol>'
+    + '</div></div>'
+    + '</div>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+function appendBatchStepHeader(step, total, text) {
+  var box = document.getElementById("messages");
+  var d = document.createElement("div");
+  d.className = "batch-step-header";
+  d.innerHTML = '<span class="batch-step-num">' + step + '/' + total + '</span>'
+    + '<span class="batch-step-text">' + esc(text) + '</span>';
+  box.appendChild(d);
+  scrollToBottom();
+}
+
+// ----- Explicación del código (perfiles no técnicos) -----
 function conclusionsEnabled() {
   var t = document.getElementById("conclusions-toggle");
   return !!(t && t.checked);
