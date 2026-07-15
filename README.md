@@ -138,11 +138,16 @@ cd ..\data
 python convertir_residencias_a_codigo.py
 ```
 
-El script informa por consola de cuántos valores no encontró en el maestro.
+El script informa por consola de cuántos valores no encontró en el maestro. En el caso de que se haya hecho previamente deberían salir todos los códigos de residencia (47 en residencia actual corregido, 49 en residencia interes corregido, 44 en residencia escogida)
 
 Antes de ejecutarlo, **cierra el CSV en Excel** y pausa la sincronización de OneDrive, o fallará con
 `PermissionError`. El script deja una copia de seguridad en `Leads_Contacts.csv.bak`.
 
+Para recuperar el anterior CSV debe ejecutarse:
+
+```powershell
+Copy-Item Leads_Contacts.csv.bak Leads_Contacts.csv -Force
+```
 
 ### 1.7. Arrancar el backend GraphRAG (terminal 1, puerto 8000)
 
