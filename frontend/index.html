@@ -205,6 +205,32 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
   font-size: 12px; color: #cbd5e1; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
 }
 
+/* ---- Conclusion payload inspector ---- */
+.concl-toggle {
+  margin-top: 8px; margin-left: 4px; font-size: 12px; color: var(--insight); cursor: pointer;
+  user-select: none; display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 4px; transition: background 0.12s, color 0.12s;
+}
+.concl-toggle:hover { background: var(--insight-lt); color: var(--insight-dk); }
+.concl-toggle .arrow { transition: transform 0.15s; display: inline-block; }
+.concl-toggle.expanded .arrow { transform: rotate(90deg); }
+.concl-block {
+  display: none; margin-top: 8px; background: #0f1729;
+  border: 1px solid #1e293b; border-radius: var(--radius-sm);
+  padding: 12px 14px; overflow-x: auto; max-height: 460px; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #334155 transparent;
+}
+.concl-block.expanded { display: block; }
+.concl-block pre {
+  margin: 0; font-family: "Menlo","Monaco","Courier New",monospace;
+  font-size: 12px; color: #cbd5e1; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+}
+.concl-block .concl-sep {
+  color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid #1e293b; font-weight: 700;
+}
+.concl-block .concl-sep:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+
 /* ---- Errors ---- */
 .error-box {
   background: var(--error-bg); border: 1px solid var(--error-bd);
@@ -2007,8 +2033,14 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
   scrollToBottom();
 
   setStatus("generando conclusión...", "busy");
+  var dbgInfo = null;
   try {
     var built = buildConclusionPayload(userQuery, execResult);
+    var dbgInfo = {
+      systemPrompt: prompts.conclusiones,
+      payload: built.payload,
+      model: MODELS.conclusiones
+    };
     
     var reply = await callModel(
       [{ role: "user", content: built.payload }],
@@ -2018,35 +2050,41 @@ async function appendConclusionTo(resultEl, userQuery, execResult) {
     
     var text = (reply || "").trim();
     if (!text) {
-      replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.");
+      replaceConclusionPlaceholder(loadingEl, null, "El modelo no devolvió texto para la conclusión.", dbgInfo);
     } else {
       var deAnon = deanonymizeText(text, built.aliasMap);
       attachConclusionToLastTurn(deAnon);
-      replaceConclusionPlaceholder(loadingEl, deAnon, null);
+      replaceConclusionPlaceholder(loadingEl, deAnon, null, dbgInfo);
     }
     setStatus("listo", "ok");
   } catch (e) {
-    replaceConclusionPlaceholder(loadingEl, null, `No se pudo generar la conclusión: ${e.message || String(e)}`);
+    replaceConclusionPlaceholder(loadingEl, null, `No se pudo generar la conclusión: ${e.message || String(e)}`, dbgInfo);
     setStatus("error generando conclusión", "error");
   }
 }
 
-function replaceConclusionPlaceholder(loadingEl, text, errorMsg) {
+function replaceConclusionPlaceholder(loadingEl, text, errorMsg, dbg) {
   if (!loadingEl || !loadingEl.parentNode) return;
   var newEl = document.createElement("div");
-  
+
+  var dbgHtml = dbg
+    ? renderConclusionToggle(dbg.systemPrompt, dbg.payload, dbg.model)
+    : "";
+
   if (text) {
     newEl.className = "conclusion-block";
     newEl.innerHTML = `
       <div class="conclusion-label">conclusión</div>
       ${renderRich(text)}
+      ${dbgHtml}
     `;
   } else {
     newEl.className = "conclusion-error";
-    newEl.textContent = errorMsg || "No se pudo generar la conclusión.";
+    newEl.innerHTML = `<div>${esc(errorMsg || "No se pudo generar la conclusión.")}</div>${dbgHtml}`;
   }
-  
+
   loadingEl.parentNode.replaceChild(newEl, loadingEl);
+  attachConclusionToggle(newEl);
   scrollToBottom();
 }
 
@@ -3052,6 +3090,31 @@ function attachPromptToggle(container) {
     if (promptBlock) {
       promptBlock.classList.toggle("expanded");
     }
+  });
+}
+
+function renderConclusionToggle(systemPrompt, userPayload, modelName) {
+  return `
+    <span class="concl-toggle"><span class="arrow">▶</span> ver todo lo enviado al agente de conclusiones</span>
+    <div class="concl-block">
+      <div class="concl-sep">modelo</div>
+      <pre>${esc(modelName || "")}</pre>
+      <div class="concl-sep">system prompt (context_conclusiones.txt)</div>
+      <pre>${esc(systemPrompt || "")}</pre>
+      <div class="concl-sep">user message (payload con datos)</div>
+      <pre>${esc(userPayload || "")}</pre>
+    </div>
+  `;
+}
+
+function attachConclusionToggle(container) {
+  const toggle = container.querySelector(".concl-toggle");
+  if (!toggle) return;
+  toggle.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    btn.classList.toggle("expanded");
+    const block = btn.nextElementSibling;
+    if (block) block.classList.toggle("expanded");
   });
 }
 
