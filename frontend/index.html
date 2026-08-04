@@ -614,17 +614,17 @@ var MODELS = {
 };
 
 var CSV_TABLES = {
-  "fact_ventas": { path: "../data/FACT_Ventas.csv", sep: ";", primary: true },
-  "fact_precios": { path: "../data/FACT_Precios.csv", sep: ";" },
-  "fact_costes_tienda": { path: "../data/FACT_Costes_Tienda.csv", sep: ";" },
-  "dim_canal": { path: "../data/DIM_Canal.csv", sep: ";" },
-  "dim_cliente": { path: "../data/DIM_Cliente.csv", sep: ";" },
-  "dim_producto": { path: "../data/DIM_Producto.csv", sep: ";" },
-  "dim_promocion": { path: "../data/DIM_Promocion.csv", sep: ";" },
-  "dim_tienda": { path: "../data/DIM_Tienda.csv", sep: ";" }
+  "FACT_Ventas": { path: "/data/FACT_Ventas.csv", sep: ";", primary: true },
+  "FACT_Precios": { path: "/data/FACT_Precios.csv", sep: ";" },
+  "FACT_Costes_Tienda": { path: "/data/FACT_Costes_Tienda.csv", sep: ";" },
+  "DIM_Canal": { path: "/data/DIM_Canal.csv", sep: ";" },
+  "DIM_Cliente": { path: "/data/DIM_Cliente.csv", sep: ";" },
+  "DIM_Producto": { path: "/data/DIM_Producto.csv", sep: ";" },
+  "DIM_Promocion": { path: "/data/DIM_Promocion.csv", sep: ";" },
+  "DIM_Tienda": { path: "/data/DIM_Tienda.csv", sep: ";" }
 };
-var PRIMARY_CSV = "fact_ventas";
-var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
+var PRIMARY_CSV = "FACT_Ventas";
+var PRIMARY_DATE_COLUMNS = [];
 var CONCLUSION_MAX_ROWS = 300;
 
 
@@ -682,7 +682,7 @@ var TOOLS = [
   }
 ];
 
-const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: fact_ventas is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>FACT_Ventas.csv</code> está en la misma carpeta que <code>index.html</code>.";
+const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: FACT_Ventas is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>FACT_Ventas.csv</code> está en la misma carpeta que <code>index.html</code>.";
 const ERR_MSG_PROMPTS = "⚠️ <strong>Faltan archivos de contexto:</strong> {archivos}.<br>Asegúrate de que están en la misma carpeta que <code>index.html</code>.";
 
 // ==========================================================================
@@ -1137,13 +1137,13 @@ import json as _json
 from pandas.api.types import is_string_dtype as _pd_is_string_dtype
 
 def __collect_unique_values__():
-    _total_rows = len(fact_ventas)
+    _total_rows = len(FACT_Ventas)
     
     # CÁLCULO DINÁMICO: 5% de las filas, con un mínimo de 10 y un máximo de seguridad de 80.
     _dynamic_max = min(80, max(10, int(_total_rows * 0.05)))
     
     _out = {}
-    for _col in fact_ventas.columns:
+    for _col in FACT_Ventas.columns:
         _name = str(_col)
         _low = _name.strip().lower()
         
@@ -1152,7 +1152,7 @@ def __collect_unique_values__():
         if ('nombre' in _low) or ('apellido' in _low):
             continue
             
-        _ser = fact_ventas[_col]
+        _ser = FACT_Ventas[_col]
         _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)
         if not _is_text:
             continue
@@ -1193,7 +1193,7 @@ function buildColumnValuesSection(colsInfo) {
   const header = `
 # VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)
 
-Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`fact_ventas\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
+Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`FACT_Ventas\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
 
 Reglas de filtrado por estos valores:
 1. Filtra SIEMPRE usando uno de los valores literales de la lista de la columna correspondiente. No uses cadenas que no aparezcan aquí.
@@ -1330,7 +1330,7 @@ async function clearPyodideEnv() {
   if (!pyodide) return;
   
   var pyCode = `
-_keep = {'pd', 'np', 'fact_ventas', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
+_keep = {'pd', 'np', 'FACT_Ventas', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
 for k in list(globals().keys()):
     if k not in _keep and not k.startswith('_'):
         del globals()[k]
