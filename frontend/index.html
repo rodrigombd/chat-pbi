@@ -539,11 +539,11 @@ input[type="password"]:focus { border-color: var(--accent-dk); }
 
   <div id="quick-questions">
     <button class="quick-btn" onclick="quickAsk('¿Qué tablas hay en el modelo?')">¿Qué tablas hay?</button>
-    <button class="quick-btn" onclick="quickAsk('¿Cómo se calcula el CR?')">¿Cómo se calcula el CR?</button>
-    <button class="quick-btn" onclick="quickAsk('¿Cuántas solicitudes de leads hay para el curso 2025/2026?')"> Solicitudes de leads 2025/2026</button>
-    <button class="quick-btn" onclick="quickAsk('Gráfico de evolución mensual de leads para curso 2024/2025')">Evolución de solicitudes para 2024/2025</button>
-    <button class="quick-btn" onclick="quickAsk('Compara la conversión entre Madrid y Valencia')">Comparar conversión Madrid vs Valencia</button>
-    <button class="quick-btn" onclick="quickAsk('Mapa de calor de leads por ciudad de interés en España')">Mapa de calor de leads por ciudad</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cómo se calcula el margen de contribución?')">¿Cómo se calcula el margen?</button>
+    <button class="quick-btn" onclick="quickAsk('¿Cuáles son las ventas netas totales de 2024?')">Ventas netas 2024</button>
+    <button class="quick-btn" onclick="quickAsk('Gráfico de evolución mensual de las ventas netas en 2024')">Evolución mensual de ventas</button>
+    <button class="quick-btn" onclick="quickAsk('Compara las ventas netas entre el canal Web y Marketplace')">Comparar ventas Web vs Marketplace</button>
+    <button class="quick-btn" onclick="quickAsk('Ranking de tiendas por resultado (margen menos costes)')">Ranking de tiendas por resultado</button>
   </div>
 
   <div id="conclusions-bar">
@@ -614,12 +614,16 @@ var MODELS = {
 };
 
 var CSV_TABLES = {
-  "leads_contacts": { path: "../data/Leads_Contacts.csv", sep: ";", primary: true },
-  "economics": { path: "../data/economics.csv", sep: ";" },
-  "sizing": { path: "../data/sizing.csv", sep: ";" },
-  "maestro_residencias": { path: "../data/maestro_residencias.csv", sep: "," }
+  "fact_ventas": { path: "../data/FACT_Ventas.csv", sep: ";", primary: true },
+  "fact_precios": { path: "../data/FACT_Precios.csv", sep: ";" },
+  "fact_costes_tienda": { path: "../data/FACT_Costes_Tienda.csv", sep: ";" },
+  "dim_canal": { path: "../data/DIM_Canal.csv", sep: ";" },
+  "dim_cliente": { path: "../data/DIM_Cliente.csv", sep: ";" },
+  "dim_producto": { path: "../data/DIM_Producto.csv", sep: ";" },
+  "dim_promocion": { path: "../data/DIM_Promocion.csv", sep: ";" },
+  "dim_tienda": { path: "../data/DIM_Tienda.csv", sep: ";" }
 };
-var PRIMARY_CSV = "leads_contacts";
+var PRIMARY_CSV = "fact_ventas";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 var CONCLUSION_MAX_ROWS = 300;
 
@@ -669,7 +673,7 @@ var TOOLS = [
       properties: {
         instruccion_enriquecida: {
           type: "string",
-          description: "Instrucción en lenguaje natural, clara y autocontenida, que describe exactamente el análisis a realizar (métrica, curso/periodo, dimensión de agrupación, filtros y tipo de salida deseado). A partir de ella se generará el script de Pandas."
+          description: "Instrucción en lenguaje natural, clara y autocontenida, que describe exactamente el análisis a realizar (métrica, periodo, dimensión de agrupación, filtros y tipo de salida deseado). A partir de ella se generará el script de Pandas."
         }
       },
       required: ["instruccion_enriquecida"],
@@ -678,7 +682,7 @@ var TOOLS = [
   }
 ];
 
-const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
+const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: fact_ventas is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>FACT_Ventas.csv</code> está en la misma carpeta que <code>index.html</code>.";
 const ERR_MSG_PROMPTS = "⚠️ <strong>Faltan archivos de contexto:</strong> {archivos}.<br>Asegúrate de que están en la misma carpeta que <code>index.html</code>.";
 
 // ==========================================================================
@@ -1133,13 +1137,13 @@ import json as _json
 from pandas.api.types import is_string_dtype as _pd_is_string_dtype
 
 def __collect_unique_values__():
-    _total_rows = len(leads_contacts)
+    _total_rows = len(fact_ventas)
     
     # CÁLCULO DINÁMICO: 5% de las filas, con un mínimo de 10 y un máximo de seguridad de 80.
     _dynamic_max = min(80, max(10, int(_total_rows * 0.05)))
     
     _out = {}
-    for _col in leads_contacts.columns:
+    for _col in fact_ventas.columns:
         _name = str(_col)
         _low = _name.strip().lower()
         
@@ -1148,7 +1152,7 @@ def __collect_unique_values__():
         if ('nombre' in _low) or ('apellido' in _low):
             continue
             
-        _ser = leads_contacts[_col]
+        _ser = fact_ventas[_col]
         _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)
         if not _is_text:
             continue
@@ -1189,7 +1193,7 @@ function buildColumnValuesSection(colsInfo) {
   const header = `
 # VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)
 
-Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`leads_contacts\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
+Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`fact_ventas\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
 
 Reglas de filtrado por estos valores:
 1. Filtra SIEMPRE usando uno de los valores literales de la lista de la columna correspondiente. No uses cadenas que no aparezcan aquí.
@@ -1326,7 +1330,7 @@ async function clearPyodideEnv() {
   if (!pyodide) return;
   
   var pyCode = `
-_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
+_keep = {'pd', 'np', 'fact_ventas', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
 for k in list(globals().keys()):
     if k not in _keep and not k.startswith('_'):
         del globals()[k]
@@ -1467,28 +1471,22 @@ async function orchestrate(userText) {
 
 function orchestratorInstructions() {
   var base = prompts.router ||
-    "Eres el orquestador de un asistente analítico sobre datos de CRM de residencias de estudiantes. " +
+    "Eres el orquestador de un asistente analítico sobre datos de ventas retail (tiendas, productos, clientes, canales y promociones). " +
     "Decides qué herramienta invocar según el mensaje del usuario y el contexto de la sesión.";
   return base + ORCHESTRATOR_SUFFIX;
 }
 
 async function dispatchToolCalls(userText, toolCalls) {
   var modelCall = null;
-  var firstPythonCall = null;
+  var pythonCalls = [];
   for (var j = 0; j < toolCalls.length; j++) {
     var tc = toolCalls[j];
-    if (tc.name === "ejecutar_analisis_python") {
-      if (!firstPythonCall) firstPythonCall = tc;
-    } else if (tc.name === "explicar_modelo_datos" && !modelCall) {
-      modelCall = tc;
-    }
+    if (tc.name === "ejecutar_analisis_python") pythonCalls.push(tc);
+    else if (tc.name === "explicar_modelo_datos" && !modelCall) modelCall = tc;
   }
 
-  if (firstPythonCall) {
-    var instruccion = (firstPythonCall.args && firstPythonCall.args.instruccion_enriquecida) || userText;
-    lastUserQuery = userText;
-    await answerDataQuery(instruccion, []);
-    setStatus("listo", "ok");
+  if (pythonCalls.length > 0) {
+    await runBatchFromToolCalls(userText, pythonCalls);
     return;
   }
 
@@ -1536,7 +1534,8 @@ var ORCHESTRATOR_SUFFIX =
     "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre." +
     "\n- Solo tienes DOS herramientas: explicar_modelo_datos y ejecutar_analisis_python." +
     "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos." +
-    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python.";
+    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python." +
+    "\n- Si el usuario pide varias cosas independientes (distintas métricas o salidas), invoca ejecutar_analisis_python varias veces en paralelo, una por petición. Una comparación de la misma métrica entre categorías es UNA sola llamada.";
 
 // ==========================================================================
 //  4. Rama: pregunta sobre el modelo de datos
@@ -1903,7 +1902,7 @@ Devuelve EXCLUSIVAMENTE un nuevo bloque \`\`\`python ... \`\`\` con el código c
 function friendlyError(execError, code, firstError) {
   return {
     kind: "error_friendly",
-    value: "No he podido obtener una respuesta esta vez. Prueba a reformular tu pregunta con más detalle (por ejemplo, indicando el curso, la métrica concreta o las categorías exactas que quieres comparar).",
+    value: "No he podido obtener una respuesta esta vez. Prueba a reformular tu pregunta con más detalle (por ejemplo, indicando el periodo, la métrica concreta o las categorías exactas que quieres comparar).",
     technical: execError.value || "",
     trace: execError.trace || "",
     firstError: firstError || null,
@@ -2109,7 +2108,7 @@ function buildConclusionPayload(userQuery, r) {
   var aliasMap = {};
   var serialized = serializeResultForLLM(r, aliasMap);
   
-  var payload = `PREGUNTA ORIGINAL DEL USUARIO:\n${userQuery}\n\nRESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto se han sustituido por alias genéricos tipo "Ciudad A", "Residencia B", etc.; los números son reales):\n${serialized}\n\nRedacta la conclusión refiriéndote a las categorías por su alias EXACTO (p. ej. "Ciudad A"). NO inventes nombres reales. Sigue las reglas del system prompt.`;
+  var payload = `PREGUNTA ORIGINAL DEL USUARIO:\n${userQuery}\n\nRESULTADO DE LA CONSULTA (datos pseudonimizados: las categorías de texto se han sustituido por alias genéricos tipo "Tienda A", "Producto B", etc.; los números son reales):\n${serialized}\n\nRedacta la conclusión refiriéndote a las categorías por su alias EXACTO (p. ej. "Tienda A"). NO inventes nombres reales. Sigue las reglas del system prompt.`;
   
   return { payload: payload, aliasMap: aliasMap };
 }
@@ -2128,7 +2127,7 @@ function serializeResultForLLM(r, aliasMap) {
     if (typeof num === "number" && num > 0 && num < 1) {
       hint = ` (es una fracción entre 0 y 1; probablemente una tasa/proporción: ${Math.round(num * 1000) / 10} %)`;
     } else if (typeof num === "number" && Number.isInteger(num)) {
-      hint = " (conteo entero de registros/solicitudes)";
+      hint = " (conteo entero de registros/líneas de venta)";
     }
     return `Valor numérico (real): ${num}${hint}\nNOTA: esta es la única cifra del resultado; contextualiza su magnitud respecto a la pregunta, sin inventar comparaciones que no estén en los datos.`;
   }
@@ -2369,15 +2368,24 @@ function aliasFor(realValue, colName, anonState, aliasMap) {
 
 function aliasPrefixForColumn(colName) {
   var s = String(colName).toLowerCase();
-  if (s.includes("ciudad")) return "Ciudad";
-  if (s.includes("residencia")) return "Residencia";
-  if (s.includes("curso")) return "Curso";
-  if (s.includes("origen")) return "Origen";
-  if (s.includes("fuente")) return "Fuente";
-  if (s.includes("campaña") || s.includes("campana")) return "Campaña";
-  if (s.includes("tipo")) return "Tipo";
-  if (s.includes("particular") || s.includes("grupo") || s.includes("segmento")) return "Segmento";
-  if (s.includes("mes")) return "Mes";
+  if (s.includes("city") || s.includes("ciudad")) return "Ciudad";
+  if (s.includes("province") || s.includes("provincia")) return "Provincia";
+  if (s.includes("region") || s.includes("región")) return "Región";
+  if (s.includes("store") || s.includes("tienda")) return "Tienda";
+  if (s.includes("product") || s.includes("producto")) return "Producto";
+  if (s.includes("category") || s.includes("categoria") || s.includes("categoría")) return "Categoría";
+  if (s.includes("subcategory") || s.includes("subcategoria")) return "Subcategoría";
+  if (s.includes("brand") || s.includes("marca")) return "Marca";
+  if (s.includes("channel") || s.includes("canal")) return "Canal";
+  if (s.includes("promotion") || s.includes("promocion") || s.includes("promoción")) return "Promoción";
+  if (s.includes("customer") || s.includes("cliente")) return "Cliente";
+  if (s.includes("segment") || s.includes("segmento")) return "Segmento";
+  if (s.includes("loyalty") || s.includes("tier")) return "Nivel";
+  if (s.includes("age") || s.includes("edad")) return "Edad";
+  if (s.includes("type") || s.includes("tipo")) return "Tipo";
+  if (s.includes("status") || s.includes("estado")) return "Estado";
+  if (s.includes("manager") || s.includes("gerente")) return "Gerente";
+  if (s.includes("month") || s.includes("mes")) return "Mes";
   if (s.includes("kpi") || s.includes("métrica") || s.includes("metrica")) return "Métrica";
   return "Categoría";
 }
