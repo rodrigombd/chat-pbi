@@ -1474,15 +1474,21 @@ function orchestratorInstructions() {
 
 async function dispatchToolCalls(userText, toolCalls) {
   var modelCall = null;
-  var pythonCalls = [];
+  var firstPythonCall = null;
   for (var j = 0; j < toolCalls.length; j++) {
     var tc = toolCalls[j];
-    if (tc.name === "ejecutar_analisis_python") pythonCalls.push(tc);
-    else if (tc.name === "explicar_modelo_datos" && !modelCall) modelCall = tc;
+    if (tc.name === "ejecutar_analisis_python") {
+      if (!firstPythonCall) firstPythonCall = tc;
+    } else if (tc.name === "explicar_modelo_datos" && !modelCall) {
+      modelCall = tc;
+    }
   }
 
-  if (pythonCalls.length > 0) {
-    await runBatchFromToolCalls(userText, pythonCalls);
+  if (firstPythonCall) {
+    var instruccion = (firstPythonCall.args && firstPythonCall.args.instruccion_enriquecida) || userText;
+    lastUserQuery = userText;
+    await answerDataQuery(instruccion, []);
+    setStatus("listo", "ok");
     return;
   }
 
@@ -1530,8 +1536,7 @@ var ORCHESTRATOR_SUFFIX =
     "\n- Debes responder SIEMPRE invocando una o más herramientas, nunca con texto libre." +
     "\n- Solo tienes DOS herramientas: explicar_modelo_datos y ejecutar_analisis_python." +
     "\n- Preguntas teóricas sobre tablas, columnas o KPIs, y saludos → explicar_modelo_datos." +
-    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python." +
-    "\n- Si el usuario pide varias cosas independientes (distintas métricas o salidas), invoca ejecutar_analisis_python varias veces en paralelo, una por petición. Una comparación de la misma métrica entre categorías es UNA sola llamada.";
+    "\n- Cualquier petición que requiera un cálculo, agregación, ranking, comparación, serie temporal o gráfico sobre los datos → ejecutar_analisis_python. NO decidas aquí si la consulta es ambigua o le faltan datos: de eso se encarga un paso posterior. Ante la duda entre las dos, elige ejecutar_analisis_python.";
 
 // ==========================================================================
 //  4. Rama: pregunta sobre el modelo de datos
