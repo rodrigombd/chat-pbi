@@ -614,12 +614,12 @@ var MODELS = {
 };
 
 var CSV_TABLES = {
-  "leads_contacts": { path: "../data/Leads_Contacts.csv", sep: ";", primary: true },
+  "Leads_Contacts": { path: "../data/Leads_Contacts.csv", sep: ";", primary: true },
   "economics": { path: "../data/economics.csv", sep: ";" },
   "sizing": { path: "../data/sizing.csv", sep: ";" },
   "maestro_residencias": { path: "../data/maestro_residencias.csv", sep: "," }
 };
-var PRIMARY_CSV = "leads_contacts";
+var PRIMARY_CSV = "Leads_Contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 var CONCLUSION_MAX_ROWS = 300;
 
@@ -678,7 +678,7 @@ var TOOLS = [
   }
 ];
 
-const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: leads_contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
+const ERR_MSG_CSV = "⚠️ <strong>El CSV principal no se cargó.</strong> Las consultas fallarán con <code>NameError: Leads_Contacts is not defined</code>.<br><br>Abre el proyecto con un servidor HTTP local (no con <code>file://</code>). Desde la carpeta: <code>python -m http.server 8000</code> y luego ve a <code>http://localhost:8000</code>. Asegúrate además de que <code>Leads_Contacts.csv</code> está en la misma carpeta que <code>index.html</code>.";
 const ERR_MSG_PROMPTS = "⚠️ <strong>Faltan archivos de contexto:</strong> {archivos}.<br>Asegúrate de que están en la misma carpeta que <code>index.html</code>.";
 
 // ==========================================================================
@@ -1133,13 +1133,13 @@ import json as _json
 from pandas.api.types import is_string_dtype as _pd_is_string_dtype
 
 def __collect_unique_values__():
-    _total_rows = len(leads_contacts)
+    _total_rows = len(Leads_Contacts)
     
     # CÁLCULO DINÁMICO: 5% de las filas, con un mínimo de 10 y un máximo de seguridad de 80.
     _dynamic_max = min(80, max(10, int(_total_rows * 0.05)))
     
     _out = {}
-    for _col in leads_contacts.columns:
+    for _col in Leads_Contacts.columns:
         _name = str(_col)
         _low = _name.strip().lower()
         
@@ -1148,7 +1148,7 @@ def __collect_unique_values__():
         if ('nombre' in _low) or ('apellido' in _low):
             continue
             
-        _ser = leads_contacts[_col]
+        _ser = Leads_Contacts[_col]
         _is_text = (_ser.dtype == object) or _pd_is_string_dtype(_ser)
         if not _is_text:
             continue
@@ -1189,7 +1189,7 @@ function buildColumnValuesSection(colsInfo) {
   const header = `
 # VALORES REALES DE LAS COLUMNAS (lista cerrada para filtrar)
 
-Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`leads_contacts\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
+Estos son los valores EXACTOS que existen en cada columna categórica del DataFrame \`Leads_Contacts\`, tal y como están escritos en los datos (con sus tildes, mayúsculas y espacios). Cuando el usuario mencione una categoría para filtrar, DEBES traducir lo que escriba al valor exacto de esta lista antes de filtrar.
 
 Reglas de filtrado por estos valores:
 1. Filtra SIEMPRE usando uno de los valores literales de la lista de la columna correspondiente. No uses cadenas que no aparezcan aquí.
@@ -1326,7 +1326,7 @@ async function clearPyodideEnv() {
   if (!pyodide) return;
   
   var pyCode = `
-_keep = {'pd', 'np', 'leads_contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
+_keep = {'pd', 'np', 'Leads_Contacts', '__builtins__', '__parse_fecha_es__', '__parse_fechas_es__', '__reset_resultado__', '_default_json', '__serialize_resultado__', 'CIUDADES_ES_COORDS', '_COORDS_NORM', '_norm_ciudad', 'coords_ciudad'}
 for k in list(globals().keys()):
     if k not in _keep and not k.startswith('_'):
         del globals()[k]
