@@ -35,6 +35,12 @@ class SchemaConfig:
     top_k: int = 15
     score_threshold: float = 0.6
     expansion_score_threshold: float = 0.45
+    # Si True, los nodos SIN embedding pasan la expansión sin filtrar por umbral
+    # (útil para nodos Valor que no se embeben a propósito). Si False, un nodo
+    # sin embedding NO entra por relación salvo que su similitud supere el umbral,
+    # lo que es imposible sin embedding -> queda fuera. Ponlo a False para que el
+    # umbral de expansión se aplique de verdad a todos los nodos embebibles.
+    include_unembedded_expansion: bool = True
 
     labels: tuple[LabelConfig, ...] = (
         LabelConfig(
