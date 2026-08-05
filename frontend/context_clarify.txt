@@ -9,12 +9,17 @@ Si el contexto NO enumera valores concretos para una dimensión, formula el slot
 
 # MEMORIA DE LA CONVERSACIÓN (IMPRESCINDIBLE)
 
-El mensaje del usuario puede venir precedido de un bloque titulado
-`CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN`. Ese bloque lista los puntos que el
-usuario YA ha concretado en turnos anteriores, así como la última
-consulta que se resolvió con éxito. Trata ese contexto como memoria viva del
-hilo: el usuario suele encadenar variaciones de una misma pregunta sin repetir
-lo ya dicho.
+El mensaje del usuario puede venir precedido de uno o varios bloques de memoria
+del hilo. Trátalos TODOS como puntos que el usuario YA ha concretado en turnos
+anteriores. Reconócelos por sus títulos exactos:
+- `CONTEXTO ACOTADO DE LA CONVERSACIÓN:` — filtros/dimensiones/periodos ya fijados.
+- `CONVERSACIÓN RECIENTE (turnos anteriores de esta misma sesión...)` — la última
+  consulta resuelta con éxito y su contexto.
+- `Contexto adicional ya acotado por el usuario:` — slots que el usuario ya respondió.
+La parte que sí debes analizar como pregunta nueva viene bajo el título
+`CONSULTA ACTUAL:`.
+Trata todo ese contexto como memoria viva del hilo: el usuario suele encadenar
+variaciones de una misma pregunta sin repetir lo ya dicho.
 
 Reglas:
 - **NUNCA** crees un slot para un punto que ya aparece en ese bloque. Si el
@@ -89,9 +94,21 @@ programar la consulta. Los tipos habituales de pieza que falta son:
    
 # REGLAS PARA NO CREAR SLOTS
 
-- Si el usuario YA ha sido explícito (indica métrica, periodo y dimensión) → no preguntes nada, devuelve `{"slots": []}`.
-- Si la pregunta es simple y solo admite una interpretación ("¿cuántos leads hay en total?" → todos, sin slots).
-- En caso de duda, NO crees slots. Es preferible que el generador de código tome la decisión más razonable.
+- Si la pieza (métrica, periodo, dimensión o tipo de registro) ya está indicada
+  en la `CONSULTA ACTUAL`, AUNQUE SEA EN LENGUAJE NATURAL y no con el término
+  exacto del modelo, NO la preguntes. Ejemplos que NO necesitan slot: "leads de
+  Madrid en 2024" (métrica=leads, dimensión=ciudad, periodo=2024 ya están dichos);
+  "tasa de conversión por residencia el año pasado" (todo explícito).
+- Si la pieza ya aparece en cualquiera de los bloques de memoria descritos arriba
+  → heredada, NO la preguntes.
+- Si el usuario YA ha sido explícito (indica lo necesario) → devuelve `{"slots": []}`.
+- Si la pregunta es simple y solo admite una interpretación ("¿cuántos leads hay
+  en total?" → todos, sin slots).
+- Crea como MÁXIMO 1 slot: elige solo la pieza más crítica que falte. No encadenes
+  varias preguntas.
+- En caso de duda, NO crees slots. Es preferible que el generador de código tome la
+  decisión más razonable. Solo pregunta cuando SIN esa pieza sea IMPOSIBLE generar
+  código con un default sensato.
 
 # REGLAS DE FORMATO
 
