@@ -45,14 +45,11 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
             f">= {exp_threshold}"
         )
         if include_unembedded:
-            # Nodos sin embedding pasan sin filtrar (comportamiento heredado).
             where_clause = (
                 f"WHERE {alias}.{emb_prop} IS NULL\n"
                 f"   OR {sim_clause}"
             )
         else:
-            # El umbral de expansión se aplica a todos: un nodo sin embedding
-            # no puede superarlo, así que queda fuera.
             where_clause = f"WHERE {alias}.{emb_prop} IS NOT NULL\n   AND {sim_clause}"
         optional_matches.append(
             f"OPTIONAL MATCH (node){pattern}\n"

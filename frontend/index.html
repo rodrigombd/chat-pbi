@@ -3530,7 +3530,6 @@ function autoResize(el) {
 
 function quickAsk(t) { sendMessage(t); }
 
-// Enviar la API key con Enter en la pantalla de inicio.
 document.getElementById("api-key-input").addEventListener("keydown", function (e) {
   if (e.key === "Enter") initChat();
 });
