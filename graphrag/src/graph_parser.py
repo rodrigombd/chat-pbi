@@ -31,6 +31,7 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
     name_prop = label_cfg.name_property
     emb_prop = schema.embedding_property
     exp_threshold = schema.expansion_score_threshold
+    include_unembedded = getattr(schema, "include_unembedded_expansion", True)
     optional_matches: list[str] = []
     collect_clauses: list[str] = []
 
@@ -39,10 +40,23 @@ def build_retrieval_query(label_cfg: LabelConfig, schema: SchemaConfig) -> str:
         alias = f"n{idx}"
         arrow = _DIRECTION_LABEL.get(direction, "--")
         pattern = _direction_pattern(rel_type, direction, hops, alias)
+        sim_clause = (
+            f"vector.similarity.cosine({alias}.{emb_prop}, $query_vector) "
+            f">= {exp_threshold}"
+        )
+        if include_unembedded:
+            # Nodos sin embedding pasan sin filtrar (comportamiento heredado).
+            where_clause = (
+                f"WHERE {alias}.{emb_prop} IS NULL\n"
+                f"   OR {sim_clause}"
+            )
+        else:
+            # El umbral de expansión se aplica a todos: un nodo sin embedding
+            # no puede superarlo, así que queda fuera.
+            where_clause = f"WHERE {alias}.{emb_prop} IS NOT NULL\n   AND {sim_clause}"
         optional_matches.append(
             f"OPTIONAL MATCH (node){pattern}\n"
-            f"WHERE {alias}.{emb_prop} IS NULL\n"
-            f"   OR vector.similarity.cosine({alias}.{emb_prop}, $query_vector) >= {exp_threshold}"
+            f"{where_clause}"
         )
         props_cypher = _props_reducer(alias, emb_prop, name_prop)
         rel_score = (
