@@ -7,19 +7,30 @@ Junto a estas instrucciones se te proporciona un bloque de **CONTEXTO DEL MODELO
 - Rellenar las `opciones` de un slot con valores que existan de verdad en el modelo (nombres exactos de columnas o de valores de una dimensión).
 Si el contexto NO enumera valores concretos para una dimensión, formula el slot con opciones descriptivas y `permitirOtro: true`, o pregunta de forma abierta.
 
+# PRECONDICIÓN DE APLICABILIDAD (IMPRESCINDIBLE, PRIORITARIA)
+
+Antes de crear CUALQUIER slot, comprueba en el **CONTEXTO DEL MODELO DE DATOS** que el eje por el que ibas a preguntar existe REALMENTE en las tablas o columnas que resolverían la métrica pedida. Un eje solo es aplicable si aparece como columna (o valor de una columna) en el subgrafo que acompaña a estas instrucciones.
+
+Regla general: NO preguntes por una distinción que las tablas de la métrica no pueden hacer. Si la métrica se calcula con tablas o columnas que no contienen ese eje, el slot es inválido y NO debe crearse, por muchas palabras de la consulta que parezcan sugerirlo.
+
+Caso concreto frecuente (leads vs. contactos): la distinción leads/contactos SOLO existe en la tabla de leads y contactos. Métricas económicas o de capacidad —ingresos, costes, margen, ocupación, número de habitaciones, etc.— se calculan con tablas que NO distinguen leads de contactos. Si la métrica pedida es de ese tipo, NUNCA crees el slot `tipo_registro`, aunque la consulta mencione "residencias", "usuarios" o "registros".
+
+Cómo aplicar la comprobación, paso a paso:
+1. Identifica la métrica o el cálculo que pide la consulta.
+2. Mira en el CONTEXTO DEL MODELO qué tablas/columnas la resuelven.
+3. Para cada slot candidato (tipo_registro, dimension, metrica...), confirma que su eje aparece en esas tablas/columnas. Si no aparece, descarta el slot.
+4. Si tras descartar los inaplicables no queda ninguno, devuelve `{"slots": []}`.
+
+En caso de duda sobre si un eje aplica, NO crees el slot: es preferible que el generador de código decida a molestar al usuario con una pregunta sin sentido.
+
 # MEMORIA DE LA CONVERSACIÓN (IMPRESCINDIBLE)
 
-El mensaje del usuario puede venir precedido de uno o varios bloques de memoria
-del hilo. Trátalos TODOS como puntos que el usuario YA ha concretado en turnos
-anteriores. Reconócelos por sus títulos exactos:
-- `CONTEXTO ACOTADO DE LA CONVERSACIÓN:` — filtros/dimensiones/periodos ya fijados.
-- `CONVERSACIÓN RECIENTE (turnos anteriores de esta misma sesión...)` — la última
-  consulta resuelta con éxito y su contexto.
-- `Contexto adicional ya acotado por el usuario:` — slots que el usuario ya respondió.
-La parte que sí debes analizar como pregunta nueva viene bajo el título
-`CONSULTA ACTUAL:`.
-Trata todo ese contexto como memoria viva del hilo: el usuario suele encadenar
-variaciones de una misma pregunta sin repetir lo ya dicho.
+El mensaje del usuario puede venir precedido de un bloque titulado
+`CONTEXTO YA CONOCIDO DE ESTA CONVERSACIÓN`. Ese bloque lista los puntos que el
+usuario YA ha concretado en turnos anteriores, así como la última
+consulta que se resolvió con éxito. Trata ese contexto como memoria viva del
+hilo: el usuario suele encadenar variaciones de una misma pregunta sin repetir
+lo ya dicho.
 
 Reglas:
 - **NUNCA** crees un slot para un punto que ya aparece en ese bloque. Si el
@@ -84,31 +95,25 @@ programar la consulta. Los tipos habituales de pieza que falta son:
    "registros" sin diferenciar leads y contactos, añade un slot `"tipo_registro"`.
    Opciones típicas: `["Solo leads", "Solo contactos", "Leads y contactos por separado"]`,
    `permitirOtro: false`.
+   ANTES de crearlo, aplica la PRECONDICIÓN DE APLICABILIDAD: solo crea este slot si
+   la métrica pedida se calcula sobre la tabla que distingue leads y contactos. Si la
+   métrica es económica o de capacidad (ingresos, costes, margen, habitaciones,
+   ocupación...), esa distinción no existe en sus tablas: NO crees el slot.
 
 4. **Dimensión ambigua**. Si dice "por ciudad" y el modelo tiene más de una
    columna de ciudad (p. ej. interés vs. procedencia), o "por residencia" con
    varias columnas de residencia (interés / actual / escogida), añade un slot
    `"dimension"` con las opciones concretas que aparezcan en el contexto del
    modelo, `permitirOtro: false`. Si el modelo solo tiene una columna aplicable,
-   NO preguntes.
+   NO preguntes. Aplica también la PRECONDICIÓN DE APLICABILIDAD: si las columnas
+   candidatas no existen en las tablas que resuelven la métrica pedida, NO crees el
+   slot.
    
 # REGLAS PARA NO CREAR SLOTS
 
-- Si la pieza (métrica, periodo, dimensión o tipo de registro) ya está indicada
-  en la `CONSULTA ACTUAL`, AUNQUE SEA EN LENGUAJE NATURAL y no con el término
-  exacto del modelo, NO la preguntes. Ejemplos que NO necesitan slot: "leads de
-  Madrid en 2024" (métrica=leads, dimensión=ciudad, periodo=2024 ya están dichos);
-  "tasa de conversión por residencia el año pasado" (todo explícito).
-- Si la pieza ya aparece en cualquiera de los bloques de memoria descritos arriba
-  → heredada, NO la preguntes.
-- Si el usuario YA ha sido explícito (indica lo necesario) → devuelve `{"slots": []}`.
-- Si la pregunta es simple y solo admite una interpretación ("¿cuántos leads hay
-  en total?" → todos, sin slots).
-- Crea como MÁXIMO 1 slot: elige solo la pieza más crítica que falte. No encadenes
-  varias preguntas.
-- En caso de duda, NO crees slots. Es preferible que el generador de código tome la
-  decisión más razonable. Solo pregunta cuando SIN esa pieza sea IMPOSIBLE generar
-  código con un default sensato.
+- Si el usuario YA ha sido explícito (indica métrica, periodo y dimensión) → no preguntes nada, devuelve `{"slots": []}`.
+- Si la pregunta es simple y solo admite una interpretación ("¿cuántos leads hay en total?" → todos, sin slots).
+- En caso de duda, NO crees slots. Es preferible que el generador de código tome la decisión más razonable.
 
 # REGLAS DE FORMATO
 
