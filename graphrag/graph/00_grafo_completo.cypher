@@ -29,7 +29,7 @@ MERGE (f:Tabla {nombre: "Leads_Contacts"})
 MATCH (f:Tabla {nombre: "Leads_Contacts"})
 UNWIND [
   {nombre: "Correo electrónico",                  desc: "Identificador del usuario."},
-  {nombre: "Tipo de registro",                    desc: "Indica si el usuario es 'Leads' o 'Contacts'."},
+  {nombre: "Tipo de registro",                    desc: "Etapa del CRM del registro. Toma exactamente dos valores: 'Leads' o 'Contacts', que son etapas distintas y NO intercambiables. Para responder cualquier pregunta sobre 'leads' hay que filtrar Tipo de registro == 'Leads'; para 'contacts', Tipo de registro == 'Contacts'. Si la pregunta menciona explícitamente leads o contacts, este filtro es OBLIGATORIO; omitirlo devuelve todos los registros y es un error."},
   {nombre: "Particular o Grupo",                  desc: "Indica si el contact es 'Particular' o 'Grupo'."},
   {nombre: "Curso_corregido",                     desc: "Curso académico para el que se solicita el servicio."},
   {nombre: "Fecha creación",                      desc: "Fecha creación del registro, AAAA-MM-DDTHH:MM:SS"},
@@ -57,6 +57,16 @@ MERGE (c)-[:TIENE_VALOR]->(v);
 MATCH (c:Columna {tabla: "Leads_Contacts", nombre: "Origen_Agrupado"})
 UNWIND ["Comisionistas", "Eventos", "Ferias", "Otros", "Paid Media", "Resa Housing", "SEO & Directo"] AS valor
 MERGE (v:Valor {columna: "Origen_Agrupado", tabla: "Leads_Contacts", valor: valor})
+MERGE (c)-[:TIENE_VALOR]->(v);
+
+MATCH (c:Columna {tabla: "Leads_Contacts", nombre: "Tipo de registro"})
+UNWIND ["Leads", "Contacts"] AS valor
+MERGE (v:Valor {columna: "Tipo de registro", tabla: "Leads_Contacts", valor: valor})
+MERGE (c)-[:TIENE_VALOR]->(v);
+
+MATCH (c:Columna {tabla: "Leads_Contacts", nombre: "Particular o Grupo"})
+UNWIND ["Particular", "Grupo"] AS valor
+MERGE (v:Valor {columna: "Particular o Grupo", tabla: "Leads_Contacts", valor: valor})
 MERGE (c)-[:TIENE_VALOR]->(v);
 
 
