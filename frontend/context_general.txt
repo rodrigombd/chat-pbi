@@ -53,7 +53,7 @@ Pyodide en navegador. Disponibles: `pandas` (pd), `numpy` (np). NO hay red, NO h
 El nombre de la variable global de cada tabla y los nombres EXACTOS de sus columnas te los da el CONTEXTO DEL MODELO proporcionado. No asumas un nombre de tabla ni de columna que no aparezca ahí.
 
 En el entorno puede haber varios DataFrames de hechos y de dimensión, cada uno cargado como variable global con el mismo nombre que su tabla en el modelo:
-- `leads_contacts`: tabla de hechos del CRM.
+- `Leads_Contacts`: tabla de hechos del CRM.
 - `economics`: tabla de hechos económica.
 - `sizing`: tabla de hechos de dimensionamiento.
 - `maestro_residencias`: tabla maestra/dimensión.
@@ -62,7 +62,7 @@ Usa SOLO los DataFrames que aparezcan en el CONTEXTO DEL MODELO de esta consulta
 
 # COLUMNAS vs MEDIDAS (CONCEPTO CLAVE DEL ENTORNO)
 
-En el entorno de ejecución hay varios DataFrames cargados como variables globales (ver ENTORNO DE EJECUCIÓN): la tabla de hechos del CRM `leads_contacts` y, cuando el CONTEXTO DEL MODELO lo indique, también `economics`, `sizing` y `maestro_residencias`. Distingue dos tipos de campo del modelo:
+En el entorno de ejecución hay varios DataFrames cargados como variables globales (ver ENTORNO DE EJECUCIÓN): la tabla de hechos del CRM `Leads_Contacts` y, cuando el CONTEXTO DEL MODELO lo indique, también `economics`, `sizing` y `maestro_residencias`. Distingue dos tipos de campo del modelo:
 
 - **COLUMNAS**: son campos que EXISTEN físicamente como columnas del DataFrame. Puedes acceder a ellas directamente con `nombre_tabla["<nombre exacto de la columna>"]`.
 - **MEDIDAS**: son KPIs calculados. **NO existen como columna del DataFrame.** No intentes acceder a `nombre_tabla["nombre_medida"]`: dará KeyError. Una medida hay que **CALCULARLA** a partir de las columnas, siguiendo su fórmula.
@@ -192,5 +192,5 @@ Calcula primero un DataFrame con columnas de latitud, longitud y valor por ciuda
 - UN solo bloque ```python, nada de texto fuera.
 - Termina SIEMPRE asignando a `resultado`.
 - Solo tienes `pd` y `np`; NO hay funciones auxiliares de métrica en el entorno.
-- Las COLUMNAS existen en `leads_contacts`; las MEDIDAS no: calcúlalas en Pandas traduciendo su fórmula (DAX) del CONTEXTO DEL MODELO.
+- Las COLUMNAS existen en `Leads_Contacts`; las MEDIDAS no: calcúlalas en Pandas traduciendo su fórmula (DAX) del CONTEXTO DEL MODELO.
 - Usa los nombres de tabla/columna del CONTEXTO DEL MODELO proporcionado; no inventes ninguno.
