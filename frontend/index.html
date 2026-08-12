@@ -707,15 +707,6 @@ var MODELS = {
   conclusiones:"gpt-5.6-luna",
   memoria:     "gpt-4o-mini"
 };
-
-// Controla si el agente CodeGen usa el hilo con estado de OpenAI (conversation /
-// previous_response_id). Se deja en false a propósito: la memoria de la conversación
-// ya viaja completa y curada dentro del prompt (buildEnrichedQuery -> buildFullMemoryText),
-// así que activar el hilo aquí duplicaría el historial (una versión cruda por parte de
-// OpenAI y otra curada por nosotros), lo que hacía que las consultas de seguimiento
-// ("¿y en 2025?") heredaran la métrica equivocada. El resto de la infraestructura de
-// hilos sigue intacta (conversationId se crea y se usa en los demás agentes). Poner
-// a true reactiva el hilo para el CodeGen si en el futuro se decide gestionar así la memoria.
 var CODEGEN_USE_THREAD = false;
 
 var CSV_TABLES = {
@@ -728,8 +719,6 @@ var PRIMARY_CSV = "Leads_Contacts";
 var PRIMARY_DATE_COLUMNS = ["Fecha creación"];
 var CONCLUSION_MAX_ROWS = 300;
 
-// Fuente única del bloque de bienvenida. El mismo marcado está en el HTML inicial
-// (para render inmediato) y se reutiliza aquí al empezar una conversación nueva.
 var WELCOME_HTML = `
     <div class="welcome-area" id="welcome">
       <div class="welcome-eyebrow">Analítica de residencias</div>
@@ -1930,12 +1919,6 @@ async function answerDataQuery(userText, answeredSlots, opts) {
   }
 }
 
-// Texto que se guarda en el historial para un turno resuelto. A diferencia de
-// buildEnrichedQuery, NO inyecta el bloque de memoria completo (eso haría el
-// historial recursivo). Solo funde la consulta con los slots que el usuario
-// respondió en el Clarify, para que el turno quede autocontenido: así un
-// mensaje elíptico posterior ("¿y para 2025?") puede heredar la métrica y la
-// dimensión reales de este turno, no el texto crudo elíptico.
 function memoryQueryText(userText, answeredSlots) {
   var base = String(userText || "");
   if (!answeredSlots || answeredSlots.length === 0) return base;
@@ -2041,7 +2024,6 @@ function appendBatchStepHeader(step, total, text) {
   scrollToBottom();
 }
 
-// ----- Lectura del análisis (perfiles de negocio) -----
 function conclusionsEnabled() {
   var t = document.getElementById("conclusions-toggle");
   return !!(t && t.checked);
@@ -2795,10 +2777,6 @@ function wrapSubgraphContext(subgraphText) {
 // ==========================================================================
 //  9. Llamada a la API de OpenAI
 // ==========================================================================
-
-// Punto único de red hacia el endpoint de respuestas. Evita repetir la misma
-// llamada fetch (cabeceras + método) en callModel, que antes la duplicaba tres
-// veces (llamada inicial, reintento de hilo y reintento por parámetro).
 function postResponses(body) {
   return fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -3455,11 +3433,6 @@ function makeHaloTrace(tr) {
 }
 
 // ----- Indicadores de escritura, errores y avisos -----
-
-// Scaffold compartido de un mensaje del asistente. Construye el esqueleto común
-// (avatar + cuerpo) que antes se repetía en appendTyping/appendError/
-// appendRetryNotice/showDevAlert, y lo inserta en el hilo. `bodyHtml` es el
-// contenido interno del cuerpo; `opts` permite ajustar avatar, id y posición.
 function appendAssistantScaffold(bodyHtml, opts) {
   opts = opts || {};
   var box = document.getElementById("messages");
@@ -3605,8 +3578,6 @@ function autoResize(el) {
 }
 
 function quickAsk(t) { sendMessage(t); }
-
-// Enviar la API key con Enter en la pantalla de inicio.
 document.getElementById("api-key-input").addEventListener("keydown", function (e) {
   if (e.key === "Enter") initChat();
 });
